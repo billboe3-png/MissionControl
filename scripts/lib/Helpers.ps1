@@ -52,3 +52,70 @@ function Invoke-McPlaceholder {
 
     Write-McWarning "Command '$Name' is reserved for a future sprint."
 }
+
+function Write-McColorLine {
+    <#
+    .SYNOPSIS
+    Writes one line with optional color.
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)]
+        [pscustomobject] $Context,
+
+        [Parameter(Mandatory)]
+        [string] $Message,
+
+        [string] $Color = "White"
+    )
+
+    if ($Context.Options.NoColor) {
+        Write-Host $Message
+    }
+    else {
+        Write-Host $Message -ForegroundColor $Color
+    }
+}
+
+function New-McPlaceholderResult {
+    <#
+    .SYNOPSIS
+    Creates a placeholder result for unimplemented commands.
+    #>
+    [CmdletBinding()]
+    param([Parameter(Mandatory)][string] $Name)
+
+    [pscustomobject]@{
+        Type = "Placeholder"
+        Message = "Command '$Name' is reserved for a future sprint."
+    }
+}
+
+function Invoke-McNativeCapture {
+    <#
+    .SYNOPSIS
+    Runs a native command and returns captured output and exit code.
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)]
+        [string] $FilePath,
+
+        [string[]] $CommandArguments = @(),
+
+        [Parameter(Mandatory)]
+        [string] $WorkingDirectory
+    )
+
+    Push-Location -LiteralPath $WorkingDirectory
+    try {
+        $output = & $FilePath @CommandArguments 2>&1
+        return [pscustomobject]@{
+            ExitCode = $LASTEXITCODE
+            Output = ($output -join "`n").Trim()
+        }
+    }
+    finally {
+        Pop-Location
+    }
+}

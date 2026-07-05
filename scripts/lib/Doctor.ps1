@@ -50,34 +50,6 @@ function Write-McDoctorResult {
     Write-Host ("  {0,-6} {1,-32} {2}" -f $marker, $Result.Name, $Result.Message) -ForegroundColor $color
 }
 
-function Invoke-McDoctorNativeCapture {
-    <#
-    .SYNOPSIS
-    Runs a native command and returns captured output and exit code.
-    #>
-    [CmdletBinding()]
-    param(
-        [Parameter(Mandatory)]
-        [string] $FilePath,
-
-        [string[]] $CommandArguments = @(),
-
-        [Parameter(Mandatory)]
-        [string] $WorkingDirectory
-    )
-
-    Push-Location -LiteralPath $WorkingDirectory
-    try {
-        $output = & $FilePath @CommandArguments 2>&1
-        return [pscustomobject]@{
-            ExitCode = $LASTEXITCODE
-            Output = ($output -join "`n").Trim()
-        }
-    }
-    finally {
-        Pop-Location
-    }
-}
 
 function Test-McCommand {
     <#
@@ -107,7 +79,7 @@ function Get-McCommandVersion {
         [string] $ProjectRoot
     )
 
-    $result = Invoke-McDoctorNativeCapture -FilePath $FilePath -CommandArguments $CommandArguments -WorkingDirectory $ProjectRoot
+    $result = Invoke-McNativeCapture -FilePath $FilePath -CommandArguments $CommandArguments -WorkingDirectory $ProjectRoot
     if ($result.ExitCode -ne 0 -or [string]::IsNullOrWhiteSpace($result.Output)) {
         return $null
     }
@@ -127,7 +99,7 @@ function Test-McDockerRunning {
         return $false
     }
 
-    $result = Invoke-McDoctorNativeCapture -FilePath "docker" -CommandArguments @("info") -WorkingDirectory $ProjectRoot
+    $result = Invoke-McNativeCapture -FilePath "docker" -CommandArguments @("info") -WorkingDirectory $ProjectRoot
     return $result.ExitCode -eq 0
 }
 
@@ -145,7 +117,7 @@ function Get-McContainerStatus {
         [string] $ProjectRoot
     )
 
-    $inspect = Invoke-McDoctorNativeCapture -FilePath "docker" -CommandArguments @(
+    $inspect = Invoke-McNativeCapture -FilePath "docker" -CommandArguments @(
         "inspect",
         "--format",
         "{{.State.Status}}|{{if .State.Health}}{{.State.Health.Status}}{{end}}",
@@ -173,23 +145,6 @@ function Get-McContainerStatus {
     return "Stopped"
 }
 
-function Invoke-McHttpStatusCheck {
-    <#
-    .SYNOPSIS
-    Gets HTTP status for a local backend endpoint.
-    #>
-    [CmdletBinding()]
-    param([Parameter(Mandatory)][string] $Path)
-
-    $uri = "http://localhost$Path"
-    try {
-        $response = Invoke-WebRequest -Uri $uri -Method Get -UseBasicParsing -TimeoutSec 5 -SkipHttpErrorCheck
-        return [string]$response.StatusCode
-    }
-    catch {
-        return "unreachable"
-    }
-}
 
 function Get-McEnvironmentDoctorResults {
     <#
@@ -259,7 +214,7 @@ function Get-McEnvironmentDoctorResults {
     $results.Add((New-McDoctorResult -Name "Current Branch" -Level $(if ($branch) { "Pass" } else { "Warn" }) -Message $(if ($branch) { $branch } else { "detached or unavailable" })))
 
     $status = if ($isGitRepo -and (Test-McCommand -Name "git")) {
-        Invoke-McDoctorNativeCapture -FilePath "git" -CommandArguments @("status", "--porcelain") -WorkingDirectory $ProjectRoot
+        Invoke-McNativeCapture -FilePath "git" -CommandArguments @("status", "--porcelain") -WorkingDirectory $ProjectRoot
     }
     else {
         $null
@@ -314,61 +269,3 @@ function Get-McBackendEndpointDoctorResults {
     }
 }
 
-function Invoke-McDoctor {
-    <#
-    .SYNOPSIS
-    Runs Mission Control environment, Docker, and endpoint health checks.
-    #>
-    [CmdletBinding()]
-    param([Parameter(Mandatory)][string] $ProjectRoot)
-
-    Write-Host "Mission Control Doctor" -ForegroundColor Green
-    Write-Host ""
-
-    Write-Host "Environment" -ForegroundColor Cyan
-    $allResults = [System.Collections.Generic.List[object]]::new()
-    $environmentResults = Get-McEnvironmentDoctorResults -ProjectRoot $ProjectRoot
-    foreach ($result in $environmentResults) {
-        $allResults.Add($result)
-        Write-McDoctorResult -Result $result
-    }
-
-    if (Test-McDockerRunning -ProjectRoot $ProjectRoot) {
-        Write-Host ""
-        Write-Host "Docker Services" -ForegroundColor Cyan
-        $serviceResults = Get-McServiceDoctorResults -ProjectRoot $ProjectRoot
-        foreach ($result in $serviceResults) {
-            $allResults.Add($result)
-            Write-McDoctorResult -Result $result
-        }
-
-        $backend = Get-McContainerStatus -ContainerName "missioncontrol-backend-1" -ProjectRoot $ProjectRoot
-        if ($backend -in @("Healthy", "Starting")) {
-            Write-Host ""
-            Write-Host "Backend HTTP" -ForegroundColor Cyan
-            $httpResults = Get-McBackendEndpointDoctorResults
-            foreach ($result in $httpResults) {
-                $allResults.Add($result)
-                Write-McDoctorResult -Result $result
-            }
-        }
-    }
-
-    $overall = if ($allResults.Level -contains "Fail") {
-        "FAILED"
-    }
-    elseif ($allResults.Level -contains "Warn") {
-        "WARNING"
-    }
-    else {
-        "READY"
-    }
-    $color = switch ($overall) {
-        "READY" { "Green" }
-        "WARNING" { "Yellow" }
-        "FAILED" { "Red" }
-    }
-
-    Write-Host ""
-    Write-Host "Overall Status: $overall" -ForegroundColor $color
-}

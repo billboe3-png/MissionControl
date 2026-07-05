@@ -46,43 +46,41 @@ function Invoke-McDockerCompose {
         -WorkingDirectory $ProjectRoot
 }
 
-function Invoke-McDockerUp {
+function Invoke-McDockerComposeCapture {
     <#
     .SYNOPSIS
-    Builds and starts the Mission Control Docker stack.
+    Runs Docker Compose and captures output and exit code.
     #>
     [CmdletBinding()]
-    param([Parameter(Mandatory)][string] $ProjectRoot)
+    param(
+        [Parameter(Mandatory)]
+        [string] $ProjectRoot,
 
-    Write-Progress -Activity "Mission Control Docker" -Status "Building and starting services" -PercentComplete 15
-    Write-McInfo "Starting Docker stack."
-    Invoke-McDockerCompose -ProjectRoot $ProjectRoot -ComposeArguments @("up", "--build", "-d")
-    Write-Progress -Activity "Mission Control Docker" -Completed
-    Write-McSuccess "Docker stack is running."
+        [Parameter(Mandatory)]
+        [string[]] $ComposeArguments
+    )
+
+    $compose = Get-McDockerComposeCommand
+    Invoke-McNativeCapture `
+        -FilePath $compose.FilePath `
+        -CommandArguments ($compose.Arguments + $ComposeArguments) `
+        -WorkingDirectory $ProjectRoot
 }
 
-function Invoke-McDockerDown {
+function Get-McDockerComposeStatus {
     <#
     .SYNOPSIS
-    Stops the Mission Control Docker stack.
+    Returns a short Docker Compose availability status.
     #>
     [CmdletBinding()]
-    param([Parameter(Mandatory)][string] $ProjectRoot)
+    param()
 
-    Write-Progress -Activity "Mission Control Docker" -Status "Stopping services" -PercentComplete 50
-    Write-McInfo "Stopping Docker stack."
-    Invoke-McDockerCompose -ProjectRoot $ProjectRoot -ComposeArguments @("down")
-    Write-Progress -Activity "Mission Control Docker" -Completed
-    Write-McSuccess "Docker stack stopped."
+    try {
+        $compose = Get-McDockerComposeCommand
+        return "$($compose.FilePath) available"
+    }
+    catch {
+        return "missing"
+    }
 }
 
-function Invoke-McDockerLogs {
-    <#
-    .SYNOPSIS
-    Shows Docker Compose logs.
-    #>
-    [CmdletBinding()]
-    param([Parameter(Mandatory)][string] $ProjectRoot)
-
-    Invoke-McDockerCompose -ProjectRoot $ProjectRoot -ComposeArguments @("logs", "--tail", "200")
-}
