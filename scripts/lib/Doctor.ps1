@@ -129,20 +129,30 @@ function Get-McContainerStatus {
     }
 
     $parts = $inspect.Output.Split("|", 2)
-    $state = $parts[0]
-    $health = if ($parts.Count -gt 1) { $parts[1] } else { "" }
+    $state = $parts[0].Trim()
+    $health = if ($parts.Count -gt 1) { $parts[1].Trim() } else { "" }
 
-    if ($state -ne "running") {
-        return "Stopped"
+    # $state is Docker's runtime state (running/exited/restarting/etc.).
+    # $health is Docker's HEALTHCHECK state and is only meaningful when the
+    # container actually defines a HEALTHCHECK; Docker returns an empty
+    # string when no healthcheck exists, which is not the same as "starting".
+    switch ($state) {
+        "restarting" { return "Restarting" }
+        "exited" { return "Stopped" }
+        "dead" { return "Stopped" }
+        "running" {
+            if ([string]::IsNullOrWhiteSpace($health)) {
+                return "Running"
+            }
+            switch ($health) {
+                "healthy" { return "Healthy" }
+                "unhealthy" { return "Unhealthy" }
+                "starting" { return "Starting" }
+                default { return "Running" }
+            }
+        }
+        default { return "Stopped" }
     }
-    if ($health -eq "healthy") {
-        return "Healthy"
-    }
-    if ($health -eq "starting" -or [string]::IsNullOrWhiteSpace($health)) {
-        return "Starting"
-    }
-
-    return "Stopped"
 }
 
 
@@ -245,7 +255,10 @@ function Get-McServiceDoctorResults {
         $status = Get-McContainerStatus -ContainerName $service.Value -ProjectRoot $ProjectRoot
         $level = switch ($status) {
             "Healthy" { "Pass" }
+            "Running" { "Pass" }
             "Starting" { "Warn" }
+            "Restarting" { "Warn" }
+            "Unhealthy" { "Fail" }
             "Stopped" { "Fail" }
             "Missing" { "Warn" }
             default { "Warn" }
@@ -268,4 +281,3 @@ function Get-McBackendEndpointDoctorResults {
         New-McDoctorResult -Name "GET $path" -Level $level -Message "HTTP $status"
     }
 }
-

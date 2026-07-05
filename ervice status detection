@@ -1,0 +1,68 @@
+warning: in the working copy of 'scripts/lib/Doctor.ps1', LF will be replaced by CRLF the next time Git touches it
+[1mdiff --git a/scripts/lib/Doctor.ps1 b/scripts/lib/Doctor.ps1[m
+[1mindex 072fe27..b14d472 100644[m
+[1m--- a/scripts/lib/Doctor.ps1[m
+[1m+++ b/scripts/lib/Doctor.ps1[m
+[36m@@ -129,20 +129,30 @@[m [mfunction Get-McContainerStatus {[m
+     }[m
+ [m
+     $parts = $inspect.Output.Split("|", 2)[m
+[31m-    $state = $parts[0][m
+[31m-    $health = if ($parts.Count -gt 1) { $parts[1] } else { "" }[m
+[31m-[m
+[31m-    if ($state -ne "running") {[m
+[31m-        return "Stopped"[m
+[31m-    }[m
+[31m-    if ($health -eq "healthy") {[m
+[31m-        return "Healthy"[m
+[31m-    }[m
+[31m-    if ($health -eq "starting" -or [string]::IsNullOrWhiteSpace($health)) {[m
+[31m-        return "Starting"[m
+[32m+[m[32m    $state = $parts[0].Trim()[m
+[32m+[m[32m    $health = if ($parts.Count -gt 1) { $parts[1].Trim() } else { "" }[m
+[32m+[m
+[32m+[m[32m    # $state is Docker's runtime state (running/exited/restarting/etc.).[m
+[32m+[m[32m    # $health is Docker's HEALTHCHECK state and is only meaningful when the[m
+[32m+[m[32m    # container actually defines a HEALTHCHECK; Docker returns an empty[m
+[32m+[m[32m    # string when no healthcheck exists, which is not the same as "starting".[m
+[32m+[m[32m    switch ($state) {[m
+[32m+[m[32m        "restarting" { return "Restarting" }[m
+[32m+[m[32m        "exited" { return "Stopped" }[m
+[32m+[m[32m        "dead" { return "Stopped" }[m
+[32m+[m[32m        "running" {[m
+[32m+[m[32m            if ([string]::IsNullOrWhiteSpace($health)) {[m
+[32m+[m[32m                return "Running"[m
+[32m+[m[32m            }[m
+[32m+[m[32m            switch ($health) {[m
+[32m+[m[32m                "healthy" { return "Healthy" }[m
+[32m+[m[32m                "unhealthy" { return "Unhealthy" }[m
+[32m+[m[32m                "starting" { return "Starting" }[m
+[32m+[m[32m                default { return "Running" }[m
+[32m+[m[32m            }[m
+[32m+[m[32m        }[m
+[32m+[m[32m        default { return "Stopped" }[m
+     }[m
+[31m-[m
+[31m-    return "Stopped"[m
+ }[m
+ [m
+ [m
+[36m@@ -245,7 +255,10 @@[m [mfunction Get-McServiceDoctorResults {[m
+         $status = Get-McContainerStatus -ContainerName $service.Value -ProjectRoot $ProjectRoot[m
+         $level = switch ($status) {[m
+             "Healthy" { "Pass" }[m
+[32m+[m[32m            "Running" { "Pass" }[m
+             "Starting" { "Warn" }[m
+[32m+[m[32m            "Restarting" { "Warn" }[m
+[32m+[m[32m            "Unhealthy" { "Fail" }[m
+             "Stopped" { "Fail" }[m
+             "Missing" { "Warn" }[m
+             default { "Warn" }[m
+[36m@@ -267,5 +280,4 @@[m [mfunction Get-McBackendEndpointDoctorResults {[m
+         $level = if ($status -match "^2\d\d$") { "Pass" } elseif ($status -eq "unreachable") { "Warn" } else { "Warn" }[m
+         New-McDoctorResult -Name "GET $path" -Level $level -Message "HTTP $status"[m
+     }[m
+[31m-}[m
+[31m-[m
+[32m+[m[32m}[m
+\ No newline at end of file[m
