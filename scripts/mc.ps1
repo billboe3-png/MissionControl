@@ -31,6 +31,7 @@ $commandPath = Join-Path $PSScriptRoot "commands"
 foreach ($libFile in @(
     "Registry.ps1",
     "Bootstrap.ps1",
+    "Config.ps1",
     "Output.ps1",
     "Logger.ps1",
     "Validation.ps1",
@@ -48,6 +49,7 @@ foreach ($commandFile in (Get-ChildItem -LiteralPath $commandPath -Filter "*.ps1
     . $commandFile.FullName
 }
 
+$context = $null
 try {
     $context = New-McContext -ScriptRoot $PSScriptRoot -Arguments $Arguments
     Initialize-McLogger -Context $context

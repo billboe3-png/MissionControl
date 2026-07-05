@@ -19,13 +19,20 @@ function New-McContext {
     $parsed = Split-McArguments -Arguments $Arguments
     $projectRoot = Get-McProjectRoot -ScriptRoot $ScriptRoot
 
+    $config = $null
+    if (-not [string]::IsNullOrWhiteSpace($parsed.Options.Config)) {
+        $config = Load-McConfig -ConfigPath $parsed.Options.Config -ProjectRoot $projectRoot
+    }
+
+    $options = Merge-McConfigOptions -Options $parsed.Options -Config $config
+
     [pscustomobject]@{
         ScriptRoot = $ScriptRoot
         ProjectRoot = $projectRoot
         CommandPath = $parsed.CommandPath
         CommandArguments = $parsed.CommandArguments
-        Options = $parsed.Options
-        ConfigPath = $parsed.Options.Config
+        Options = $options
+        ConfigPath = $options.Config
         LogFile = $null
     }
 }
@@ -47,6 +54,12 @@ function Split-McArguments {
         NoColor = $false
         Log = $false
         Config = $null
+        Explicit = [ordered]@{
+            Output = $false
+            NoColor = $false
+            Log = $false
+            Config = $false
+        }
     }
 
     $commandArguments = [System.Collections.Generic.List[string]]::new()
@@ -57,8 +70,8 @@ function Split-McArguments {
             "--verbose" { $options.Verbose = $true; continue }
             "--quiet" { $options.Quiet = $true; continue }
             "--debug" { $options.Debug = $true; $options.Verbose = $true; continue }
-            "--no-color" { $options.NoColor = $true; continue }
-            "--log" { $options.Log = $true; continue }
+            "--no-color" { $options.NoColor = $true; $options.Explicit.NoColor = $true; continue }
+            "--log" { $options.Log = $true; $options.Explicit.Log = $true; continue }
             "--output" {
                 $index++
                 if ($index -ge $Arguments.Count) {
@@ -68,6 +81,7 @@ function Split-McArguments {
                     throw "Unsupported output format '$($Arguments[$index])'."
                 }
                 $options.Output = $Arguments[$index]
+                $options.Explicit.Output = $true
                 continue
             }
             "--config" {
@@ -76,6 +90,7 @@ function Split-McArguments {
                     throw "Missing value for --config."
                 }
                 $options.Config = $Arguments[$index]
+                $options.Explicit.Config = $true
                 continue
             }
             default {
