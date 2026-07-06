@@ -44,3 +44,4 @@ async def api_root() -> dict[str, str]:
         "status": "online",
         "environment": settings.environment,
     }
+

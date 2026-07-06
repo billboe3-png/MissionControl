@@ -1,11 +1,10 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter
 
-router = APIRouter(prefix="/doctor", tags=["doctor"])
+from app.services import get_doctor
+
+router = APIRouter(tags=["doctor"])
 
 
-@router.get("")
+@router.get("/doctor")
 async def doctor():
-    raise HTTPException(
-        status_code=501,
-        detail="Not implemented",
-    )
+    return await get_doctor()
