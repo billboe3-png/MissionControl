@@ -16,7 +16,11 @@ function Invoke-McHelpCommand {
     $topic = if ($Context.CommandPath.Count -gt 1) { $Context.CommandPath[1] } else { "root" }
     $sections = if ($topic -eq "root") {
         $commands = Get-McRegisteredCommands
-        $commandLines = $commands | ForEach-Object { "  mc $_" }
+        $commandLines = $commands | ForEach-Object {
+            $metadata = Get-McCommandMetadata -Name $_
+            $description = if ($metadata) { $metadata.Description } else { "" }
+            "  mc $_  -  $description"
+        }
         
         @(
             [pscustomobject]@{ Title = "Available commands:"; Color = "Cyan"; Lines = $commandLines },
