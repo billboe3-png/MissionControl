@@ -1,16 +1,16 @@
 from abc import ABC, abstractmethod
 
 
-class PlatformBase(ABC):
+class DockerProvider(ABC):
 
     @abstractmethod
-    async def status(self):
+    async def info(self):
         ...
 
     @abstractmethod
-    async def doctor(self):
+    async def containers(self):
         ...
 
     @abstractmethod
-    async def docker_status(self):
+    async def version(self):
         ...

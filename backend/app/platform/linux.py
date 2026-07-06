@@ -1,32 +1,15 @@
 from datetime import datetime, timezone
-import subprocess
 
 from app.core.config import get_settings
 from app.db.postgres import check_postgres
 from app.db.redis import check_redis
 
+from app.infrastructure.docker import get_docker_provider
+
 from .base import PlatformBase
 
 
-def run(command):
-
-    try:
-
-        result = subprocess.run(
-            command,
-            capture_output=True,
-            text=True,
-            timeout=10
-        )
-
-        return result.returncode == 0, result.stdout.strip()
-
-    except Exception:
-        return False, ""
-
-
 class LinuxPlatform(PlatformBase):
-
     async def status(self):
 
         settings = get_settings()
@@ -41,7 +24,7 @@ class LinuxPlatform(PlatformBase):
             "backend": "online",
             "database": "connected" if postgres else "disconnected",
             "redis": "connected" if redis else "disconnected",
-            "timestamp": datetime.now(timezone.utc).isoformat()
+            "timestamp": datetime.now(timezone.utc).isoformat(),
         }
 
     async def doctor(self):
@@ -51,35 +34,39 @@ class LinuxPlatform(PlatformBase):
 
         checks = [
             {
-                "name":"Backend",
-                "status":"OK",
-                "message":"API running"
+                "name": "Backend",
+                "status": "OK",
+                "message": "API running",
             },
             {
-                "name":"PostgreSQL",
-                "status":"OK" if postgres else "ERROR",
-                "message":"Connected" if postgres else "Unavailable"
+                "name": "PostgreSQL",
+                "status": "OK" if postgres else "ERROR",
+                "message": "Connected" if postgres else "Unavailable",
             },
             {
-                "name":"Redis",
-                "status":"OK" if redis else "ERROR",
-                "message":"Connected" if redis else "Unavailable"
-            }
+                "name": "Redis",
+                "status": "OK" if redis else "ERROR",
+                "message": "Connected" if redis else "Unavailable",
+            },
         ]
 
         return {
-            "overall":"healthy" if postgres and redis else "degraded",
-            "timestamp":datetime.now(timezone.utc).isoformat(),
-            "checks":checks
+            "overall": "healthy" if postgres and redis else "degraded",
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "checks": checks,
         }
 
     async def docker_status(self):
 
-        engine,_ = run(["docker","info"])
+        docker = get_docker_provider()
 
-        compose,_ = run(["docker","compose","version"])
+        version = await docker.version()
+        containers = await docker.containers()
 
         return {
-            "engine":"running" if engine else "offline",
-            "compose":"available" if compose else "missing"
+            "engine": "running" if version else "offline",
+            "compose": "sdk",
+            "container_count": len(containers),
+            "containers": containers,
+            "docker_version": version.get("Version", "Unknown"),
         }

@@ -12,7 +12,7 @@ RUN pip install --no-cache-dir --upgrade pip && pip install --no-cache-dir -r re
 
 COPY app ./app
 
-USER app
+USER root
 
 EXPOSE 8000
 

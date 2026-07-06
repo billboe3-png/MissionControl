@@ -18,7 +18,6 @@ def get_platform():
 
     if system == "windows":
         _provider = WindowsPlatform()
-
     else:
         _provider = LinuxPlatform()
 

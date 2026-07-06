@@ -6,7 +6,8 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
     project_name: str = Field(default="Mission Control", alias="PROJECT_NAME")
-    environment: str = Field(default="development", alias="ENVIRONMENT")
+    environment: str = Field(default="development", alias="ENVIRONMENT")
+    compose_project_name: str = "missioncontrol"
 
     postgres_db: str = Field(default="mission_control", alias="POSTGRES_DB")
     postgres_user: str = Field(default="mission_control", alias="POSTGRES_USER")
@@ -49,3 +50,4 @@ class Settings(BaseSettings):
 @lru_cache
 def get_settings() -> Settings:
     return Settings()
+
