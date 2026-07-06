@@ -1,0 +1,18 @@
+{
+  "recommendations": [
+    "ms-vscode.PowerShell",
+    "ms-azuretools.vscode-docker",
+    "eamodio.gitlens",
+    "ms-python.python",
+    "ms-python.pylance",
+    "charliermarsh.ruff",
+    "redhat.vscode-yaml",
+    "humao.rest-client",
+    "mtxr.sqltools",
+    "EditorConfig.EditorConfig",
+    "usernamehw.errorlens",
+    "dbaeumer.vscode-eslint",
+    "esbenp.prettier-vscode",
+    "yzhang.markdown-all-in-one"
+  ]
+}

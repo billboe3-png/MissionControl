@@ -50,7 +50,7 @@ function Invoke-McPlaceholder {
     [CmdletBinding()]
     param([Parameter(Mandatory)][string] $Name)
 
-    Write-McWarning "Command '$Name' is reserved for a future sprint."
+    Write-McLog -Context $Context -Level Warning -Message "Command '$Name' is reserved for a future sprint."
 }
 
 function Write-McColorLine {
@@ -86,7 +86,7 @@ function New-McPlaceholderResult {
     param([Parameter(Mandatory)][string] $Name)
 
     [pscustomobject]@{
-        Type = "Placeholder"
+        Type    = "Placeholder"
         Message = "Command '$Name' is reserved for a future sprint."
     }
 }
@@ -112,7 +112,7 @@ function Invoke-McNativeCapture {
         $output = & $FilePath @CommandArguments 2>&1
         return [pscustomobject]@{
             ExitCode = $LASTEXITCODE
-            Output = ($output -join "`n").Trim()
+            Output   = ($output -join "`n").Trim()
         }
     }
     finally {

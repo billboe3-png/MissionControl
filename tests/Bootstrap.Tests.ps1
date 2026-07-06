@@ -27,4 +27,16 @@ Describe 'Bootstrap' {
         $context.CommandPath[0] | Should Be 'help'
         $context.Options.Help | Should Be $true
     }
+
+    It 'dispatches command to registered handler' {
+        $context = New-McContext -ScriptRoot $script:ScriptsRoot -Arguments @('version')
+        $result = Invoke-McCommand -Context $context
+        $result | Should Not BeNullOrEmpty
+        $result.Type | Should Be 'Version'
+    }
+
+    It 'throws for unknown command' {
+        $context = New-McContext -ScriptRoot $script:ScriptsRoot -Arguments @('nonexistent')
+        { Invoke-McCommand -Context $context } | Should Throw "Unknown command 'nonexistent'"
+    }
 }

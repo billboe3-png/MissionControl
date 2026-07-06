@@ -22,8 +22,8 @@ function New-McDoctorResult {
     )
 
     [pscustomobject]@{
-        Name = $Name
-        Level = $Level
+        Name    = $Name
+        Level   = $Level
         Message = $Message
     }
 }
@@ -171,7 +171,7 @@ function Get-McEnvironmentDoctorResults {
     if (Test-McCommand -Name "git") {
         $gitVersion = Get-McCommandVersion -FilePath "git" -CommandArguments @("--version") -ProjectRoot $ProjectRoot
         $results.Add((New-McDoctorResult -Name "Git Installed" -Level "Pass" -Message "available"))
-        $results.Add((New-McDoctorResult -Name "Git Version" -Level "Pass" -Message $gitVersion))
+        $results.Add((New-McDoctorResult -Name "Git Version" -Level "Pass" -Message $(if ($gitVersion) { $gitVersion } else { "unavailable" })))
     }
     else {
         $results.Add((New-McDoctorResult -Name "Git Installed" -Level "Fail" -Message "missing"))
@@ -200,8 +200,8 @@ function Get-McEnvironmentDoctorResults {
         }
         $results.Add((New-McDoctorResult -Name "$label Installed" -Level $(if ($installed) { "Pass" } else { "Warn" }) -Message $(if ($installed) { "available" } else { "missing" })))
         if ($tool -eq "python") {
-            $version = if ($installed) { Get-McCommandVersion -FilePath "python" -CommandArguments @("--version") -ProjectRoot $ProjectRoot } else { "unavailable" }
-            $results.Add((New-McDoctorResult -Name "Python Version" -Level $(if ($installed) { "Pass" } else { "Warn" }) -Message $version))
+            $version = if ($installed) { Get-McCommandVersion -FilePath "python" -CommandArguments @("--version") -ProjectRoot $ProjectRoot } else { $null }
+            $results.Add((New-McDoctorResult -Name "Python Version" -Level $(if ($installed) { "Pass" } else { "Warn" }) -Message $(if ($version) { $version } else { "unavailable" })))
         }
     }
 
@@ -244,11 +244,11 @@ function Get-McServiceDoctorResults {
     param([Parameter(Mandatory)][string] $ProjectRoot)
 
     $services = [ordered]@{
-        "Mission Control Backend" = "missioncontrol-backend-1"
-        "Mission Control Frontend" = "missioncontrol-frontend-1"
+        "Mission Control Backend"    = "missioncontrol-backend-1"
+        "Mission Control Frontend"   = "missioncontrol-frontend-1"
         "Mission Control PostgreSQL" = "missioncontrol-postgres-1"
-        "Mission Control Redis" = "missioncontrol-redis-1"
-        "Mission Control Nginx" = "missioncontrol-nginx-1"
+        "Mission Control Redis"      = "missioncontrol-redis-1"
+        "Mission Control Nginx"      = "missioncontrol-nginx-1"
     }
 
     foreach ($service in $services.GetEnumerator()) {

@@ -1,0 +1,24 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  quality-gate:
+    runs-on: windows-latest
+    
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+    
+    - name: Install PowerShell 7
+      uses: actions/setup-powershell@v2
+      with:
+        powershell-version: 'latest'
+    
+    - name: Run Quality Gate
+      shell: pwsh
+      run: ./scripts/Invoke-Quality.ps1

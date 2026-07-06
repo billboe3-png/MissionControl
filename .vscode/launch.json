@@ -1,0 +1,35 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Launch Mission Control Help",
+      "type": "PowerShell",
+      "request": "launch",
+      "script": "${workspaceFolder}/scripts/mc.ps1",
+      "args": [
+        "help"
+      ],
+      "cwd": "${workspaceFolder}"
+    },
+    {
+      "name": "Launch Mission Control Doctor",
+      "type": "PowerShell",
+      "request": "launch",
+      "script": "${workspaceFolder}/scripts/mc.ps1",
+      "args": [
+        "doctor"
+      ],
+      "cwd": "${workspaceFolder}"
+    },
+    {
+      "name": "Launch Mission Control Status",
+      "type": "PowerShell",
+      "request": "launch",
+      "script": "${workspaceFolder}/scripts/mc.ps1",
+      "args": [
+        "status"
+      ],
+      "cwd": "${workspaceFolder}"
+    }
+  ]
+}
