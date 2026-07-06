@@ -2,8 +2,14 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import get_settings
-from app.routers import health
-
+from app.routers import (
+    doctor,
+    docker,
+    git,
+    health,
+    status,
+    version,
+)
 
 settings = get_settings()
 
@@ -24,6 +30,11 @@ app.add_middleware(
 )
 
 app.include_router(health.router, prefix="/api/v1")
+app.include_router(version.router, prefix="/api/v1")
+app.include_router(status.router, prefix="/api/v1")
+app.include_router(doctor.router, prefix="/api/v1")
+app.include_router(docker.router, prefix="/api/v1")
+app.include_router(git.router, prefix="/api/v1")
 
 
 @app.get("/api/v1")
