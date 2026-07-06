@@ -1,11 +1,10 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter
 
-router = APIRouter(prefix="/status", tags=["status"])
+from app.services import get_status
+
+router = APIRouter(tags=["status"])
 
 
-@router.get("")
+@router.get("/status")
 async def status():
-    raise HTTPException(
-        status_code=501,
-        detail="Not implemented",
-    )
+    return await get_status()
