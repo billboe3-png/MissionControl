@@ -13,12 +13,11 @@ function Invoke-McGitCommand {
     [CmdletBinding()]
     param([Parameter(Mandatory)][pscustomobject] $Context)
 
-    Assert-McArgumentCount -Arguments $Context.CommandArguments -Minimum 2 -Usage "mc git <status|commit>"
+    Assert-McValidSubcommand -Context $Context -AllowedSubcommands @("status", "commit")
     $subcommand = [string]$Context.CommandArguments[1].ToLowerInvariant()
     switch ($subcommand) {
         "status" { return Invoke-McGitStatusCommand -Context $Context }
         "commit" { return Invoke-McGitCommitCommand -Context $Context }
-        default { throw "Unknown git command '$subcommand'. Run 'mc git --help'." }
     }
 }
 

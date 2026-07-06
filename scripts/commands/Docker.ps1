@@ -13,13 +13,12 @@ function Invoke-McDockerCommand {
     [CmdletBinding()]
     param([Parameter(Mandatory)][pscustomobject] $Context)
 
-    Assert-McArgumentCount -Arguments $Context.CommandArguments -Minimum 2 -Usage "mc docker <up|down|logs>"
+    Assert-McValidSubcommand -Context $Context -AllowedSubcommands @("up", "down", "logs")
     $subcommand = [string]$Context.CommandArguments[1].ToLowerInvariant()
     switch ($subcommand) {
         "up" { return Invoke-McDockerUpCommand -Context $Context }
         "down" { return Invoke-McDockerDownCommand -Context $Context }
         "logs" { return Invoke-McDockerLogsCommand -Context $Context }
-        default { throw "Unknown docker command '$subcommand'. Run 'mc docker --help'." }
     }
 }
 

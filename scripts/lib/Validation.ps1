@@ -50,3 +50,28 @@ function Assert-McGitRepository {
         throw "Project root is not a Git repository: $ProjectRoot"
     }
 }
+
+function Assert-McValidSubcommand {
+    <#
+    .SYNOPSIS
+    Validates that a subcommand is in the list of allowed subcommands.
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)]
+        [pscustomobject] $Context,
+
+        [Parameter(Mandatory)]
+        [string[]] $AllowedSubcommands
+    )
+
+    if ($Context.CommandArguments.Count -lt 2) {
+        throw "Missing subcommand. Allowed: $($AllowedSubcommands -join ', ')"
+    }
+
+    $subcommand = [string]$Context.CommandArguments[1].ToLowerInvariant()
+    if ($subcommand -notin $AllowedSubcommands) {
+        $allowedList = $AllowedSubcommands -join ', '
+        throw "Unknown subcommand '$subcommand'. Allowed: $allowedList"
+    }
+}
