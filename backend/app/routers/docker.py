@@ -1,11 +1,11 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter
 
-router = APIRouter(prefix="/docker", tags=["docker"])
+from app.services import get_docker_status
+
+router = APIRouter(tags=["docker"])
 
 
-@router.get("")
+@router.get("/docker")
 async def docker():
-    raise HTTPException(
-        status_code=501,
-        detail="Not implemented",
-    )
+
+    return await get_docker_status()
