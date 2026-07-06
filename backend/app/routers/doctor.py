@@ -1,10 +1,13 @@
 from fastapi import APIRouter
 
-from app.services import get_doctor
+from app.platform import get_platform
 
-router = APIRouter(tags=["doctor"])
+router = APIRouter(prefix="/doctor", tags=["doctor"])
 
 
-@router.get("/doctor")
+@router.get("")
 async def doctor():
-    return await get_doctor()
+
+    platform = get_platform()
+
+    return await platform.doctor()
