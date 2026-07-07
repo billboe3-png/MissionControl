@@ -1,12 +1,4 @@
-/**
- * Mission Control API Client
- *
- * Sprint:
- * 0.1.1 - Dashboard Foundation
- */
-
-export const API_BASE =
-    import.meta.env.VITE_API_URL ?? "/api/v1";
+const API = "/api/v1";
 
 export interface DashboardResponse {
     application: {
@@ -21,9 +13,11 @@ export interface DashboardResponse {
         backend: {
             status: string;
         };
+
         database: {
             status: string;
         };
+
         redis: {
             status: string;
         };
@@ -53,8 +47,17 @@ export interface DashboardResponse {
 
     integrations: {
         docker: {
-            enabled: boolean;
-            status: string;
+            engine: string;
+            compose: string;
+            container_count: number;
+            docker_version: string;
+
+            containers: {
+                id: string;
+                name: string;
+                image: string;
+                status: string;
+            }[];
         };
 
         ssh: {
@@ -74,26 +77,14 @@ export interface DashboardResponse {
     };
 }
 
-class ApiClient {
-    private async request<T>(endpoint: string): Promise<T> {
-        const response = await fetch(`${API_BASE}${endpoint}`, {
-            headers: {
-                Accept: "application/json",
-            },
-        });
+export const api = {
+    async getDashboard(): Promise<DashboardResponse> {
+        const response = await fetch(`${API}/dashboard`);
 
         if (!response.ok) {
-            throw new Error(
-                `API request failed (${response.status} ${response.statusText})`
-            );
+            throw new Error("Unable to load dashboard.");
         }
 
-        return response.json() as Promise<T>;
-    }
-
-    async getDashboard(): Promise<DashboardResponse> {
-        return this.request<DashboardResponse>("/dashboard");
-    }
-}
-
-export const api = new ApiClient();
+        return response.json();
+    },
+};

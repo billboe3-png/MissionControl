@@ -4,10 +4,12 @@ Mission Control Dashboard Service
 Provides the primary dashboard payload for the frontend.
 
 Sprint:
-    0.1.1 - Dashboard Foundation
+    1.0.2 - Live Docker Integration
 """
 
 from datetime import datetime, timezone
+
+from app.services.docker_service import get_docker_status
 
 
 class DashboardService:
@@ -16,11 +18,13 @@ class DashboardService:
     async def get_dashboard(self) -> dict:
         """Return the dashboard payload."""
 
+        docker = await get_docker_status()
+
         return {
             "application": {
                 "name": "Mission Control",
                 "tagline": "The Daily Workspace for IT Operations",
-                "version": "0.1.1",
+                "version": "1.0.2",
             },
             "generated": datetime.now(timezone.utc).isoformat(),
             "health": {
@@ -34,10 +38,19 @@ class DashboardService:
             "resume": None,
             "parking_lot": {"count": 0, "items": []},
             "integrations": {
-                "docker": {"enabled": True, "status": "connected"},
-                "ssh": {"enabled": False, "status": "not_configured"},
-                "zabbix": {"enabled": False, "status": "not_configured"},
-                "github": {"enabled": False, "status": "not_configured"},
+                "docker": docker,
+                "ssh": {
+                    "enabled": False,
+                    "status": "not_configured",
+                },
+                "zabbix": {
+                    "enabled": False,
+                    "status": "not_configured",
+                },
+                "github": {
+                    "enabled": False,
+                    "status": "not_configured",
+                },
             },
         }
 

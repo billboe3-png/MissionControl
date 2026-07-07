@@ -1,13 +1,14 @@
 from fastapi import APIRouter
 
-from app.platform import get_platform
+from app.models.docker import DockerResponse
+from app.services.docker_service import get_docker_status
 
-router = APIRouter(prefix="/docker", tags=["docker"])
+router = APIRouter(
+    prefix="/system/docker",
+    tags=["Docker"],
+)
 
 
-@router.get("")
-async def docker():
-
-    platform = get_platform()
-
-    return await platform.docker_status()
+@router.get("", response_model=DockerResponse)
+async def docker_status():
+    return await get_docker_status()

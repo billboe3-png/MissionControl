@@ -28,7 +28,7 @@ class SystemService:
         disk = psutil.disk_usage("/")
 
         return {
-            "hostname": socket.gethostname(),
+            "hostname": socket.gethostbyname(),
             "operating_system": platform.platform(),
             "cpu_percent": psutil.cpu_percent(interval=0.2),
             "memory_percent": round(memory.percent, 1),

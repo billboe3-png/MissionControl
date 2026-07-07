@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { api, DashboardResponse } from "../services/api";
 
 export default function Dashboard() {
-    const [dashboard, setDashboard] = useState<DashboardResponse | null>(null);
+    const [dashboard, setDashboard] =useState<DashboardResponse | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
 
@@ -39,6 +39,7 @@ export default function Dashboard() {
         return (
             <main className="dashboard">
                 <h1>Mission Control</h1>
+
                 <div className="card error-card">
                     <h2>Connection Error</h2>
                     <p>{error}</p>
@@ -50,6 +51,8 @@ export default function Dashboard() {
     if (!dashboard) {
         return null;
     }
+
+    const docker = dashboard.integrations.docker;
 
     return (
         <main className="dashboard">
@@ -122,29 +125,39 @@ export default function Dashboard() {
                 </div>
 
                 <div className="card">
-                    <h2>Integrations</h2>
+                    <h2>Docker</h2>
 
                     <ul className="status-list">
                         <li>
-                            Docker
-                            <span>{dashboard.integrations.docker.status}</span>
+                            Engine
+                            <span>{docker.engine}</span>
                         </li>
 
                         <li>
-                            SSH
-                            <span>{dashboard.integrations.ssh.status}</span>
+                            Containers
+                            <span>{docker.container_count}</span>
                         </li>
 
                         <li>
-                            Zabbix
-                            <span>{dashboard.integrations.zabbix.status}</span>
-                        </li>
-
-                        <li>
-                            GitHub
-                            <span>{dashboard.integrations.github.status}</span>
+                            Version
+                            <span>{docker.docker_version}</span>
                         </li>
                     </ul>
+
+                    <hr />
+
+                    {docker.containers.length === 0 ? (
+                        <p>No running containers.</p>
+                    ) : (
+                        <ul className="status-list">
+                            {docker.containers.map((container) => (
+                                <li key={container.id}>
+                                    {container.name}
+                                    <span>{container.status}</span>
+                                </li>
+                            ))}
+                        </ul>
+                    )}
                 </div>
 
             </section>
