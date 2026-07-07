@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { api, DashboardResponse } from "../services/api";
 
 export default function Dashboard() {
-    const [dashboard, setDashboard] =useState<DashboardResponse | null>(null);
+    const [dashboard, setDashboard] = useState<DashboardResponse | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
 
@@ -67,12 +67,46 @@ export default function Dashboard() {
                 </small>
             </header>
 
+            {/* ===========================================================
+                Executive Summary
+            ============================================================ */}
+
+            <section className="dashboard-grid">
+
+                <div className="card">
+                    <h2>Running Containers</h2>
+                    <strong>{dashboard.summary.containers_running}</strong>
+                    <p>of {dashboard.summary.containers_total}</p>
+                </div>
+
+                <div className="card">
+                    <h2>Projects</h2>
+                    <strong>{dashboard.summary.projects}</strong>
+                </div>
+
+                <div className="card">
+                    <h2>Tasks</h2>
+                    <strong>{dashboard.summary.tasks}</strong>
+                </div>
+
+                <div className="card">
+                    <h2>Notes</h2>
+                    <strong>{dashboard.summary.notes}</strong>
+                </div>
+
+            </section>
+
+            {/* ===========================================================
+                Main Dashboard
+            ============================================================ */}
+
             <section className="dashboard-grid">
 
                 <div className="card">
                     <h2>Infrastructure Health</h2>
 
                     <ul className="status-list">
+
                         <li>
                             Backend
                             <span>{dashboard.health.backend.status}</span>
@@ -87,6 +121,7 @@ export default function Dashboard() {
                             Redis
                             <span>{dashboard.health.redis.status}</span>
                         </li>
+
                     </ul>
                 </div>
 
@@ -117,17 +152,21 @@ export default function Dashboard() {
                 <div className="card">
                     <h2>Resume Me</h2>
 
-                    <p>
-                        {dashboard.resume
-                            ? "Resume available"
-                            : "Nothing to resume"}
-                    </p>
+                    {dashboard.resume?.available ? (
+                        <>
+                            <strong>{dashboard.resume.title}</strong>
+                            <p>{dashboard.resume.description}</p>
+                        </>
+                    ) : (
+                        <p>Nothing to resume</p>
+                    )}
                 </div>
 
                 <div className="card">
                     <h2>Docker</h2>
 
                     <ul className="status-list">
+
                         <li>
                             Engine
                             <span>{docker.engine}</span>
@@ -142,6 +181,7 @@ export default function Dashboard() {
                             Version
                             <span>{docker.docker_version}</span>
                         </li>
+
                     </ul>
 
                     <hr />
@@ -158,6 +198,7 @@ export default function Dashboard() {
                             ))}
                         </ul>
                     )}
+
                 </div>
 
             </section>

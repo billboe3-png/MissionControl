@@ -1,5 +1,3 @@
-const API = "/api/v1";
-
 export interface DashboardResponse {
     application: {
         name: string;
@@ -8,6 +6,16 @@ export interface DashboardResponse {
     };
 
     generated: string;
+
+    summary: {
+        containers_running: number;
+        containers_total: number;
+        docker_engine: string;
+        projects: number;
+        tasks: number;
+        notes: number;
+        resume_available: boolean;
+    };
 
     health: {
         backend: {
@@ -38,7 +46,11 @@ export interface DashboardResponse {
         items: unknown[];
     };
 
-    resume: unknown;
+    resume: {
+        available: boolean;
+        title: string | null;
+        description: string | null;
+    };
 
     parking_lot: {
         count: number;
@@ -65,17 +77,19 @@ export interface DashboardResponse {
             status: string;
         };
 
-        zabbix: {
+        github: {
             enabled: boolean;
             status: string;
         };
 
-        github: {
+        zabbix: {
             enabled: boolean;
             status: string;
         };
     };
 }
+
+const API = "/api/v1";
 
 export const api = {
     async getDashboard(): Promise<DashboardResponse> {
