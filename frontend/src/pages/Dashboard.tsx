@@ -53,6 +53,7 @@ export default function Dashboard() {
     }
 
     const docker = dashboard.integrations.docker;
+    const summary = dashboard.summary;
 
     return (
         <main className="dashboard">
@@ -67,46 +68,12 @@ export default function Dashboard() {
                 </small>
             </header>
 
-            {/* ===========================================================
-                Executive Summary
-            ============================================================ */}
-
-            <section className="dashboard-grid">
-
-                <div className="card">
-                    <h2>Running Containers</h2>
-                    <strong>{dashboard.summary.containers_running}</strong>
-                    <p>of {dashboard.summary.containers_total}</p>
-                </div>
-
-                <div className="card">
-                    <h2>Projects</h2>
-                    <strong>{dashboard.summary.projects}</strong>
-                </div>
-
-                <div className="card">
-                    <h2>Tasks</h2>
-                    <strong>{dashboard.summary.tasks}</strong>
-                </div>
-
-                <div className="card">
-                    <h2>Notes</h2>
-                    <strong>{dashboard.summary.notes}</strong>
-                </div>
-
-            </section>
-
-            {/* ===========================================================
-                Main Dashboard
-            ============================================================ */}
-
             <section className="dashboard-grid">
 
                 <div className="card">
                     <h2>Infrastructure Health</h2>
 
                     <ul className="status-list">
-
                         <li>
                             Backend
                             <span>{dashboard.health.backend.status}</span>
@@ -121,52 +88,49 @@ export default function Dashboard() {
                             Redis
                             <span>{dashboard.health.redis.status}</span>
                         </li>
-
                     </ul>
                 </div>
 
                 <div className="card">
-                    <h2>Projects</h2>
+                    <h2>Operations Overview</h2>
 
-                    <p>Total Projects</p>
+                    <ul className="status-list">
+                        <li>
+                            Running Containers
+                            <span>{summary.containers_running}</span>
+                        </li>
 
-                    <strong>{dashboard.projects.count}</strong>
-                </div>
+                        <li>
+                            Total Projects
+                            <span>{summary.projects}</span>
+                        </li>
 
-                <div className="card">
-                    <h2>Today's Tasks</h2>
+                        <li>
+                            Open Tasks
+                            <span>{summary.tasks}</span>
+                        </li>
 
-                    <p>Total Tasks</p>
+                        <li>
+                            Notes
+                            <span>{summary.notes}</span>
+                        </li>
 
-                    <strong>{dashboard.tasks.count}</strong>
-                </div>
+                        <li>
+                            Resume Available
+                            <span>{summary.resume_available ? "Yes" : "No"}</span>
+                        </li>
 
-                <div className="card">
-                    <h2>Notes</h2>
-
-                    <p>Total Notes</p>
-
-                    <strong>{dashboard.notes.count}</strong>
-                </div>
-
-                <div className="card">
-                    <h2>Resume Me</h2>
-
-                    {dashboard.resume?.available ? (
-                        <>
-                            <strong>{dashboard.resume.title}</strong>
-                            <p>{dashboard.resume.description}</p>
-                        </>
-                    ) : (
-                        <p>Nothing to resume</p>
-                    )}
+                        <li>
+                            Docker Engine
+                            <span>{summary.docker_engine}</span>
+                        </li>
+                    </ul>
                 </div>
 
                 <div className="card">
                     <h2>Docker</h2>
 
                     <ul className="status-list">
-
                         <li>
                             Engine
                             <span>{docker.engine}</span>
@@ -181,7 +145,6 @@ export default function Dashboard() {
                             Version
                             <span>{docker.docker_version}</span>
                         </li>
-
                     </ul>
 
                     <hr />
@@ -198,7 +161,19 @@ export default function Dashboard() {
                             ))}
                         </ul>
                     )}
+                </div>
 
+                <div className="card">
+                    <h2>Resume</h2>
+
+                    {dashboard.resume.available ? (
+                        <>
+                            <strong>{dashboard.resume.title}</strong>
+                            <p>{dashboard.resume.description}</p>
+                        </>
+                    ) : (
+                        <p>No work currently waiting to be resumed.</p>
+                    )}
                 </div>
 
             </section>
