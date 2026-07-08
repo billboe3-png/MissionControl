@@ -1,30 +1,25 @@
 """
-Mission Control Project ORM Model
+Mission Control Note ORM Model
 """
 
 from datetime import datetime
-from typing import TYPE_CHECKING
 
-from sqlalchemy import Boolean
 from sqlalchemy import DateTime
 from sqlalchemy import Integer
 from sqlalchemy import String
+from sqlalchemy import Text
 from sqlalchemy.orm import Mapped
 from sqlalchemy.orm import mapped_column
-from sqlalchemy.orm import relationship
 
 from app.db.database import Base
 
-if TYPE_CHECKING:
-    from app.models.db.task import Task
 
-
-class Project(Base):
+class Note(Base):
     """
-    Project stored in PostgreSQL.
+    Note stored in PostgreSQL.
     """
 
-    __tablename__ = "projects"
+    __tablename__ = "notes"
 
     id: Mapped[int] = mapped_column(
         Integer,
@@ -32,19 +27,14 @@ class Project(Base):
         index=True,
     )
 
-    name: Mapped[str] = mapped_column(
+    title: Mapped[str] = mapped_column(
         String(200),
         nullable=False,
     )
 
-    description: Mapped[str | None] = mapped_column(
-        String(1000),
-        nullable=True,
-    )
-
-    active: Mapped[bool] = mapped_column(
-        Boolean,
-        default=True,
+    content: Mapped[str] = mapped_column(
+        Text,
+        nullable=False,
     )
 
     created_at: Mapped[datetime] = mapped_column(
@@ -56,10 +46,4 @@ class Project(Base):
         DateTime,
         default=datetime.utcnow,
         onupdate=datetime.utcnow,
-    )
-
-    tasks: Mapped[list["Task"]] = relationship(
-        "Task",
-        back_populates="project",
-        cascade="all, delete-orphan",
     )

@@ -227,6 +227,38 @@ MissionControl/
 
 ## Development Workflow
 
+### Seeding the Database
+
+Database seeding runs automatically when the backend container starts via `entrypoint.sh`.
+
+To run the seed manually:
+
+```bash
+cd backend
+python -m app.seed.runner
+```
+
+From inside the backend container:
+
+```bash
+docker compose exec backend python -m app.seed.runner
+```
+
+The seed runner is idempotent — each entity module seeds only when its table is empty. Running it multiple times will not create duplicates.
+
+Production baseline after a fresh `docker compose up`:
+
+- Projects: 4
+- Tasks: 8
+- Notes: 0
+- Resume: 0
+
+Verify seeded data on the dashboard:
+
+```bash
+curl http://localhost/api/v1/dashboard
+```
+
 ### Running Tests Locally
 
 Use Pester to run the test suite:

@@ -1,9 +1,8 @@
 """
-Mission Control Project ORM Model
+Mission Control Resume ORM Model
 """
 
 from datetime import datetime
-from typing import TYPE_CHECKING
 
 from sqlalchemy import Boolean
 from sqlalchemy import DateTime
@@ -11,20 +10,16 @@ from sqlalchemy import Integer
 from sqlalchemy import String
 from sqlalchemy.orm import Mapped
 from sqlalchemy.orm import mapped_column
-from sqlalchemy.orm import relationship
 
 from app.db.database import Base
 
-if TYPE_CHECKING:
-    from app.models.db.task import Task
 
-
-class Project(Base):
+class Resume(Base):
     """
-    Project stored in PostgreSQL.
+    Saved work context the user can resume.
     """
 
-    __tablename__ = "projects"
+    __tablename__ = "resumes"
 
     id: Mapped[int] = mapped_column(
         Integer,
@@ -32,7 +27,7 @@ class Project(Base):
         index=True,
     )
 
-    name: Mapped[str] = mapped_column(
+    title: Mapped[str] = mapped_column(
         String(200),
         nullable=False,
     )
@@ -42,7 +37,7 @@ class Project(Base):
         nullable=True,
     )
 
-    active: Mapped[bool] = mapped_column(
+    available: Mapped[bool] = mapped_column(
         Boolean,
         default=True,
     )
@@ -56,10 +51,4 @@ class Project(Base):
         DateTime,
         default=datetime.utcnow,
         onupdate=datetime.utcnow,
-    )
-
-    tasks: Mapped[list["Task"]] = relationship(
-        "Task",
-        back_populates="project",
-        cascade="all, delete-orphan",
     )

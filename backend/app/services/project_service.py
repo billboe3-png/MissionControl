@@ -1,17 +1,27 @@
 """
 Mission Control Project Service
 
-Business logic for the Projects dashboard section.
+Business logic for the Projects dashboard section and CRUD API.
 """
 
+import logging
+
+from fastapi import HTTPException
+from fastapi import status
 from sqlalchemy.orm import Session
 
 from app.models.db.project import Project
 from app.repositories.project_repository import ProjectRepository
+from app.schemas.project import ProjectCreate
+from app.schemas.project import ProjectListResponse
+from app.schemas.project import ProjectResponse
+from app.schemas.project import ProjectUpdate
+
+logger = logging.getLogger(__name__)
 
 
 class ProjectService:
-    """Project dashboard section."""
+    """Project dashboard section and CRUD operations."""
 
     def __init__(self, repository: ProjectRepository | None = None) -> None:
         self._repository = repository or ProjectRepository()
@@ -33,6 +43,80 @@ class ProjectService:
             "count": count,
             "items": [self._serialize_project(project) for project in projects],
         }
+
+    async def get_all(self, db: Session) -> ProjectListResponse:
+        """Return all projects as API response models."""
+        logger.info("Fetching all projects")
+        projects = self._repository.get_all(db)
+        items = [ProjectResponse.model_validate(project) for project in projects]
+        return ProjectListResponse(count=len(items), items=items)
+
+    async def get_by_id(self, db: Session, project_id: int) -> ProjectResponse:
+        """Return a single project as an API response model."""
+        logger.info("Fetching project id=%s", project_id)
+        project = self._repository.get_by_id(db, project_id)
+        if project is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Project not found",
+            )
+        return ProjectResponse.model_validate(project)
+
+    async def create(self, db: Session, data: ProjectCreate) -> ProjectResponse:
+        """Create a new project and return the API response model."""
+        logger.info("Creating project: %s", data.name)
+
+        if self._repository.get_by_name(db, data.name) is not None:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Project already exists",
+            )
+
+        project = self._repository.create(db, data)
+        return ProjectResponse.model_validate(project)
+
+    async def update(
+        self,
+        db: Session,
+        project_id: int,
+        data: ProjectUpdate,
+    ) -> ProjectResponse:
+        """Update an existing project and return the API response model."""
+        logger.info("Updating project id=%s", project_id)
+
+        existing = self._repository.get_by_id(db, project_id)
+        if existing is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Project not found",
+            )
+
+        if data.name is not None:
+            duplicate = self._repository.get_by_name(db, data.name)
+            if duplicate is not None and duplicate.id != project_id:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail="Project already exists",
+                )
+
+        updated = self._repository.update(db, project_id, data)
+        if updated is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Project not found",
+            )
+        return ProjectResponse.model_validate(updated)
+
+    async def delete(self, db: Session, project_id: int) -> None:
+        """Delete a project by identifier."""
+        logger.info("Deleting project id=%s", project_id)
+
+        deleted = self._repository.delete(db, project_id)
+        if not deleted:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Project not found",
+            )
 
     @staticmethod
     def _serialize_project(project: Project) -> dict:

@@ -1,12 +1,12 @@
 """
-Mission Control Project ORM Model
+Mission Control Task ORM Model
 """
 
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import Boolean
 from sqlalchemy import DateTime
+from sqlalchemy import ForeignKey
 from sqlalchemy import Integer
 from sqlalchemy import String
 from sqlalchemy.orm import Mapped
@@ -16,15 +16,15 @@ from sqlalchemy.orm import relationship
 from app.db.database import Base
 
 if TYPE_CHECKING:
-    from app.models.db.task import Task
+    from app.models.db.project import Project
 
 
-class Project(Base):
+class Task(Base):
     """
-    Project stored in PostgreSQL.
+    Task belonging to a project.
     """
 
-    __tablename__ = "projects"
+    __tablename__ = "tasks"
 
     id: Mapped[int] = mapped_column(
         Integer,
@@ -32,7 +32,14 @@ class Project(Base):
         index=True,
     )
 
-    name: Mapped[str] = mapped_column(
+    project_id: Mapped[int] = mapped_column(
+        Integer,
+        ForeignKey("projects.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+
+    title: Mapped[str] = mapped_column(
         String(200),
         nullable=False,
     )
@@ -42,9 +49,16 @@ class Project(Base):
         nullable=True,
     )
 
-    active: Mapped[bool] = mapped_column(
-        Boolean,
-        default=True,
+    status: Mapped[str] = mapped_column(
+        String(50),
+        nullable=False,
+        default="pending",
+    )
+
+    priority: Mapped[str] = mapped_column(
+        String(50),
+        nullable=False,
+        default="medium",
     )
 
     created_at: Mapped[datetime] = mapped_column(
@@ -58,8 +72,7 @@ class Project(Base):
         onupdate=datetime.utcnow,
     )
 
-    tasks: Mapped[list["Task"]] = relationship(
-        "Task",
-        back_populates="project",
-        cascade="all, delete-orphan",
+    project: Mapped["Project"] = relationship(
+        "Project",
+        back_populates="tasks",
     )

@@ -9,7 +9,8 @@ Sprint:
 
 from datetime import datetime, timezone
 
-from app.db import SessionLocal
+from sqlalchemy.orm import Session
+
 from app.services.docker_service import get_docker_status
 from app.services.project_service import project_service
 from app.services.task_service import task_service
@@ -20,20 +21,18 @@ from app.services.resume_service import resume_service
 class DashboardService:
     """Service responsible for building the dashboard response."""
 
-    async def get_dashboard(self) -> dict:
-        """Return the complete dashboard payload."""
+    async def get_dashboard(self, db: Session) -> dict:
+        """
+        Return the complete dashboard payload.
 
+        Args:
+            db: Active SQLAlchemy session provided by the router.
+        """
         docker = await get_docker_status()
-
-        db = SessionLocal()
-        try:
-            projects = await project_service.get_data(db)
-        finally:
-            db.close()
-
-        tasks = await task_service.get_data()
-        notes = await note_service.get_data()
-        resume = await resume_service.get_data()
+        projects = await project_service.get_data(db)
+        tasks = await task_service.get_data(db)
+        notes = await note_service.get_data(db)
+        resume = await resume_service.get_data(db)
 
         running = len([c for c in docker["containers"] if c["status"] == "running"])
 

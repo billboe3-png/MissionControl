@@ -6,7 +6,10 @@ Sprint:
 """
 
 from fastapi import APIRouter
+from fastapi import Depends
+from sqlalchemy.orm import Session
 
+from app.db import get_db
 from app.services.dashboard_service import dashboard_service
 
 router = APIRouter(tags=["Dashboard"])
@@ -17,7 +20,7 @@ router = APIRouter(tags=["Dashboard"])
     summary="Mission Control Dashboard",
     response_description="Mission Control dashboard data",
 )
-async def get_dashboard():
+async def get_dashboard(db: Session = Depends(get_db)):
     """
     Return the primary Mission Control dashboard payload.
 
@@ -25,4 +28,4 @@ async def get_dashboard():
     Additional widgets will extend the payload in future sprints without
     changing the endpoint.
     """
-    return await dashboard_service.get_dashboard()
+    return await dashboard_service.get_dashboard(db)
