@@ -1,5 +1,6 @@
 """Seed default tasks."""
 
+from datetime import UTC
 from datetime import datetime
 
 from sqlalchemy import func
@@ -21,7 +22,7 @@ def seed(db: Session) -> bool:
         raise RuntimeError("Projects must be seeded before tasks.")
 
     project_map = {project.name: project for project in projects}
-    now = datetime.utcnow()
+    now = datetime.now(UTC)
 
     task_definitions = [
         (

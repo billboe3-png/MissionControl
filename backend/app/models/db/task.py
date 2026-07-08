@@ -2,6 +2,7 @@
 Mission Control Task ORM Model
 """
 
+from datetime import UTC
 from datetime import datetime
 from typing import TYPE_CHECKING
 
@@ -63,13 +64,13 @@ class Task(Base):
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime,
-        default=datetime.utcnow,
+        default=lambda: datetime.now(UTC),
     )
 
     updated_at: Mapped[datetime] = mapped_column(
         DateTime,
-        default=datetime.utcnow,
-        onupdate=datetime.utcnow,
+        default=lambda: datetime.now(UTC),
+        onupdate=lambda: datetime.now(UTC),
     )
 
     project: Mapped["Project"] = relationship(

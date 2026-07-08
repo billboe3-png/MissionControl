@@ -2,6 +2,7 @@
 Mission Control Resume ORM Model
 """
 
+from datetime import UTC
 from datetime import datetime
 
 from sqlalchemy import Boolean
@@ -44,11 +45,11 @@ class Resume(Base):
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime,
-        default=datetime.utcnow,
+        default=lambda: datetime.now(UTC),
     )
 
     updated_at: Mapped[datetime] = mapped_column(
         DateTime,
-        default=datetime.utcnow,
-        onupdate=datetime.utcnow,
+        default=lambda: datetime.now(UTC),
+        onupdate=lambda: datetime.now(UTC),
     )

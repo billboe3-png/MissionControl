@@ -1,5 +1,6 @@
 """Seed default projects."""
 
+from datetime import UTC
 from datetime import datetime
 
 from sqlalchemy import func
@@ -15,7 +16,7 @@ def seed(db: Session) -> bool:
     if count > 0:
         return False
 
-    now = datetime.utcnow()
+    now = datetime.now(UTC)
     db.add_all(
         [
             Project(

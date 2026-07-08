@@ -2,6 +2,7 @@
 Project CRUD API integration tests.
 """
 
+from datetime import UTC
 from datetime import datetime
 from datetime import timedelta
 
@@ -38,7 +39,7 @@ def _persist_project(
     created_at: datetime | None = None,
 ) -> Project:
     """Insert a project directly for test setup."""
-    timestamp = created_at or datetime.utcnow()
+    timestamp = created_at or datetime.now(UTC)
     project = Project(
         name=name,
         description=description,
@@ -57,17 +58,17 @@ def test_get_all_projects_returns_ordered_list(client, db_session, project_repos
     oldest = _persist_project(
         db_session,
         name="Oldest Project",
-        created_at=datetime.utcnow() - timedelta(hours=2),
+        created_at=datetime.now(UTC) - timedelta(hours=2),
     )
     middle = _persist_project(
         db_session,
         name="Middle Project",
-        created_at=datetime.utcnow() - timedelta(hours=1),
+        created_at=datetime.now(UTC) - timedelta(hours=1),
     )
     newest = _persist_project(
         db_session,
         name="Newest Project",
-        created_at=datetime.utcnow(),
+        created_at=datetime.now(UTC),
     )
 
     response = client.get(PROJECTS_URL)
@@ -254,3 +255,113 @@ def test_delete_missing_project_returns_404(client, db_session, project_reposito
     assert response.status_code == 404
     assert response.json() == {"detail": "Project not found"}
     assert project_repository.get_by_id(db_session, 99999) is None
+
+
+@pytest.fixture
+def mission_control_project(db_session) -> Project:
+    """Seed a project used for duplicate-name validation tests."""
+    return _persist_project(
+        db_session,
+        name="Mission Control",
+        description="Existing project for duplicate checks",
+    )
+
+
+@pytest.mark.parametrize(
+    "duplicate_name",
+    [
+        "Mission Control",
+        " mission control ",
+        "MISSION CONTROL",
+    ],
+)
+def test_create_duplicate_project_rejects_case_and_whitespace_variants(
+    client,
+    db_session,
+    project_repository,
+    mission_control_project,
+    duplicate_name,
+):
+    """POST rejects duplicate names regardless of case or surrounding whitespace."""
+    response = client.post(
+        PROJECTS_URL,
+        json={"name": duplicate_name, "description": "Duplicate attempt"},
+    )
+
+    assert response.status_code == 409
+    assert response.json() == {"detail": "Project already exists"}
+    assert project_repository.get_count(db_session) == 1
+
+
+def test_update_project_description_only_returns_200(
+    client,
+    db_session,
+    project_repository,
+    mission_control_project,
+):
+    """PUT allows updates that do not change the normalized project name."""
+    response = client.put(
+        f"{PROJECTS_URL}/{mission_control_project.id}",
+        json={"description": "Updated description only"},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["name"] == "Mission Control"
+    assert payload["description"] == "Updated description only"
+
+    stored = project_repository.get_by_id(db_session, mission_control_project.id)
+    assert stored is not None
+    assert stored.description == "Updated description only"
+
+
+def test_update_project_rejects_renaming_to_existing_normalized_name(
+    client,
+    db_session,
+    project_repository,
+):
+    """PUT returns 409 when renaming to another project's normalized name."""
+    first = _persist_project(
+        db_session,
+        name="Mission Control Updated",
+        description="First project",
+    )
+    _persist_project(
+        db_session,
+        name="Mission Control",
+        description="Second project",
+    )
+
+    response = client.put(
+        f"{PROJECTS_URL}/{first.id}",
+        json={"name": "Mission Control"},
+    )
+
+    assert response.status_code == 409
+    assert response.json() == {"detail": "Project already exists"}
+
+    stored = project_repository.get_by_id(db_session, first.id)
+    assert stored is not None
+    assert stored.name == "Mission Control Updated"
+
+
+def test_update_project_allows_case_only_name_change(
+    client,
+    db_session,
+    project_repository,
+    mission_control_project,
+):
+    """PUT allows a case-only rename for the same project."""
+    response = client.put(
+        f"{PROJECTS_URL}/{mission_control_project.id}",
+        json={"name": "mission control"},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["name"] == "mission control"
+
+    stored = project_repository.get_by_id(db_session, mission_control_project.id)
+    assert stored is not None
+    assert stored.name == "mission control"
+    assert project_repository.get_count(db_session) == 1

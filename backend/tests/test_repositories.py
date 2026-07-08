@@ -2,6 +2,7 @@
 Repository layer tests.
 """
 
+from datetime import UTC
 from datetime import datetime
 
 from app.models.db.note import Note
@@ -94,7 +95,7 @@ def test_note_repository_create_and_count(db_session):
 
 def test_resume_repository_get_active(db_session):
     repository = ResumeRepository()
-    now = datetime.utcnow()
+    now = datetime.now(UTC)
     repository.create_many(
         db_session,
         [

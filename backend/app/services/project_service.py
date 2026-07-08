@@ -64,15 +64,17 @@ class ProjectService:
 
     async def create(self, db: Session, data: ProjectCreate) -> ProjectResponse:
         """Create a new project and return the API response model."""
-        logger.info("Creating project: %s", data.name)
+        normalized_name = ProjectRepository.normalize_name(data.name)
+        logger.info("Creating project: %s", normalized_name)
 
-        if self._repository.get_by_name(db, data.name) is not None:
+        if self._repository.get_by_name(db, normalized_name) is not None:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
                 detail="Project already exists",
             )
 
-        project = self._repository.create(db, data)
+        payload = data.model_copy(update={"name": data.name.strip()})
+        project = self._repository.create(db, payload)
         return ProjectResponse.model_validate(project)
 
     async def update(
@@ -92,12 +94,16 @@ class ProjectService:
             )
 
         if data.name is not None:
-            duplicate = self._repository.get_by_name(db, data.name)
-            if duplicate is not None and duplicate.id != project_id:
-                raise HTTPException(
-                    status_code=status.HTTP_409_CONFLICT,
-                    detail="Project already exists",
-                )
+            normalized_new = ProjectRepository.normalize_name(data.name)
+            normalized_existing = ProjectRepository.normalize_name(existing.name)
+            if normalized_new != normalized_existing:
+                duplicate = self._repository.get_by_name(db, data.name)
+                if duplicate is not None and duplicate.id != project_id:
+                    raise HTTPException(
+                        status_code=status.HTTP_409_CONFLICT,
+                        detail="Project already exists",
+                    )
+            data = data.model_copy(update={"name": data.name.strip()})
 
         updated = self._repository.update(db, project_id, data)
         if updated is None:

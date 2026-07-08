@@ -17,6 +17,11 @@ class ProjectRepository:
     """Data access layer for projects stored in PostgreSQL."""
 
     @staticmethod
+    def normalize_name(name: str) -> str:
+        """Normalize a project name for case-insensitive, trimmed comparison."""
+        return name.strip().lower()
+
+    @staticmethod
     def get_all(db: Session) -> list[Project]:
         """
         Return all projects ordered by creation date descending.
@@ -80,7 +85,7 @@ class ProjectRepository:
     @staticmethod
     def get_by_name(db: Session, name: str) -> Project | None:
         """
-        Return a project by name using a case-insensitive lookup.
+        Return a project by name using a case-insensitive, trimmed lookup.
 
         Args:
             db: Active SQLAlchemy session.
@@ -89,7 +94,10 @@ class ProjectRepository:
         Returns:
             Project ORM instance, or None if not found.
         """
-        stmt = select(Project).where(func.lower(Project.name) == name.lower())
+        normalized = ProjectRepository.normalize_name(name)
+        stmt = select(Project).where(
+            func.lower(func.trim(Project.name)) == normalized,
+        )
         return db.scalar(stmt)
 
     @staticmethod
@@ -105,7 +113,7 @@ class ProjectRepository:
             The persisted Project ORM instance.
         """
         entity = Project(
-            name=project.name,
+            name=project.name.strip(),
             description=project.description,
             active=project.active,
         )
@@ -136,6 +144,8 @@ class ProjectRepository:
             return None
 
         updates = project.model_dump(exclude_unset=True)
+        if "name" in updates and updates["name"] is not None:
+            updates["name"] = updates["name"].strip()
         for field, value in updates.items():
             setattr(entity, field, value)
 
