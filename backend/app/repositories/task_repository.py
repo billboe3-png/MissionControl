@@ -10,6 +10,8 @@ from sqlalchemy.orm import Session
 from sqlalchemy.orm import selectinload
 
 from app.models.db.task import Task
+from app.schemas.task import TaskCreate
+from app.schemas.task import TaskUpdate
 
 
 class TaskRepository:
@@ -18,7 +20,8 @@ class TaskRepository:
     @staticmethod
     def get_all(db: Session) -> list[Task]:
         """
-        Return all tasks ordered by id with their parent project loaded.
+        Return all tasks ordered by creation date descending with their parent
+        project loaded.
 
         Args:
             db: Active SQLAlchemy session.
@@ -29,9 +32,123 @@ class TaskRepository:
         stmt = (
             select(Task)
             .options(selectinload(Task.project))
-            .order_by(Task.id)
+            .order_by(Task.created_at.desc())
         )
         return list(db.scalars(stmt).all())
+
+    @staticmethod
+    def get_by_id(db: Session, task_id: int) -> Task | None:
+        """
+        Return a single task by identifier.
+
+        Args:
+            db: Active SQLAlchemy session.
+            task_id: Primary key of the task.
+
+        Returns:
+            Task ORM instance, or None if not found.
+        """
+        stmt = select(Task).where(Task.id == task_id)
+        return db.scalar(stmt)
+
+    @staticmethod
+    def get_by_project_and_title(
+        db: Session,
+        project_id: int,
+        title: str,
+    ) -> Task | None:
+        """
+        Return a task by project and title using a case-insensitive lookup.
+
+        Args:
+            db: Active SQLAlchemy session.
+            project_id: Identifier of the parent project.
+            title: Task title to search for.
+
+        Returns:
+            Task ORM instance, or None if not found.
+        """
+        normalized = title.strip().lower()
+        stmt = select(Task).where(
+            Task.project_id == project_id,
+            func.lower(func.trim(Task.title)) == normalized,
+        )
+        return db.scalar(stmt)
+
+    @staticmethod
+    def create(db: Session, task: TaskCreate) -> Task:
+        """
+        Persist a new task.
+
+        Args:
+            db: Active SQLAlchemy session.
+            task: Validated task creation payload.
+
+        Returns:
+            The persisted Task ORM instance.
+        """
+        entity = Task(
+            project_id=task.project_id,
+            title=task.title.strip(),
+            description=task.description,
+            status=task.status,
+            priority=task.priority,
+        )
+        db.add(entity)
+        db.commit()
+        db.refresh(entity)
+        return entity
+
+    @staticmethod
+    def update(
+        db: Session,
+        task_id: int,
+        task: TaskUpdate,
+    ) -> Task | None:
+        """
+        Update an existing task with only the supplied fields.
+
+        Args:
+            db: Active SQLAlchemy session.
+            task_id: Primary key of the task.
+            task: Validated task update payload.
+
+        Returns:
+            Updated Task ORM instance, or None if not found.
+        """
+        entity = TaskRepository.get_by_id(db, task_id)
+        if entity is None:
+            return None
+
+        updates = task.model_dump(exclude_unset=True)
+        if "title" in updates and updates["title"] is not None:
+            updates["title"] = updates["title"].strip()
+        for field, value in updates.items():
+            setattr(entity, field, value)
+
+        db.commit()
+        db.refresh(entity)
+        return entity
+
+    @staticmethod
+    def delete(db: Session, task_id: int) -> bool:
+        """
+        Delete a task by identifier.
+
+        Args:
+            db: Active SQLAlchemy session.
+            task_id: Primary key of the task.
+
+        Returns:
+            True if deleted, False if the task was not found.
+        """
+        entity = TaskRepository.get_by_id(db, task_id)
+        if entity is None:
+            return False
+
+        db.delete(entity)
+        db.commit()
+        return True
 
     @staticmethod
     def get_count(db: Session) -> int:
