@@ -15,6 +15,9 @@ from app.models.db import Note
 from app.models.db import Project
 from app.models.db import Resume
 from app.models.db import Task
+from app.models.db.remote_host import RemoteHost
+from app.models.db.credential_profile import CredentialProfile
+from app.models.db.command_history import CommandHistory
 
 
 @pytest.fixture
@@ -135,6 +138,18 @@ def mock_docker(monkeypatch):
         },
     )
 
+    async def fake_remote_data(self, _db):
+        return {
+            "totalHosts": 0,
+            "enabledHosts": 0,
+            "recentCommands": [],
+        }
+
+    monkeypatch.setattr(
+        "app.providers.remote_provider.RemoteProvider.get_remote_data",
+        fake_remote_data,
+    )
+
 
 @pytest.fixture
 def sample_project(db_session):
@@ -148,3 +163,54 @@ def sample_project(db_session):
     db_session.commit()
     db_session.refresh(project)
     return project
+
+
+@pytest.fixture
+def sample_credential(db_session):
+    """Create a single credential profile for tests."""
+    credential = CredentialProfile(
+        name="Test SSH Key",
+        authentication_type="ssh_key",
+        username="testuser",
+        ssh_key="fake-key-content",
+    )
+    db_session.add(credential)
+    db_session.commit()
+    db_session.refresh(credential)
+    return credential
+
+
+@pytest.fixture
+def sample_host(db_session, sample_credential):
+    """Create a single remote host for tests."""
+    host = RemoteHost(
+        name="Test Server",
+        hostname="test.server.local",
+        ip_address="10.0.0.1",
+        operating_system="Ubuntu 22.04",
+        connection_type="ssh",
+        port=22,
+        enabled=True,
+        credential_profile_id=sample_credential.id,
+    )
+    db_session.add(host)
+    db_session.commit()
+    db_session.refresh(host)
+    return host
+
+
+@pytest.fixture
+def sample_disabled_host(db_session, sample_credential):
+    """Create a disabled remote host for tests."""
+    host = RemoteHost(
+        name="Disabled Server",
+        hostname="disabled.server.local",
+        connection_type="winrm",
+        port=5985,
+        enabled=False,
+        credential_profile_id=sample_credential.id,
+    )
+    db_session.add(host)
+    db_session.commit()
+    db_session.refresh(host)
+    return host

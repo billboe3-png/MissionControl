@@ -12,6 +12,7 @@ import TasksCard from "../components/TasksCard";
 import NotesCard from "../components/NotesCard";
 import ResumeCard from "../components/ResumeCard";
 import ParkingLotCard from "../components/ParkingLotCard";
+import RemoteOperationsCard from "../components/RemoteOperationsCard";
 import LoadingSkeleton from "../components/LoadingSkeleton";
 import ErrorCard from "../components/ErrorCard";
 import ToastContainer from "../components/Toast";
@@ -168,6 +169,14 @@ export default function Dashboard() {
                 <ParkingLotCard
                     count={dashboard.parking_lot.count}
                     items={dashboard.parking_lot.items}
+                    onRefresh={refreshDashboard}
+                    showToast={showToast}
+                />
+
+                <RemoteOperationsCard
+                    totalHosts={dashboard.remote.totalHosts}
+                    enabledHosts={dashboard.remote.enabledHosts}
+                    recentCommands={dashboard.remote.recentCommands}
                     onRefresh={refreshDashboard}
                     showToast={showToast}
                 />

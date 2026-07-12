@@ -21,12 +21,16 @@ from app.providers.task_provider import task_provider
 from app.providers.note_provider import note_provider
 from app.providers.resume_provider import resume_provider
 from app.providers.parking_lot_provider import parking_lot_provider
+from app.providers.remote_provider import RemoteProvider
 
 logger = logging.getLogger(__name__)
 
 
 class DashboardService:
     """Orchestrates dashboard data from all providers."""
+
+    def __init__(self) -> None:
+        self._remote_provider = RemoteProvider()
 
     async def get_dashboard(self, db: Session) -> dict:
         """
@@ -46,6 +50,7 @@ class DashboardService:
         notes = note_provider.get_note_data(db)
         resume = resume_provider.get_resume_data(db)
         parking_lot = parking_lot_provider.get_parking_lot_data(db)
+        remote = await self._remote_provider.get_remote_data(db)
 
         return {
             "application": {
@@ -75,6 +80,7 @@ class DashboardService:
             "notes": notes,
             "resume": resume,
             "parking_lot": parking_lot,
+            "remote": remote,
             "integrations": {
                 "docker": docker,
                 "ssh": {

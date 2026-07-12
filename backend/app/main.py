@@ -11,6 +11,7 @@ from app.routers import (
     notes,
     parking_lot,
     projects,
+    remote,
     resume,
     status,
     tasks,
@@ -51,6 +52,7 @@ app.include_router(tasks.router, prefix="/api/v1")
 app.include_router(notes.router, prefix="/api/v1")
 app.include_router(resume.router, prefix="/api/v1")
 app.include_router(parking_lot.router, prefix="/api/v1")
+app.include_router(remote.router, prefix="/api/v1")
 
 
 @app.get("/api/v1")
