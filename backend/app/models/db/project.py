@@ -17,6 +17,7 @@ from sqlalchemy.orm import relationship
 from app.db.database import Base
 
 if TYPE_CHECKING:
+    from app.models.db.note import Note
     from app.models.db.task import Task
 
 
@@ -63,4 +64,9 @@ class Project(Base):
         "Task",
         back_populates="project",
         cascade="all, delete-orphan",
+    )
+
+    notes: Mapped[list["Note"]] = relationship(
+        "Note",
+        back_populates="project",
     )

@@ -2,6 +2,8 @@
 Mission Control API Schemas
 """
 
+from app.schemas.note import NoteListResponse
+from app.schemas.note import NoteResponse
 from app.schemas.project import ProjectCreate
 from app.schemas.project import ProjectListResponse
 from app.schemas.project import ProjectResponse
@@ -12,6 +14,8 @@ from app.schemas.task import TaskResponse
 from app.schemas.task import TaskUpdate
 
 __all__ = [
+    "NoteListResponse",
+    "NoteResponse",
     "ProjectCreate",
     "ProjectListResponse",
     "ProjectResponse",

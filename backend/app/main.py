@@ -8,6 +8,7 @@ from app.routers import (
     docker,
     git,
     health,
+    notes,
     projects,
     status,
     tasks,
@@ -45,6 +46,7 @@ app.include_router(git.router, prefix="/api/v1")
 app.include_router(dashboard.router, prefix="/api/v1")
 app.include_router(projects.router, prefix="/api/v1")
 app.include_router(tasks.router, prefix="/api/v1")
+app.include_router(notes.router, prefix="/api/v1")
 
 
 @app.get("/api/v1")

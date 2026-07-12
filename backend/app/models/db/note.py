@@ -4,15 +4,21 @@ Mission Control Note ORM Model
 
 from datetime import UTC
 from datetime import datetime
+from typing import TYPE_CHECKING
 
 from sqlalchemy import DateTime
+from sqlalchemy import ForeignKey
 from sqlalchemy import Integer
 from sqlalchemy import String
 from sqlalchemy import Text
 from sqlalchemy.orm import Mapped
 from sqlalchemy.orm import mapped_column
+from sqlalchemy.orm import relationship
 
 from app.db.database import Base
+
+if TYPE_CHECKING:
+    from app.models.db.project import Project
 
 
 class Note(Base):
@@ -25,6 +31,13 @@ class Note(Base):
     id: Mapped[int] = mapped_column(
         Integer,
         primary_key=True,
+        index=True,
+    )
+
+    project_id: Mapped[int | None] = mapped_column(
+        Integer,
+        ForeignKey("projects.id", ondelete="CASCADE"),
+        nullable=True,
         index=True,
     )
 
@@ -47,4 +60,9 @@ class Note(Base):
         DateTime,
         default=lambda: datetime.now(UTC),
         onupdate=lambda: datetime.now(UTC),
+    )
+
+    project: Mapped["Project | None"] = relationship(
+        "Project",
+        back_populates="notes",
     )
