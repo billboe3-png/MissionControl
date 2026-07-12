@@ -7,15 +7,19 @@ Sprint:
     1.0.3
 """
 
+import logging
 from datetime import datetime, timezone
 
 from sqlalchemy.orm import Session
 
+from app.repositories.dashboard_repository import dashboard_repository
 from app.services.docker_service import get_docker_status
 from app.services.project_service import project_service
 from app.services.task_service import task_service
 from app.services.note_service import note_service
 from app.services.resume_service import resume_service
+
+logger = logging.getLogger(__name__)
 
 
 class DashboardService:
@@ -28,6 +32,15 @@ class DashboardService:
         Args:
             db: Active SQLAlchemy session provided by the router.
         """
+        logger.info("Loading project statistics")
+        project_statistics = dashboard_repository.get_project_statistics(db)
+
+        logger.info("Loading task statistics")
+        task_breakdown = dashboard_repository.get_task_status_breakdown(db)
+        total_tasks = dashboard_repository.count_tasks(db)
+
+        logger.info("Loading dashboard statistics")
+
         docker = await get_docker_status()
         projects = await project_service.get_data(db)
         tasks = await task_service.get_data(db)
@@ -47,10 +60,25 @@ class DashboardService:
                 "containers_running": running,
                 "containers_total": docker["container_count"],
                 "docker_engine": docker["engine"],
-                "projects": projects["count"],
-                "tasks": tasks["count"],
-                "notes": notes["count"],
-                "resume_available": resume["available"],
+                "projects": project_statistics["total"],
+                "active_projects": project_statistics["active"],
+                "project_statistics": {
+                    "total": project_statistics["total"],
+                    "active": project_statistics["active"],
+                    "inactive": project_statistics["inactive"],
+                },
+                "tasks": total_tasks,
+                "completed_tasks": task_breakdown["completed"],
+                "pending_tasks": task_breakdown["pending"],
+                "task_statistics": {
+                    "total": total_tasks,
+                    "pending": task_breakdown["pending"],
+                    "in_progress": task_breakdown["in_progress"],
+                    "completed": task_breakdown["completed"],
+                    "blocked": task_breakdown["blocked"],
+                },
+                "notes": dashboard_repository.count_notes(db),
+                "resume_available": dashboard_repository.count_active_resumes(db) > 0,
             },
             "health": {
                 "backend": {"status": "healthy"},
