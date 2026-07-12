@@ -1,183 +1,177 @@
-import { useEffect, useState } from "react";
-import { api, DashboardResponse } from "../services/api";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { api } from "../services/api";
+import { DashboardResponse } from "../types/dashboard";
+import DashboardHeader from "../components/DashboardHeader";
+import HealthCard from "../components/HealthCard";
+import OverviewCard from "../components/OverviewCard";
+import SystemCard from "../components/SystemCard";
+import DockerCard from "../components/DockerCard";
+import GitCard from "../components/GitCard";
+import ProjectsCard from "../components/ProjectsCard";
+import TasksCard from "../components/TasksCard";
+import NotesCard from "../components/NotesCard";
+import ResumeCard from "../components/ResumeCard";
+import ParkingLotCard from "../components/ParkingLotCard";
+import LoadingSkeleton from "../components/LoadingSkeleton";
+import ErrorCard from "../components/ErrorCard";
+import ToastContainer from "../components/Toast";
+import { useToasts } from "../hooks/useToasts";
+
+const REFRESH_INTERVAL_MS = 30_000;
 
 export default function Dashboard() {
     const [dashboard, setDashboard] = useState<DashboardResponse | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
+    const [refreshing, setRefreshing] = useState(false);
+    const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+    const mountedRef = useRef(true);
+    const { toasts, showToast, dismissToast } = useToasts();
 
-    useEffect(() => {
-        loadDashboard();
+    const handleDashboardData = useCallback((data: DashboardResponse) => {
+        setDashboard(data);
+        setError("");
     }, []);
 
-    async function loadDashboard() {
+    const handleDashboardError = useCallback((err: unknown) => {
+        console.error(err);
+        setError("Unable to connect to the Mission Control API.");
+    }, []);
+
+    const loadDashboard = useCallback(async () => {
         try {
             setLoading(true);
-
             const data = await api.getDashboard();
-
-            setDashboard(data);
-            setError("");
+            handleDashboardData(data);
         } catch (err) {
-            console.error(err);
-            setError("Unable to connect to the Mission Control API.");
+            handleDashboardError(err);
         } finally {
-            setLoading(false);
+            if (mountedRef.current) {
+                setLoading(false);
+            }
         }
-    }
+    }, [handleDashboardData, handleDashboardError]);
+
+    const refreshDashboard = useCallback(async () => {
+        try {
+            setRefreshing(true);
+            const data = await api.getDashboard();
+            handleDashboardData(data);
+        } catch (err) {
+            handleDashboardError(err);
+        } finally {
+            if (mountedRef.current) {
+                setRefreshing(false);
+            }
+        }
+    }, [handleDashboardData, handleDashboardError]);
+
+    useEffect(() => {
+        mountedRef.current = true;
+
+        const initialLoad = async () => {
+            try {
+                const data = await api.getDashboard();
+                if (mountedRef.current) {
+                    handleDashboardData(data);
+                }
+            } catch (err) {
+                if (mountedRef.current) {
+                    handleDashboardError(err);
+                }
+            } finally {
+                if (mountedRef.current) {
+                    setLoading(false);
+                }
+            }
+        };
+
+        initialLoad();
+
+        intervalRef.current = setInterval(() => {
+            refreshDashboard();
+        }, REFRESH_INTERVAL_MS);
+
+        return () => {
+            mountedRef.current = false;
+            if (intervalRef.current !== null) {
+                clearInterval(intervalRef.current);
+            }
+        };
+    }, [handleDashboardData, handleDashboardError, refreshDashboard]);
 
     if (loading) {
-        return (
-            <main className="dashboard">
-                <h1>Mission Control</h1>
-                <p>Loading dashboard...</p>
-            </main>
-        );
+        return <LoadingSkeleton />;
     }
 
     if (error) {
-        return (
-            <main className="dashboard">
-                <h1>Mission Control</h1>
-
-                <div className="card error-card">
-                    <h2>Connection Error</h2>
-                    <p>{error}</p>
-                </div>
-            </main>
-        );
+        return <ErrorCard message={error} onRetry={loadDashboard} />;
     }
 
     if (!dashboard) {
         return null;
     }
 
-    const docker = dashboard.integrations.docker;
-    const summary = dashboard.summary;
-
     return (
         <main className="dashboard">
+            <ToastContainer toasts={toasts} onDismiss={dismissToast} />
 
-            <header className="page-header">
-                <h1>{dashboard.application.name}</h1>
+            <DashboardHeader
+                name={dashboard.application.name}
+                tagline={dashboard.application.tagline}
+                version={dashboard.application.version}
+                generated={dashboard.generated}
+                onRefresh={refreshDashboard}
+                refreshing={refreshing}
+            />
 
-                <p>{dashboard.application.tagline}</p>
+            <section className="dashboard-grid dashboard-grid-4">
+                <HealthCard health={dashboard.health} />
 
-                <small>
-                    Version {dashboard.application.version}
-                </small>
-            </header>
+                <OverviewCard summary={dashboard.summary} />
 
-            <section className="dashboard-grid">
+                <SystemCard system={dashboard.system} />
 
-                <div className="card">
-                    <h2>Infrastructure Health</h2>
+                <GitCard git={dashboard.git} />
 
-                    <ul className="status-list">
-                        <li>
-                            Backend
-                            <span>{dashboard.health.backend.status}</span>
-                        </li>
+                <DockerCard docker={dashboard.docker} />
 
-                        <li>
-                            PostgreSQL
-                            <span>{dashboard.health.database.status}</span>
-                        </li>
+                <ProjectsCard
+                    count={dashboard.projects.count}
+                    items={dashboard.projects.items}
+                    onRefresh={refreshDashboard}
+                    showToast={showToast}
+                />
 
-                        <li>
-                            Redis
-                            <span>{dashboard.health.redis.status}</span>
-                        </li>
-                    </ul>
-                </div>
+                <TasksCard
+                    count={dashboard.tasks.count}
+                    items={dashboard.tasks.items}
+                    projects={dashboard.projects.items}
+                    onRefresh={refreshDashboard}
+                    showToast={showToast}
+                />
 
-                <div className="card">
-                    <h2>Operations Overview</h2>
+                <NotesCard
+                    count={dashboard.notes.count}
+                    items={dashboard.notes.items}
+                    projects={dashboard.projects.items}
+                    onRefresh={refreshDashboard}
+                    showToast={showToast}
+                />
 
-                    <ul className="status-list">
-                        <li>
-                            Running Containers
-                            <span>{summary.containers_running}</span>
-                        </li>
+                <ResumeCard
+                    available={dashboard.resume.available}
+                    title={dashboard.resume.title}
+                    description={dashboard.resume.description}
+                />
 
-                        <li>
-                            Total Projects
-                            <span>{summary.projects}</span>
-                        </li>
-
-                        <li>
-                            Open Tasks
-                            <span>{summary.tasks}</span>
-                        </li>
-
-                        <li>
-                            Notes
-                            <span>{summary.notes}</span>
-                        </li>
-
-                        <li>
-                            Resume Available
-                            <span>{summary.resume_available ? "Yes" : "No"}</span>
-                        </li>
-
-                        <li>
-                            Docker Engine
-                            <span>{summary.docker_engine}</span>
-                        </li>
-                    </ul>
-                </div>
-
-                <div className="card">
-                    <h2>Docker</h2>
-
-                    <ul className="status-list">
-                        <li>
-                            Engine
-                            <span>{docker.engine}</span>
-                        </li>
-
-                        <li>
-                            Containers
-                            <span>{docker.container_count}</span>
-                        </li>
-
-                        <li>
-                            Version
-                            <span>{docker.docker_version}</span>
-                        </li>
-                    </ul>
-
-                    <hr />
-
-                    {docker.containers.length === 0 ? (
-                        <p>No running containers.</p>
-                    ) : (
-                        <ul className="status-list">
-                            {docker.containers.map((container) => (
-                                <li key={container.id}>
-                                    {container.name}
-                                    <span>{container.status}</span>
-                                </li>
-                            ))}
-                        </ul>
-                    )}
-                </div>
-
-                <div className="card">
-                    <h2>Resume</h2>
-
-                    {dashboard.resume.available ? (
-                        <>
-                            <strong>{dashboard.resume.title}</strong>
-                            <p>{dashboard.resume.description}</p>
-                        </>
-                    ) : (
-                        <p>No work currently waiting to be resumed.</p>
-                    )}
-                </div>
-
+                <ParkingLotCard
+                    count={dashboard.parking_lot.count}
+                    items={dashboard.parking_lot.items}
+                    onRefresh={refreshDashboard}
+                    showToast={showToast}
+                />
             </section>
-
         </main>
     );
 }

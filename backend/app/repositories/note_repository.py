@@ -7,6 +7,7 @@ All database access for Note entities.
 from sqlalchemy import func
 from sqlalchemy import select
 from sqlalchemy.orm import Session
+from sqlalchemy.orm import selectinload
 
 from app.models.db.note import Note
 from app.schemas.note import NoteCreate
@@ -27,7 +28,11 @@ class NoteRepository:
         Returns:
             List of Note ORM instances.
         """
-        stmt = select(Note).order_by(Note.created_at.desc())
+        stmt = (
+            select(Note)
+            .options(selectinload(Note.project))
+            .order_by(Note.created_at.desc())
+        )
         return list(db.scalars(stmt).all())
 
     @staticmethod

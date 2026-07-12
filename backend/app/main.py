@@ -9,7 +9,9 @@ from app.routers import (
     git,
     health,
     notes,
+    parking_lot,
     projects,
+    resume,
     status,
     tasks,
     version,
@@ -47,6 +49,8 @@ app.include_router(dashboard.router, prefix="/api/v1")
 app.include_router(projects.router, prefix="/api/v1")
 app.include_router(tasks.router, prefix="/api/v1")
 app.include_router(notes.router, prefix="/api/v1")
+app.include_router(resume.router, prefix="/api/v1")
+app.include_router(parking_lot.router, prefix="/api/v1")
 
 
 @app.get("/api/v1")

@@ -172,8 +172,11 @@ class NoteService:
         """
         Map a Note ORM instance to the dashboard item shape.
         """
+        project_name = note.project.name if note.project else None
         return {
             "id": str(note.id),
+            "project_id": str(note.project_id) if note.project_id else None,
+            "project_name": project_name,
             "title": note.title,
             "content": note.content,
             "created_at": note.created_at.isoformat(),
