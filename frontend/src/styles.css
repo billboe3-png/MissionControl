@@ -2450,3 +2450,184 @@ select.form-input {
     font-size: 0.88rem;
     margin-bottom: 4px;
 }
+
+/* ==========================================================================
+   Integrations — Sprint 2.3.1
+   ========================================================================== */
+
+.integrations-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+    gap: 16px;
+    margin-top: 16px;
+}
+
+.integration-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    transition: border-color 0.15s;
+}
+
+.integration-card.enabled {
+    border-left: 3px solid var(--success);
+}
+
+.integration-card-header {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+}
+
+.integration-card-icon {
+    font-size: 1.6rem;
+    line-height: 1;
+    flex-shrink: 0;
+}
+
+.integration-card-title h3 {
+    margin: 0;
+    font-size: 1rem;
+    font-weight: 600;
+}
+
+.integration-card-title p {
+    margin: 4px 0 0;
+    font-size: 0.82rem;
+    color: var(--text-muted);
+    line-height: 1.4;
+}
+
+.integration-card-status {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.integration-test-result {
+    font-size: 0.78rem;
+    padding: 2px 8px;
+    border-radius: 6px;
+}
+
+.integration-test-result.success {
+    background: rgba(34, 197, 94, 0.15);
+    color: var(--success);
+}
+
+.integration-test-result.error {
+    background: rgba(239, 68, 68, 0.15);
+    color: var(--danger);
+}
+
+.integration-card-meta {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    font-size: 0.8rem;
+    color: var(--text-muted);
+}
+
+.integration-meta-url {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 100%;
+}
+
+.integration-card-actions {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    padding-top: 6px;
+    border-top: 1px solid var(--border);
+}
+
+/* Dashboard Integrations Card */
+
+.integrations-card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.integrations-card-header h3 {
+    margin: 0;
+}
+
+.integrations-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-top: 8px;
+}
+
+.integrations-list-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 0.88rem;
+}
+
+.integrations-item-icon {
+    font-size: 1rem;
+}
+
+.integrations-item-name {
+    flex: 1;
+}
+
+.integrations-item-status {
+    font-size: 0.78rem;
+    padding: 2px 8px;
+    border-radius: 6px;
+    font-weight: 500;
+}
+
+.integrations-item-status.healthy {
+    background: rgba(34, 197, 94, 0.15);
+    color: var(--success);
+}
+
+.integrations-item-status.warning {
+    background: rgba(245, 158, 11, 0.15);
+    color: var(--warning);
+}
+
+.integrations-item-status.neutral {
+    background: rgba(148, 163, 184, 0.15);
+    color: var(--text-muted);
+}
+
+.btn-warning {
+    background: var(--warning);
+    color: #000;
+    border: none;
+    padding: 6px 14px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-weight: 500;
+    font-size: 0.88rem;
+}
+
+.btn-warning:hover:not(:disabled) {
+    filter: brightness(1.1);
+}
+
+.btn-link {
+    background: none;
+    border: none;
+    color: var(--primary);
+    cursor: pointer;
+    padding: 0;
+    font-size: 0.85rem;
+}
+
+.btn-link:hover {
+    text-decoration: underline;
+}

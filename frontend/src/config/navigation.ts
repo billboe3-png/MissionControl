@@ -60,6 +60,7 @@ export const navigation: NavGroup[] = [
         icon: "⚙️",
         items: [
             { label: "General", path: "/settings", icon: "🔧" },
+            { label: "Integrations", path: "/settings/integrations", icon: "🔌" },
             { label: "Appearance", path: "/settings/appearance", icon: "🎨" },
             { label: "About", path: "/settings/about", icon: "ℹ️" },
         ],

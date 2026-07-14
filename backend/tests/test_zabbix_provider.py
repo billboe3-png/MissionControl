@@ -953,7 +953,8 @@ class TestDashboardZabbixIntegration:
         data = resp.json()
         assert "zabbix" in data
         assert "integrations" in data
-        assert "zabbix" in data["integrations"]
+        assert "count" in data["integrations"]
+        assert "items" in data["integrations"]
 
     @pytest.mark.asyncio
     async def test_dashboard_zabbix_summary_fields(self, client, mock_docker):

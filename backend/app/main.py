@@ -9,6 +9,7 @@ from app.routers import (
     git,
     health,
     identity,
+    integration,
     notes,
     parking_lot,
     projects,
@@ -72,6 +73,7 @@ app.include_router(resume.router, prefix="/api/v1")
 app.include_router(parking_lot.router, prefix="/api/v1")
 app.include_router(remote.router, prefix="/api/v1")
 app.include_router(identity.router, prefix="/api/v1")
+app.include_router(integration.router, prefix="/api/v1")
 app.include_router(zabbix.router, prefix="/api/v1")
 
 

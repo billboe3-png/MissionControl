@@ -53,6 +53,7 @@ class DashboardService:
         parking_lot = parking_lot_provider.get_parking_lot_data(db)
         remote = await self._remote_provider.get_remote_data(db)
         zabbix = await self._get_zabbix_data()
+        integrations = await self._get_integrations_data(db)
 
         return {
             "application": {
@@ -87,21 +88,7 @@ class DashboardService:
             "parking_lot": parking_lot,
             "remote": remote,
             "zabbix": zabbix,
-            "integrations": {
-                "docker": docker,
-                "ssh": {
-                    "enabled": True,
-                    "status": "configured",
-                },
-                "zabbix": {
-                    "enabled": zabbix.get("connected", False),
-                    "status": "connected" if zabbix.get("connected") else "not_configured",
-                },
-                "github": {
-                    "enabled": False,
-                    "status": "not_configured",
-                },
-            },
+            "integrations": integrations,
         }
 
     async def _get_zabbix_data(self) -> dict:
@@ -121,6 +108,41 @@ class DashboardService:
                 "warning_count": 0,
                 "ok_count": 0,
             }
+
+    async def _get_integrations_data(self, db) -> dict:
+        """Get integration statuses for the dashboard."""
+        try:
+            from app.repositories.integration_profile_repository import (
+                IntegrationProfileRepository,
+            )
+
+            profiles = IntegrationProfileRepository.get_all(db)
+            items = []
+            for p in profiles:
+                items.append({
+                    "id": p.id,
+                    "name": p.name,
+                    "type": p.integration_type,
+                    "enabled": p.enabled,
+                    "connected": (
+                        p.last_success is not None
+                        and p.last_error is None
+                    ),
+                    "last_test": (
+                        p.last_test.isoformat()
+                        if p.last_test
+                        else None
+                    ),
+                })
+            return {
+                "count": len(items),
+                "items": items,
+            }
+        except Exception as e:
+            logger.warning(
+                "Dashboard: integrations data failed: %s", e
+            )
+            return {"count": 0, "items": []}
 
 
 dashboard_service = DashboardService()

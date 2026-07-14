@@ -17,6 +17,7 @@ import IdentityOverviewPage from "./pages/identity/IdentityOverviewPage";
 import ActiveDirectoryPage from "./pages/identity/ActiveDirectoryPage";
 import Microsoft365Page from "./pages/identity/Microsoft365Page";
 import GeneralPage from "./pages/settings/GeneralPage";
+import IntegrationsPage from "./pages/settings/IntegrationsPage";
 import AppearancePage from "./pages/settings/AppearancePage";
 import AboutPage from "./pages/settings/AboutPage";
 import ZabbixOverviewPage from "./pages/zabbix/OverviewPage";
@@ -70,6 +71,7 @@ export default function App() {
                             <Route path="/identity/microsoft-365" element={<Microsoft365Page />} />
 
                             <Route path="/settings" element={<GeneralPage />} />
+                            <Route path="/settings/integrations" element={<IntegrationsPage />} />
                             <Route path="/settings/appearance" element={<AppearancePage />} />
                             <Route path="/settings/about" element={<AboutPage />} />
 

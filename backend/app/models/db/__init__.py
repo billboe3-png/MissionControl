@@ -5,6 +5,7 @@ Mission Control ORM Models
 from .command_history import CommandHistory
 from .command_template import CommandTemplate
 from .credential_profile import CredentialProfile
+from .integration_profile import IntegrationProfile
 from .note import Note
 from .parking_lot import ParkingLot
 from .project import Project
@@ -17,6 +18,7 @@ __all__ = [
     "CommandHistory",
     "CommandTemplate",
     "CredentialProfile",
+    "IntegrationProfile",
     "Note",
     "ParkingLot",
     "Project",

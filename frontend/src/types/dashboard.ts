@@ -191,11 +191,26 @@ export interface IntegrationStatus {
     status: string;
 }
 
+export interface IntegrationListItem {
+    id: number;
+    name: string;
+    type: string;
+    enabled: boolean;
+    connected: boolean;
+    last_test: string | null;
+}
+
+export interface IntegrationListData {
+    count: number;
+    items: IntegrationListItem[];
+}
+
 export interface Integrations {
     docker: DockerData;
     ssh: IntegrationStatus;
     zabbix: IntegrationStatus;
     github: IntegrationStatus;
+    profiles: IntegrationListData;
 }
 
 export interface RemoteCommand {

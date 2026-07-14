@@ -4,6 +4,7 @@ import { DashboardResponse } from "../types/dashboard";
 import StatCard from "../components/dashboard/StatCard";
 import HealthBadges from "../components/dashboard/HealthBadges";
 import QuickActions from "../components/dashboard/QuickActions";
+import IntegrationsCard from "../components/dashboard/IntegrationsCard";
 import PageHeader from "../components/common/PageHeader";
 
 export default function DashboardPage() {
@@ -86,6 +87,9 @@ export default function DashboardPage() {
                     <h3>Quick Actions</h3>
                     <QuickActions />
                 </div>
+                {data.integrations?.profiles && (
+                    <IntegrationsCard items={data.integrations.profiles.items} />
+                )}
             </div>
         </>
     );
