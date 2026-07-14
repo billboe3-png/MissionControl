@@ -1,10 +1,14 @@
 """
 Mission Control Identity Provider Base
 
-Abstract base class defining the contract for all identity providers.
-Each provider implements Active Directory or Microsoft 365 operations.
+Abstract base classes defining the contract for all identity
+providers. Standardized methods: test_connection, get_summary,
+get_users, get_groups, get_devices, get_health.
 
-Sprint 2.2.1 - Identity Platform Foundation.
+Providers never raise exceptions to the dashboard.
+They return {"connected": false, "error": "..."} on failure.
+
+Sprint 2.2.0 - Microsoft 365 & Active Directory Integration.
 """
 
 from abc import ABC, abstractmethod
@@ -14,38 +18,23 @@ class ActiveDirectoryProvider(ABC):
     """
     Abstract base class for Active Directory providers.
 
-    Each concrete provider must implement:
-    - get_domain_controllers: List domain controllers
-    - get_forest: Get forest information
-    - get_domain: Get domain information
-    - get_organizational_units: List OUs
+    Standardized interface:
+    - test_connection: Verify AD connectivity
+    - get_summary: Get domain/forest overview
     - get_users: List user summaries
     - get_groups: List group summaries
-    - get_computers: List computer summaries
-    - get_gpos: List Group Policy Objects
-    - get_fsmo_roles: Get FSMO role holders
-    - get_dns_health: Get DNS health status
-    - get_dhcp_health: Get DHCP health status
+    - get_devices: List computer/device summaries
+    - get_health: Get replication and health status
     """
 
     @abstractmethod
-    async def get_domain_controllers(self) -> dict:
-        """List domain controllers in the forest."""
+    async def test_connection(self) -> dict:
+        """Test connectivity to Active Directory."""
         ...
 
     @abstractmethod
-    async def get_forest(self) -> dict:
-        """Get forest information."""
-        ...
-
-    @abstractmethod
-    async def get_domain(self) -> dict:
-        """Get domain information."""
-        ...
-
-    @abstractmethod
-    async def get_organizational_units(self) -> dict:
-        """List organizational units."""
+    async def get_summary(self) -> dict:
+        """Get domain and forest summary information."""
         ...
 
     @abstractmethod
@@ -59,28 +48,13 @@ class ActiveDirectoryProvider(ABC):
         ...
 
     @abstractmethod
-    async def get_computers(self) -> dict:
-        """List computer summaries."""
+    async def get_devices(self) -> dict:
+        """List computer/device summaries."""
         ...
 
     @abstractmethod
-    async def get_gpos(self) -> dict:
-        """List Group Policy Objects."""
-        ...
-
-    @abstractmethod
-    async def get_fsmo_roles(self) -> dict:
-        """Get FSMO role holders."""
-        ...
-
-    @abstractmethod
-    async def get_dns_health(self) -> dict:
-        """Get DNS health status."""
-        ...
-
-    @abstractmethod
-    async def get_dhcp_health(self) -> dict:
-        """Get DHCP health status."""
+    async def get_health(self) -> dict:
+        """Get replication and health status."""
         ...
 
 
@@ -88,47 +62,41 @@ class Microsoft365Provider(ABC):
     """
     Abstract base class for Microsoft 365 providers.
 
-    Each concrete provider must implement:
-    - get_tenant: Get tenant information
-    - get_licenses: List license summaries
-    - get_service_health: Get Microsoft 365 service health
-    - get_entra_health: Get Entra ID health
-    - get_exchange_health: Get Exchange Online health
-    - get_secure_score: Get Secure Score
-    - get_message_center: Get Message Center items
+    Standardized interface:
+    - test_connection: Verify M365 connectivity
+    - get_summary: Get tenant overview
+    - get_users: List user summaries
+    - get_groups: List group summaries
+    - get_devices: List device summaries
+    - get_health: Get service health status
     """
 
     @abstractmethod
-    async def get_tenant(self) -> dict:
-        """Get tenant information."""
+    async def test_connection(self) -> dict:
+        """Test connectivity to Microsoft 365."""
         ...
 
     @abstractmethod
-    async def get_licenses(self) -> dict:
-        """List license summaries."""
+    async def get_summary(self) -> dict:
+        """Get tenant summary information."""
         ...
 
     @abstractmethod
-    async def get_service_health(self) -> dict:
-        """Get Microsoft 365 service health."""
+    async def get_users(self) -> dict:
+        """List user summaries."""
         ...
 
     @abstractmethod
-    async def get_entra_health(self) -> dict:
-        """Get Entra ID health."""
+    async def get_groups(self) -> dict:
+        """List group summaries."""
         ...
 
     @abstractmethod
-    async def get_exchange_health(self) -> dict:
-        """Get Exchange Online health."""
+    async def get_devices(self) -> dict:
+        """List device summaries."""
         ...
 
     @abstractmethod
-    async def get_secure_score(self) -> dict:
-        """Get Secure Score."""
-        ...
-
-    @abstractmethod
-    async def get_message_center(self) -> dict:
-        """Get Message Center items."""
+    async def get_health(self) -> dict:
+        """Get service health status."""
         ...

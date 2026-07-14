@@ -4,7 +4,7 @@ Mission Control Microsoft 365 Provider (Mocked)
 Returns mocked Microsoft 365 data for development and testing.
 No Graph API connections. No authentication.
 
-Sprint 2.2.1 - Identity Platform Foundation.
+Sprint 2.2.0 - Microsoft 365 & Active Directory Integration.
 """
 
 import logging
@@ -23,292 +23,189 @@ class MockMicrosoft365Provider(Microsoft365Provider):
     Used for development, testing, and UI scaffolding.
     """
 
-    async def get_tenant(self) -> dict:
-        """Return mocked tenant information."""
-        logger.info("M365: get_tenant (mocked)")
+    async def test_connection(self) -> dict:
+        """Test M365 connectivity (mocked)."""
+        logger.info("M365: test_connection (mocked)")
         return {
-            "success": True,
+            "connected": True,
+            "latency_ms": 45,
+            "message": "Mocked M365 connection successful",
+            "tenant": "Contoso Corporation",
+            "tenant_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+        }
+
+    async def get_summary(self) -> dict:
+        """Return mocked tenant summary."""
+        logger.info("M365: get_summary (mocked)")
+        return {
+            "connected": True,
             "tenant": {
                 "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
-                "name": "Contoso Corporation",
                 "display_name": "Contoso Corporation",
                 "domain": "contoso.com",
-                "verified_domains": ["contoso.com", "contoso.onmicrosoft.com"],
-                "default_domain": "contoso.com",
+                "verified_domains": [
+                    "contoso.com",
+                    "contoso.onmicrosoft.com",
+                ],
                 "tenant_type": "AAD",
-                "created_at": "2018-06-01T00:00:00Z",
-                "created_by": "admin@contoso.com",
-                "directory_sync_enabled": True,
-                "directory_sync_last_sync": datetime.now(UTC).isoformat(),
                 "mfa_enabled": True,
-                "conditional_access_enabled": True,
-                "total_users": 2134,
-                "licensed_users": 1987,
-                "total_groups": 456,
-                "total_devices": 1203,
+                "directory_sync_enabled": True,
             },
-        }
-
-    async def get_licenses(self) -> dict:
-        """Return mocked license summary data."""
-        logger.info("M365: get_licenses (mocked)")
-        return {
-            "success": True,
+            "user_count": 2134,
+            "licensed_users": 1987,
+            "group_count": 456,
+            "device_count": 1203,
             "licenses": [
                 {
-                    "sku_part_number": "ENTERPRISEPREMIUM",
-                    "display_name": "Microsoft 365 E5",
-                    "total_licenses": 500,
-                    "assigned_licenses": 478,
-                    "available_licenses": 22,
-                    "cost_per_user_monthly": 57.00,
-                    "total_monthly_cost": 27226.00,
+                    "sku": "ENTERPRISEPREMIUM",
+                    "name": "Microsoft 365 E5",
+                    "total": 500,
+                    "assigned": 478,
+                    "available": 22,
                 },
                 {
-                    "sku_part_number": "SPE_E3",
-                    "display_name": "Microsoft 365 E3",
-                    "total_licenses": 1200,
-                    "assigned_licenses": 1156,
-                    "available_licenses": 44,
-                    "cost_per_user_monthly": 36.00,
-                    "total_monthly_cost": 41616.00,
-                },
-                {
-                    "sku_part_number": "EXCHANGESTANDARD",
-                    "display_name": "Exchange Online Plan 1",
-                    "total_licenses": 300,
-                    "assigned_licenses": 289,
-                    "available_licenses": 11,
-                    "cost_per_user_monthly": 4.00,
-                    "total_monthly_cost": 1156.00,
-                },
-                {
-                    "sku_part_number": "EMSPREMIUM",
-                    "display_name": "Enterprise Mobility + Security E5",
-                    "total_licenses": 500,
-                    "assigned_licenses": 478,
-                    "available_licenses": 22,
-                    "cost_per_user_monthly": 16.00,
-                    "total_monthly_cost": 7648.00,
+                    "sku": "SPE_E3",
+                    "name": "Microsoft 365 E3",
+                    "total": 1200,
+                    "assigned": 1156,
+                    "available": 44,
                 },
             ],
-            "total_sku_count": 4,
-            "total_assigned": 2401,
-            "total_available": 99,
-            "total_monthly_cost": 77646.00,
         }
 
-    async def get_service_health(self) -> dict:
-        """Return mocked Microsoft 365 service health data."""
-        logger.info("M365: get_service_health (mocked)")
-        now = datetime.now(UTC).isoformat()
+    async def get_users(self) -> dict:
+        """Return mocked user summaries."""
+        logger.info("M365: get_users (mocked)")
         return {
-            "success": True,
-            "service_health": {
-                "overall_status": "healthy",
-                "services": [
-                    {
-                        "name": "Exchange Online",
-                        "status": "healthy",
-                        "feature": "Exchange",
-                        "issues": [],
-                    },
-                    {
-                        "name": "SharePoint Online",
-                        "status": "healthy",
-                        "feature": "SharePoint",
-                        "issues": [],
-                    },
-                    {
-                        "name": "Microsoft Teams",
-                        "status": "healthy",
-                        "feature": "Microsoft Teams",
-                        "issues": [],
-                    },
-                    {
-                        "name": "OneDrive for Business",
-                        "status": "healthy",
-                        "feature": "OneDrive",
-                        "issues": [],
-                    },
-                    {
-                        "name": "Entra ID",
-                        "status": "healthy",
-                        "feature": "Azure Active Directory",
-                        "issues": [],
-                    },
-                    {
-                        "name": "Intune",
-                        "status": "degraded",
-                        "feature": "Intune",
-                        "issues": [
-                            {
-                                "title": "Device enrollment delays",
-                                "status": "investigating",
-                                "impact": "Minor",
-                                "start_time": now,
-                                "last_update": now,
-                            }
-                        ],
-                    },
-                ],
-                "active_incidents": 1,
-                "resolved_last_30_days": 3,
-            },
+            "connected": True,
+            "users": [
+                {
+                    "id": "u1",
+                    "display_name": "Robert Barnes",
+                    "email": "rbarnes@contoso.com",
+                    "department": "IT",
+                    "job_title": "Systems Administrator",
+                    "account_enabled": True,
+                    "licensed": True,
+                },
+                {
+                    "id": "u2",
+                    "display_name": "Alice Smith",
+                    "email": "asmith@contoso.com",
+                    "department": "Engineering",
+                    "job_title": "Senior Engineer",
+                    "account_enabled": True,
+                    "licensed": True,
+                },
+                {
+                    "id": "u3",
+                    "display_name": "Mike Jones",
+                    "email": "mjones@contoso.com",
+                    "department": "Sales",
+                    "job_title": "Account Executive",
+                    "account_enabled": False,
+                    "licensed": False,
+                },
+            ],
+            "total_count": 2134,
+            "enabled_count": 2098,
+            "disabled_count": 36,
+            "licensed_count": 1987,
         }
 
-    async def get_entra_health(self) -> dict:
-        """Return mocked Entra ID health data."""
-        logger.info("M365: get_entra_health (mocked)")
+    async def get_groups(self) -> dict:
+        """Return mocked group summaries."""
+        logger.info("M365: get_groups (mocked)")
         return {
-            "success": True,
-            "entra_health": {
-                "status": "healthy",
-                "sign_in_success_rate": 99.7,
-                "total_sign_ins_24h": 4523,
-                "failed_sign_ins_24h": 14,
-                "mfa_success_rate": 99.2,
-                "conditional_access_policies": 12,
-                "active_policies": 12,
-                "blocked_sign_ins_24h": 8,
-                "risk_detections_24h": 3,
-                "risky_users": 1,
-                "deleted_objects_30d": 15,
-                "password_reset_registrations": 1876,
-                "self_service_password_resets_30d": 42,
-            },
+            "connected": True,
+            "groups": [
+                {
+                    "id": "g1",
+                    "display_name": "All Employees",
+                    "mail": "allemployees@contoso.com",
+                    "member_count": 2134,
+                    "type": "Unified",
+                },
+                {
+                    "id": "g2",
+                    "display_name": "IT Admins",
+                    "mail": "itadmins@contoso.com",
+                    "member_count": 45,
+                    "type": "Security",
+                },
+            ],
+            "total_count": 456,
         }
 
-    async def get_exchange_health(self) -> dict:
-        """Return mocked Exchange Online health data."""
-        logger.info("M365: get_exchange_health (mocked)")
+    async def get_devices(self) -> dict:
+        """Return mocked device summaries."""
+        logger.info("M365: get_devices (mocked)")
         return {
-            "success": True,
-            "exchange_health": {
-                "status": "healthy",
-                "mailboxes_total": 1987,
-                "mailboxes_active": 1945,
-                "mailboxes_online": 1987,
-                "daily_emails_sent": 23456,
-                "daily_emails_received": 31234,
-                "average_mailbox_size_gb": 12.4,
-                "total_mailbox_size_gb": 24638.8,
-                "dags_count": 2,
-                "databases_count": 8,
-                "database_availability": 99.99,
-                "queue_length": 0,
-                "transport_rules_count": 15,
-                "connectors_count": 8,
-            },
+            "connected": True,
+            "devices": [
+                {
+                    "id": "d1",
+                    "display_name": "DESKTOP-JBARNES",
+                    "os": "Windows 11",
+                    "version": "23H2",
+                    "compliant": True,
+                    "last_sync": datetime.now(UTC).isoformat(),
+                },
+                {
+                    "id": "d2",
+                    "display_name": "LAPTOP-ASMITH",
+                    "os": "Windows 11",
+                    "version": "23H2",
+                    "compliant": True,
+                    "last_sync": datetime.now(UTC).isoformat(),
+                },
+            ],
+            "total_count": 1203,
+            "compliant_count": 1178,
+            "non_compliant_count": 25,
         }
 
-    async def get_secure_score(self) -> dict:
-        """Return mocked Secure Score data."""
-        logger.info("M365: get_secure_score (mocked)")
+    async def get_health(self) -> dict:
+        """Return mocked M365 service health."""
+        logger.info("M365: get_health (mocked)")
         return {
-            "success": True,
+            "connected": True,
+            "status": "healthy",
+            "overall_status": "healthy",
+            "services": [
+                {
+                    "name": "Exchange Online",
+                    "status": "healthy",
+                },
+                {
+                    "name": "SharePoint Online",
+                    "status": "healthy",
+                },
+                {
+                    "name": "Microsoft Teams",
+                    "status": "healthy",
+                },
+                {
+                    "name": "Entra ID",
+                    "status": "healthy",
+                },
+                {
+                    "name": "Intune",
+                    "status": "degraded",
+                    "issues": [
+                        {
+                            "title": "Device enrollment delays",
+                            "status": "investigating",
+                        }
+                    ],
+                },
+            ],
+            "active_incidents": 1,
+            "resolved_last_30_days": 3,
             "secure_score": {
                 "current_score": 72.4,
                 "max_score": 100,
                 "percentage": 72.4,
-                "comparison_to_industry": {
-                    "your_score": 72.4,
-                    "average_score": 58.2,
-                    "tier": "above_average",
-                },
-                "categories": [
-                    {
-                        "name": "Identity",
-                        "current_score": 18.5,
-                        "max_score": 25,
-                        "percentage": 74.0,
-                    },
-                    {
-                        "name": "Devices",
-                        "current_score": 14.2,
-                        "max_score": 20,
-                        "percentage": 71.0,
-                    },
-                    {
-                        "name": "Apps",
-                        "current_score": 11.8,
-                        "max_score": 15,
-                        "percentage": 78.7,
-                    },
-                    {
-                        "name": "Data",
-                        "current_score": 15.4,
-                        "max_score": 25,
-                        "percentage": 61.6,
-                    },
-                    {
-                        "name": "Infrastructure",
-                        "current_score": 12.5,
-                        "max_score": 15,
-                        "percentage": 83.3,
-                    },
-                ],
-                "recommended_actions_count": 18,
-                "high_priority_actions": 4,
-                "last_calculated": datetime.now(UTC).isoformat(),
-            },
-        }
-
-    async def get_message_center(self) -> dict:
-        """Return mocked Message Center items."""
-        logger.info("M365: get_message_center (mocked)")
-        now = datetime.now(UTC).isoformat()
-        return {
-            "success": True,
-            "message_center": {
-                "total_items": 8,
-                "items": [
-                    {
-                        "id": "MC123456",
-                        "title": "Microsoft Teams: New meeting experience rolling out",
-                        "category": "Stay Informed",
-                        "severity": "Standard",
-                        "message": (
-                            "A new meeting experience will be "
-                            "rolled out starting next month."
-                        ),
-                        "action_required": False,
-                        "published_at": now,
-                        "end_of_rollout": now,
-                        "affected_services": ["Microsoft Teams"],
-                        "compatibility_impact": "No action required",
-                    },
-                    {
-                        "id": "MC123457",
-                        "title": "Exchange Online: TLS 1.2 enforcement deadline",
-                        "category": "Act Now",
-                        "severity": "Critical",
-                        "message": (
-                            "TLS 1.0 and 1.1 will be disabled. "
-                            "Ensure all clients support TLS 1.2."
-                        ),
-                        "action_required": True,
-                        "published_at": now,
-                        "end_of_rollout": now,
-                        "affected_services": ["Exchange Online"],
-                        "compatibility_impact": "Clients must support TLS 1.2",
-                    },
-                    {
-                        "id": "MC123458",
-                        "title": "SharePoint Online: Modernization of classic sites",
-                        "category": "Stay Informed",
-                        "severity": "Standard",
-                        "message": (
-                            "Classic SharePoint sites will begin "
-                            "automated modernization."
-                        ),
-                        "action_required": False,
-                        "published_at": now,
-                        "end_of_rollout": now,
-                        "affected_services": ["SharePoint Online"],
-                        "compatibility_impact": "No action required",
-                    },
-                ],
             },
         }
 

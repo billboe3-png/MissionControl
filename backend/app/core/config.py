@@ -164,6 +164,59 @@ class Settings(BaseSettings):
     )
 
     # ------------------------------------------------------------------
+    # Active Directory
+    # ------------------------------------------------------------------
+
+    ad_server: str = Field(
+        default="",
+        alias="AD_SERVER",
+    )
+
+    ad_port: int = Field(
+        default=636,
+        alias="AD_PORT",
+    )
+
+    ad_use_ssl: bool = Field(
+        default=True,
+        alias="AD_USE_SSL",
+    )
+
+    ad_username: str = Field(
+        default="",
+        alias="AD_USERNAME",
+    )
+
+    ad_password: str = Field(
+        default="",
+        alias="AD_PASSWORD",
+    )
+
+    ad_base_dn: str = Field(
+        default="",
+        alias="AD_BASE_DN",
+    )
+
+    # ------------------------------------------------------------------
+    # Microsoft 365
+    # ------------------------------------------------------------------
+
+    m365_tenant_id: str = Field(
+        default="",
+        alias="M365_TENANT_ID",
+    )
+
+    m365_client_id: str = Field(
+        default="",
+        alias="M365_CLIENT_ID",
+    )
+
+    m365_client_secret: str = Field(
+        default="",
+        alias="M365_CLIENT_SECRET",
+    )
+
+    # ------------------------------------------------------------------
     # API
     # ------------------------------------------------------------------
 

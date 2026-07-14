@@ -4,11 +4,12 @@ Mission Control Identity Service Tests
 Tests for IdentityService business logic layer.
 Validates service correctly delegates to providers.
 
-Sprint 2.2.1 - Identity Platform Foundation.
+Sprint 2.2.0 - Microsoft 365 & Active Directory Integration.
 """
 
 import pytest
 
+from app.providers.identity.provider_factory import reset_providers
 from app.services.identity_service import IdentityService
 
 
@@ -17,75 +18,50 @@ class TestIdentityServiceAD:
 
     @pytest.fixture()
     def service(self) -> IdentityService:
+        reset_providers()
         return IdentityService()
 
     @pytest.mark.anyio()
-    async def test_get_domain_controllers(self, service: IdentityService) -> None:
-        result = await service.get_domain_controllers()
-        assert result["success"] is True
-        assert "domain_controllers" in result
+    async def test_ad_test_connection(self, service: IdentityService) -> None:
+        result = await service.ad_test_connection()
+        assert "connected" in result
+        assert result["connected"] is True
 
     @pytest.mark.anyio()
-    async def test_get_forest(self, service: IdentityService) -> None:
-        result = await service.get_forest()
-        assert result["success"] is True
-        assert "forest" in result
-
-    @pytest.mark.anyio()
-    async def test_get_domain(self, service: IdentityService) -> None:
-        result = await service.get_domain()
-        assert result["success"] is True
+    async def test_ad_get_summary(self, service: IdentityService) -> None:
+        result = await service.ad_get_summary()
+        assert "connected" in result
+        assert result["connected"] is True
         assert "domain" in result
 
     @pytest.mark.anyio()
-    async def test_get_organizational_units(self, service: IdentityService) -> None:
-        result = await service.get_organizational_units()
-        assert result["success"] is True
-        assert "organizational_units" in result
-
-    @pytest.mark.anyio()
-    async def test_get_users(self, service: IdentityService) -> None:
-        result = await service.get_users()
-        assert result["success"] is True
+    async def test_ad_get_users(self, service: IdentityService) -> None:
+        result = await service.ad_get_users()
+        assert "connected" in result
+        assert result["connected"] is True
         assert "users" in result
         assert "total_count" in result
 
     @pytest.mark.anyio()
-    async def test_get_groups(self, service: IdentityService) -> None:
-        result = await service.get_groups()
-        assert result["success"] is True
+    async def test_ad_get_groups(self, service: IdentityService) -> None:
+        result = await service.ad_get_groups()
+        assert "connected" in result
+        assert result["connected"] is True
         assert "groups" in result
 
     @pytest.mark.anyio()
-    async def test_get_computers(self, service: IdentityService) -> None:
-        result = await service.get_computers()
-        assert result["success"] is True
-        assert "computers" in result
+    async def test_ad_get_devices(self, service: IdentityService) -> None:
+        result = await service.ad_get_devices()
+        assert "connected" in result
+        assert result["connected"] is True
+        assert "devices" in result
 
     @pytest.mark.anyio()
-    async def test_get_gpos(self, service: IdentityService) -> None:
-        result = await service.get_gpos()
-        assert result["success"] is True
-        assert "gpos" in result
-
-    @pytest.mark.anyio()
-    async def test_get_fsmo_roles(self, service: IdentityService) -> None:
-        result = await service.get_fsmo_roles()
-        assert result["success"] is True
-        assert "forest_roles" in result
-        assert "domain_roles" in result
-
-    @pytest.mark.anyio()
-    async def test_get_dns_health(self, service: IdentityService) -> None:
-        result = await service.get_dns_health()
-        assert result["success"] is True
-        assert "dns_health" in result
-
-    @pytest.mark.anyio()
-    async def test_get_dhcp_health(self, service: IdentityService) -> None:
-        result = await service.get_dhcp_health()
-        assert result["success"] is True
-        assert "dhcp_health" in result
+    async def test_ad_get_health(self, service: IdentityService) -> None:
+        result = await service.ad_get_health()
+        assert "connected" in result
+        assert result["connected"] is True
+        assert "status" in result
 
 
 class TestIdentityServiceM365:
@@ -93,50 +69,49 @@ class TestIdentityServiceM365:
 
     @pytest.fixture()
     def service(self) -> IdentityService:
+        reset_providers()
         return IdentityService()
 
     @pytest.mark.anyio()
-    async def test_get_tenant(self, service: IdentityService) -> None:
-        result = await service.get_tenant()
-        assert result["success"] is True
+    async def test_m365_test_connection(self, service: IdentityService) -> None:
+        result = await service.m365_test_connection()
+        assert "connected" in result
+        assert result["connected"] is True
+
+    @pytest.mark.anyio()
+    async def test_m365_get_summary(self, service: IdentityService) -> None:
+        result = await service.m365_get_summary()
+        assert "connected" in result
+        assert result["connected"] is True
         assert "tenant" in result
 
     @pytest.mark.anyio()
-    async def test_get_licenses(self, service: IdentityService) -> None:
-        result = await service.get_licenses()
-        assert result["success"] is True
-        assert "licenses" in result
+    async def test_m365_get_users(self, service: IdentityService) -> None:
+        result = await service.m365_get_users()
+        assert "connected" in result
+        assert result["connected"] is True
+        assert "users" in result
 
     @pytest.mark.anyio()
-    async def test_get_service_health(self, service: IdentityService) -> None:
-        result = await service.get_service_health()
-        assert result["success"] is True
-        assert "service_health" in result
+    async def test_m365_get_groups(self, service: IdentityService) -> None:
+        result = await service.m365_get_groups()
+        assert "connected" in result
+        assert result["connected"] is True
+        assert "groups" in result
 
     @pytest.mark.anyio()
-    async def test_get_entra_health(self, service: IdentityService) -> None:
-        result = await service.get_entra_health()
-        assert result["success"] is True
-        assert "entra_health" in result
+    async def test_m365_get_devices(self, service: IdentityService) -> None:
+        result = await service.m365_get_devices()
+        assert "connected" in result
+        assert result["connected"] is True
+        assert "devices" in result
 
     @pytest.mark.anyio()
-    async def test_get_exchange_health(self, service: IdentityService) -> None:
-        result = await service.get_exchange_health()
-        assert result["success"] is True
-        assert "exchange_health" in result
-
-    @pytest.mark.anyio()
-    async def test_get_secure_score(self, service: IdentityService) -> None:
-        result = await service.get_secure_score()
-        assert result["success"] is True
-        assert "secure_score" in result
-
-    @pytest.mark.anyio()
-    async def test_get_message_center(self, service: IdentityService) -> None:
-        result = await service.get_message_center()
-        mc = result.get("message_center", result)
-        assert "items" in mc
-        assert isinstance(mc["items"], list)
+    async def test_m365_get_health(self, service: IdentityService) -> None:
+        result = await service.m365_get_health()
+        assert "connected" in result
+        assert result["connected"] is True
+        assert "status" in result
 
 
 class TestIdentityServiceOverview:
@@ -144,6 +119,7 @@ class TestIdentityServiceOverview:
 
     @pytest.fixture()
     def service(self) -> IdentityService:
+        reset_providers()
         return IdentityService()
 
     @pytest.mark.anyio()
@@ -164,20 +140,13 @@ class TestIdentityServiceOverview:
         assert "m365" in overview
 
     @pytest.mark.anyio()
-    async def test_overview_ad_has_counts(self, service: IdentityService) -> None:
+    async def test_overview_ad_has_connected(self, service: IdentityService) -> None:
         result = await service.get_overview()
         ad = result["overview"]["ad"]
-        assert "domain_controllers" in ad
-        assert "total_users" in ad
-        assert "total_computers" in ad
-        assert "total_groups" in ad
-        assert "total_gpos" in ad
+        assert "connected" in ad
 
     @pytest.mark.anyio()
-    async def test_overview_m365_has_counts(self, service: IdentityService) -> None:
+    async def test_overview_m365_has_connected(self, service: IdentityService) -> None:
         result = await service.get_overview()
         m365 = result["overview"]["m365"]
-        assert "total_users" in m365
-        assert "licensed_users" in m365
-        assert "overall_status" in m365
-        assert "secure_score" in m365
+        assert "connected" in m365

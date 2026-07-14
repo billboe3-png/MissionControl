@@ -1,5 +1,4 @@
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
 import PageHeader from "../../components/common/PageHeader";
 import StatusBadge from "../../components/common/StatusBadge";
 import { identityApi, IdentityOverview } from "../../services/identity";
@@ -18,21 +17,8 @@ export default function IdentityOverviewPage() {
     if (error) return <div className="error-banner">{error}</div>;
     if (!data) return <div className="loading">Loading…</div>;
 
-    const adCards = [
-        { label: "Domain Controllers", count: data.ad_domain_controllers, path: "/identity/active-directory", status: data.ad_domain_controllers > 0 ? ("healthy" as const) : ("neutral" as const) },
-        { label: "Users", count: data.ad_users_total, path: "/identity/active-directory", status: data.ad_users_total > 0 ? ("healthy" as const) : ("neutral" as const) },
-        { label: "Computers", count: data.ad_computers_total, path: "/identity/active-directory", status: data.ad_computers_total > 0 ? ("healthy" as const) : ("neutral" as const) },
-        { label: "Groups", count: data.ad_groups_total, path: "/identity/active-directory", status: data.ad_groups_total > 0 ? ("healthy" as const) : ("neutral" as const) },
-        { label: "GPOs", count: data.ad_gpos_total, path: "/identity/active-directory", status: data.ad_gpos_total > 0 ? ("info" as const) : ("neutral" as const) },
-    ];
-
-    const m365Cards = [
-        { label: "Total Users", count: data.m365_total_users, path: "/identity/microsoft-365", status: data.m365_total_users > 0 ? ("healthy" as const) : ("neutral" as const) },
-        { label: "Licensed Users", count: data.m365_licensed_users, path: "/identity/microsoft-365", status: data.m365_licensed_users > 0 ? ("healthy" as const) : ("neutral" as const) },
-        { label: "Service Status", count: 0, path: "/identity/microsoft-365", status: data.m365_overall_status === "healthy" ? ("healthy" as const) : data.m365_overall_status === "degraded" ? ("warning" as const) : ("neutral" as const) },
-        { label: "Active Incidents", count: data.m365_active_incidents, path: "/identity/microsoft-365", status: data.m365_active_incidents > 0 ? ("warning" as const) : ("healthy" as const) },
-        { label: "Secure Score", count: Math.round(data.m365_secure_score), path: "/identity/microsoft-365", status: data.m365_secure_score >= 70 ? ("healthy" as const) : data.m365_secure_score >= 50 ? ("warning" as const) : ("error" as const) },
-    ];
+    const ad = data.overview.ad;
+    const m365 = data.overview.m365;
 
     return (
         <>
@@ -43,30 +29,113 @@ export default function IdentityOverviewPage() {
             <div className="identity-overview-section">
                 <h3>Active Directory</h3>
                 <div className="infra-overview-grid">
-                    {adCards.map((card) => (
-                        <Link key={card.label} to={card.path} className="infra-overview-card">
-                            <div className="infra-card-header">
-                                <span className="infra-card-label">{card.label}</span>
-                                <StatusBadge status={card.status} label={String(card.count)} />
-                            </div>
-                        </Link>
-                    ))}
+                    <div className="infra-overview-card">
+                        <div className="infra-card-header">
+                            <span className="infra-card-label">Status</span>
+                            <StatusBadge
+                                status={ad.connected ? "healthy" : "error"}
+                                label={ad.connected ? "Connected" : "Disconnected"}
+                            />
+                        </div>
+                    </div>
+                    <div className="infra-overview-card">
+                        <div className="infra-card-header">
+                            <span className="infra-card-label">Domain</span>
+                            <StatusBadge status="info" label={ad.domain} />
+                        </div>
+                    </div>
+                    <div className="infra-overview-card">
+                        <div className="infra-card-header">
+                            <span className="infra-card-label">Users</span>
+                            <StatusBadge
+                                status={ad.user_count > 0 ? "healthy" : "neutral"}
+                                label={String(ad.user_count)}
+                            />
+                        </div>
+                    </div>
+                    <div className="infra-overview-card">
+                        <div className="infra-card-header">
+                            <span className="infra-card-label">Groups</span>
+                            <StatusBadge
+                                status={ad.group_count > 0 ? "healthy" : "neutral"}
+                                label={String(ad.group_count)}
+                            />
+                        </div>
+                    </div>
+                    <div className="infra-overview-card">
+                        <div className="infra-card-header">
+                            <span className="infra-card-label">Computers</span>
+                            <StatusBadge
+                                status={ad.computer_count > 0 ? "healthy" : "neutral"}
+                                label={String(ad.computer_count)}
+                            />
+                        </div>
+                    </div>
+                    <div className="infra-overview-card">
+                        <div className="infra-card-header">
+                            <span className="infra-card-label">Health</span>
+                            <StatusBadge
+                                status={ad.health === "healthy" ? "healthy" : ad.health === "degraded" ? "warning" : "neutral"}
+                                label={ad.health}
+                            />
+                        </div>
+                    </div>
                 </div>
             </div>
             <div className="identity-overview-section">
                 <h3>Microsoft 365</h3>
                 <div className="infra-overview-grid">
-                    {m365Cards.map((card) => (
-                        <Link key={card.label} to={card.path} className="infra-overview-card">
-                            <div className="infra-card-header">
-                                <span className="infra-card-label">{card.label}</span>
-                                <StatusBadge
-                                    status={card.status}
-                                    label={card.label === "Service Status" ? data.m365_overall_status : card.label === "Secure Score" ? `${data.m365_secure_score}%` : String(card.count)}
-                                />
-                            </div>
-                        </Link>
-                    ))}
+                    <div className="infra-overview-card">
+                        <div className="infra-card-header">
+                            <span className="infra-card-label">Status</span>
+                            <StatusBadge
+                                status={m365.connected ? "healthy" : "error"}
+                                label={m365.connected ? "Connected" : "Disconnected"}
+                            />
+                        </div>
+                    </div>
+                    <div className="infra-overview-card">
+                        <div className="infra-card-header">
+                            <span className="infra-card-label">Tenant</span>
+                            <StatusBadge status="info" label={m365.tenant} />
+                        </div>
+                    </div>
+                    <div className="infra-overview-card">
+                        <div className="infra-card-header">
+                            <span className="infra-card-label">Licensed Users</span>
+                            <StatusBadge
+                                status={m365.licensed_users > 0 ? "healthy" : "neutral"}
+                                label={String(m365.licensed_users)}
+                            />
+                        </div>
+                    </div>
+                    <div className="infra-overview-card">
+                        <div className="infra-card-header">
+                            <span className="infra-card-label">Licenses</span>
+                            <StatusBadge
+                                status="info"
+                                label={String(m365.license_count)}
+                            />
+                        </div>
+                    </div>
+                    <div className="infra-overview-card">
+                        <div className="infra-card-header">
+                            <span className="infra-card-label">Service Health</span>
+                            <StatusBadge
+                                status={m365.health === "healthy" ? "healthy" : m365.health === "degraded" ? "warning" : "neutral"}
+                                label={m365.health}
+                            />
+                        </div>
+                    </div>
+                    <div className="infra-overview-card">
+                        <div className="infra-card-header">
+                            <span className="infra-card-label">Active Incidents</span>
+                            <StatusBadge
+                                status={m365.active_incidents > 0 ? "warning" : "healthy"}
+                                label={String(m365.active_incidents)}
+                            />
+                        </div>
+                    </div>
                 </div>
             </div>
         </>

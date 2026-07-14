@@ -4,7 +4,7 @@ Mission Control Identity API Tests
 Integration tests for /api/v1/identity endpoints.
 Validates all endpoints return correct response shapes.
 
-Sprint 2.2.1 - Identity Platform Foundation.
+Sprint 2.2.0 - Microsoft 365 & Active Directory Integration.
 """
 
 import pytest
@@ -36,24 +36,19 @@ class TestIdentityOverviewAPI:
         assert response.status_code == 200
 
     @pytest.mark.anyio()
-    async def test_overview_has_ad_fields(self, client: AsyncClient) -> None:
+    async def test_overview_has_success(self, client: AsyncClient) -> None:
         response = await client.get("/api/v1/identity/overview")
         data = response.json()
-        assert "ad_domain_controllers" in data
-        assert "ad_users_total" in data
-        assert "ad_computers_total" in data
-        assert "ad_groups_total" in data
-        assert "ad_gpos_total" in data
+        assert "success" in data
+        assert data["success"] is True
 
     @pytest.mark.anyio()
-    async def test_overview_has_m365_fields(self, client: AsyncClient) -> None:
+    async def test_overview_has_ad_and_m365(self, client: AsyncClient) -> None:
         response = await client.get("/api/v1/identity/overview")
         data = response.json()
-        assert "m365_total_users" in data
-        assert "m365_licensed_users" in data
-        assert "m365_overall_status" in data
-        assert "m365_active_incidents" in data
-        assert "m365_secure_score" in data
+        overview = data["overview"]
+        assert "ad" in overview
+        assert "m365" in overview
 
 
 # ------------------------------------------------------------------ #
@@ -61,65 +56,42 @@ class TestIdentityOverviewAPI:
 # ------------------------------------------------------------------ #
 
 
-class TestADDomainControllersAPI:
-    """Tests for GET /api/v1/identity/ad/domain-controllers."""
+class TestADTestConnectionAPI:
+    """Tests for GET /api/v1/identity/ad/test."""
 
     @pytest.mark.anyio()
     async def test_returns_200(self, client: AsyncClient) -> None:
-        response = await client.get(
-            "/api/v1/identity/ad/domain-controllers"
-        )
+        response = await client.get("/api/v1/identity/ad/test")
         assert response.status_code == 200
 
     @pytest.mark.anyio()
-    async def test_has_success_field(self, client: AsyncClient) -> None:
-        response = await client.get(
-            "/api/v1/identity/ad/domain-controllers"
-        )
+    async def test_has_connected_field(self, client: AsyncClient) -> None:
+        response = await client.get("/api/v1/identity/ad/test")
         data = response.json()
-        assert "success" in data
-        assert data["success"] is True
-
-    @pytest.mark.anyio()
-    async def test_has_domain_controllers(self, client: AsyncClient) -> None:
-        response = await client.get(
-            "/api/v1/identity/ad/domain-controllers"
-        )
-        data = response.json()
-        assert "domain_controllers" in data
-        assert isinstance(data["domain_controllers"], list)
+        assert "connected" in data
+        assert data["connected"] is True
 
 
-class TestADForestAPI:
-    """Tests for GET /api/v1/identity/ad/forest."""
+class TestADSummaryAPI:
+    """Tests for GET /api/v1/identity/ad/summary."""
 
     @pytest.mark.anyio()
     async def test_returns_200(self, client: AsyncClient) -> None:
-        response = await client.get("/api/v1/identity/ad/forest")
+        response = await client.get("/api/v1/identity/ad/summary")
         assert response.status_code == 200
 
     @pytest.mark.anyio()
-    async def test_has_forest(self, client: AsyncClient) -> None:
-        response = await client.get("/api/v1/identity/ad/forest")
+    async def test_has_connected(self, client: AsyncClient) -> None:
+        response = await client.get("/api/v1/identity/ad/summary")
         data = response.json()
-        assert "forest" in data
-        assert "name" in data["forest"]
-
-
-class TestADDomainAPI:
-    """Tests for GET /api/v1/identity/ad/domain."""
-
-    @pytest.mark.anyio()
-    async def test_returns_200(self, client: AsyncClient) -> None:
-        response = await client.get("/api/v1/identity/ad/domain")
-        assert response.status_code == 200
+        assert "connected" in data
+        assert data["connected"] is True
 
     @pytest.mark.anyio()
     async def test_has_domain(self, client: AsyncClient) -> None:
-        response = await client.get("/api/v1/identity/ad/domain")
+        response = await client.get("/api/v1/identity/ad/summary")
         data = response.json()
         assert "domain" in data
-        assert "password_policy" in data["domain"]
 
 
 class TestADUsersAPI:
@@ -138,12 +110,10 @@ class TestADUsersAPI:
         assert isinstance(data["users"], list)
 
     @pytest.mark.anyio()
-    async def test_has_summary_counts(self, client: AsyncClient) -> None:
+    async def test_has_total_count(self, client: AsyncClient) -> None:
         response = await client.get("/api/v1/identity/ad/users")
         data = response.json()
         assert "total_count" in data
-        assert "enabled_count" in data
-        assert "disabled_count" in data
 
 
 class TestADGroupsAPI:
@@ -161,81 +131,34 @@ class TestADGroupsAPI:
         assert "groups" in data
 
 
-class TestADComputersAPI:
-    """Tests for GET /api/v1/identity/ad/computers."""
+class TestADDevicesAPI:
+    """Tests for GET /api/v1/identity/ad/devices."""
 
     @pytest.mark.anyio()
     async def test_returns_200(self, client: AsyncClient) -> None:
-        response = await client.get("/api/v1/identity/ad/computers")
+        response = await client.get("/api/v1/identity/ad/devices")
         assert response.status_code == 200
 
     @pytest.mark.anyio()
-    async def test_has_computers(self, client: AsyncClient) -> None:
-        response = await client.get("/api/v1/identity/ad/computers")
+    async def test_has_devices(self, client: AsyncClient) -> None:
+        response = await client.get("/api/v1/identity/ad/devices")
         data = response.json()
-        assert "computers" in data
-        assert "server_count" in data
+        assert "devices" in data
 
 
-class TestADGPOsAPI:
-    """Tests for GET /api/v1/identity/ad/gpos."""
+class TestADHealthAPI:
+    """Tests for GET /api/v1/identity/ad/health."""
 
     @pytest.mark.anyio()
     async def test_returns_200(self, client: AsyncClient) -> None:
-        response = await client.get("/api/v1/identity/ad/gpos")
+        response = await client.get("/api/v1/identity/ad/health")
         assert response.status_code == 200
 
     @pytest.mark.anyio()
-    async def test_has_gpos(self, client: AsyncClient) -> None:
-        response = await client.get("/api/v1/identity/ad/gpos")
+    async def test_has_connected(self, client: AsyncClient) -> None:
+        response = await client.get("/api/v1/identity/ad/health")
         data = response.json()
-        assert "gpos" in data
-
-
-class TestADFSMOAPI:
-    """Tests for GET /api/v1/identity/ad/fsmo-roles."""
-
-    @pytest.mark.anyio()
-    async def test_returns_200(self, client: AsyncClient) -> None:
-        response = await client.get("/api/v1/identity/ad/fsmo-roles")
-        assert response.status_code == 200
-
-    @pytest.mark.anyio()
-    async def test_has_fsmo_roles(self, client: AsyncClient) -> None:
-        response = await client.get("/api/v1/identity/ad/fsmo-roles")
-        data = response.json()
-        assert "fsmo_roles" in data
-        assert "forest_roles" in data["fsmo_roles"]
-
-
-class TestADDNSHealthAPI:
-    """Tests for GET /api/v1/identity/ad/dns-health."""
-
-    @pytest.mark.anyio()
-    async def test_returns_200(self, client: AsyncClient) -> None:
-        response = await client.get("/api/v1/identity/ad/dns-health")
-        assert response.status_code == 200
-
-    @pytest.mark.anyio()
-    async def test_has_dns_health(self, client: AsyncClient) -> None:
-        response = await client.get("/api/v1/identity/ad/dns-health")
-        data = response.json()
-        assert "dns_health" in data
-
-
-class TestADDHCPHealthAPI:
-    """Tests for GET /api/v1/identity/ad/dhcp-health."""
-
-    @pytest.mark.anyio()
-    async def test_returns_200(self, client: AsyncClient) -> None:
-        response = await client.get("/api/v1/identity/ad/dhcp-health")
-        assert response.status_code == 200
-
-    @pytest.mark.anyio()
-    async def test_has_dhcp_health(self, client: AsyncClient) -> None:
-        response = await client.get("/api/v1/identity/ad/dhcp-health")
-        data = response.json()
-        assert "dhcp_health" in data
+        assert "connected" in data
 
 
 # ------------------------------------------------------------------ #
@@ -243,114 +166,94 @@ class TestADDHCPHealthAPI:
 # ------------------------------------------------------------------ #
 
 
-class TestM365TenantAPI:
-    """Tests for GET /api/v1/identity/m365/tenant."""
+class TestM365TestConnectionAPI:
+    """Tests for GET /api/v1/identity/m365/test."""
 
     @pytest.mark.anyio()
     async def test_returns_200(self, client: AsyncClient) -> None:
-        response = await client.get("/api/v1/identity/m365/tenant")
+        response = await client.get("/api/v1/identity/m365/test")
+        assert response.status_code == 200
+
+    @pytest.mark.anyio()
+    async def test_has_connected_field(self, client: AsyncClient) -> None:
+        response = await client.get("/api/v1/identity/m365/test")
+        data = response.json()
+        assert "connected" in data
+        assert data["connected"] is True
+
+
+class TestM365SummaryAPI:
+    """Tests for GET /api/v1/identity/m365/summary."""
+
+    @pytest.mark.anyio()
+    async def test_returns_200(self, client: AsyncClient) -> None:
+        response = await client.get("/api/v1/identity/m365/summary")
         assert response.status_code == 200
 
     @pytest.mark.anyio()
     async def test_has_tenant(self, client: AsyncClient) -> None:
-        response = await client.get("/api/v1/identity/m365/tenant")
+        response = await client.get("/api/v1/identity/m365/summary")
         data = response.json()
         assert "tenant" in data
-        assert "domain" in data["tenant"]
+        assert "display_name" in data["tenant"]
 
 
-class TestM365LicensesAPI:
-    """Tests for GET /api/v1/identity/m365/licenses."""
-
-    @pytest.mark.anyio()
-    async def test_returns_200(self, client: AsyncClient) -> None:
-        response = await client.get("/api/v1/identity/m365/licenses")
-        assert response.status_code == 200
-
-    @pytest.mark.anyio()
-    async def test_has_licenses(self, client: AsyncClient) -> None:
-        response = await client.get("/api/v1/identity/m365/licenses")
-        data = response.json()
-        assert "licenses" in data
-        assert "total_monthly_cost" in data
-
-
-class TestM365ServiceHealthAPI:
-    """Tests for GET /api/v1/identity/m365/service-health."""
+class TestM365UsersAPI:
+    """Tests for GET /api/v1/identity/m365/users."""
 
     @pytest.mark.anyio()
     async def test_returns_200(self, client: AsyncClient) -> None:
-        response = await client.get("/api/v1/identity/m365/service-health")
+        response = await client.get("/api/v1/identity/m365/users")
         assert response.status_code == 200
 
     @pytest.mark.anyio()
-    async def test_has_service_health(self, client: AsyncClient) -> None:
-        response = await client.get("/api/v1/identity/m365/service-health")
+    async def test_has_users_list(self, client: AsyncClient) -> None:
+        response = await client.get("/api/v1/identity/m365/users")
         data = response.json()
-        assert "service_health" in data
+        assert "users" in data
+        assert isinstance(data["users"], list)
 
 
-class TestM365EntraHealthAPI:
-    """Tests for GET /api/v1/identity/m365/entra-health."""
+class TestM365GroupsAPI:
+    """Tests for GET /api/v1/identity/m365/groups."""
 
     @pytest.mark.anyio()
     async def test_returns_200(self, client: AsyncClient) -> None:
-        response = await client.get("/api/v1/identity/m365/entra-health")
+        response = await client.get("/api/v1/identity/m365/groups")
         assert response.status_code == 200
 
     @pytest.mark.anyio()
-    async def test_has_entra_health(self, client: AsyncClient) -> None:
-        response = await client.get("/api/v1/identity/m365/entra-health")
+    async def test_has_groups(self, client: AsyncClient) -> None:
+        response = await client.get("/api/v1/identity/m365/groups")
         data = response.json()
-        assert "entra_health" in data
+        assert "groups" in data
 
 
-class TestM365ExchangeHealthAPI:
-    """Tests for GET /api/v1/identity/m365/exchange-health."""
+class TestM365DevicesAPI:
+    """Tests for GET /api/v1/identity/m365/devices."""
 
     @pytest.mark.anyio()
     async def test_returns_200(self, client: AsyncClient) -> None:
-        response = await client.get(
-            "/api/v1/identity/m365/exchange-health"
-        )
+        response = await client.get("/api/v1/identity/m365/devices")
         assert response.status_code == 200
 
     @pytest.mark.anyio()
-    async def test_has_exchange_health(self, client: AsyncClient) -> None:
-        response = await client.get(
-            "/api/v1/identity/m365/exchange-health"
-        )
+    async def test_has_devices(self, client: AsyncClient) -> None:
+        response = await client.get("/api/v1/identity/m365/devices")
         data = response.json()
-        assert "exchange_health" in data
+        assert "devices" in data
 
 
-class TestM365SecureScoreAPI:
-    """Tests for GET /api/v1/identity/m365/secure-score."""
+class TestM365HealthAPI:
+    """Tests for GET /api/v1/identity/m365/health."""
 
     @pytest.mark.anyio()
     async def test_returns_200(self, client: AsyncClient) -> None:
-        response = await client.get("/api/v1/identity/m365/secure-score")
+        response = await client.get("/api/v1/identity/m365/health")
         assert response.status_code == 200
 
     @pytest.mark.anyio()
-    async def test_has_secure_score(self, client: AsyncClient) -> None:
-        response = await client.get("/api/v1/identity/m365/secure-score")
+    async def test_has_connected(self, client: AsyncClient) -> None:
+        response = await client.get("/api/v1/identity/m365/health")
         data = response.json()
-        assert "secure_score" in data
-        assert "current_score" in data["secure_score"]
-
-
-class TestM365MessageCenterAPI:
-    """Tests for GET /api/v1/identity/m365/message-center."""
-
-    @pytest.mark.anyio()
-    async def test_returns_200(self, client: AsyncClient) -> None:
-        response = await client.get("/api/v1/identity/m365/message-center")
-        assert response.status_code == 200
-
-    @pytest.mark.anyio()
-    async def test_has_items(self, client: AsyncClient) -> None:
-        response = await client.get("/api/v1/identity/m365/message-center")
-        data = response.json()
-        assert "items" in data
-        assert isinstance(data["items"], list)
+        assert "connected" in data

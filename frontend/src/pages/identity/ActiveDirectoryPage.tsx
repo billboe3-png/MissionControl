@@ -2,52 +2,45 @@ import { useEffect, useState } from "react";
 import PageHeader from "../../components/common/PageHeader";
 import StatusBadge from "../../components/common/StatusBadge";
 import DataTable, { Column } from "../../components/common/DataTable";
-import { identityApi, DomainController, Domain, Forest, OrganizationalUnit, UserSummary, GroupSummary, ComputerSummary, GPO, FSMORoles, DNSHealth, DHCPHealth } from "../../services/identity";
+import {
+    identityApi,
+    ADSummary,
+    ADUser,
+    ADGroup,
+    ADDevice,
+    ADHealthResponse,
+    ConnectionTestResult,
+} from "../../services/identity";
 
-type ADTab = "overview" | "users" | "computers" | "groups" | "ous" | "gpos" | "fsmo" | "dns" | "dhcp";
+type ADTab = "overview" | "users" | "groups" | "devices" | "health";
 
 export default function ActiveDirectoryPage() {
     const [tab, setTab] = useState<ADTab>("overview");
-    const [dcs, setDCs] = useState<DomainController[]>([]);
-    const [domain, setDomain] = useState<Domain | null>(null);
-    const [forest, setForest] = useState<Forest | null>(null);
-    const [ous, setOUs] = useState<OrganizationalUnit[]>([]);
-    const [users, setUsers] = useState<UserSummary[]>([]);
-    const [groups, setGroups] = useState<GroupSummary[]>([]);
-    const [computers, setComputers] = useState<ComputerSummary[]>([]);
-    const [gpos, setGPOs] = useState<GPO[]>([]);
-    const [fsmo, setFSMO] = useState<FSMORoles | null>(null);
-    const [dns, setDNS] = useState<DNSHealth | null>(null);
-    const [dhcp, setDHCP] = useState<DHCPHealth | null>(null);
+    const [summary, setSummary] = useState<ADSummary | null>(null);
+    const [users, setUsers] = useState<ADUser[]>([]);
+    const [groups, setGroups] = useState<ADGroup[]>([]);
+    const [devices, setDevices] = useState<ADDevice[]>([]);
+    const [health, setHealth] = useState<ADHealthResponse | null>(null);
+    const [connTest, setConnTest] = useState<ConnectionTestResult | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
         Promise.all([
-            identityApi.getDomainControllers(),
-            identityApi.getDomain(),
-            identityApi.getForest(),
-            identityApi.getOUs(),
-            identityApi.getUsers(),
-            identityApi.getGroups(),
-            identityApi.getComputers(),
-            identityApi.getGPOs(),
-            identityApi.getFSMORoles(),
-            identityApi.getDNSHealth(),
-            identityApi.getDHCPHealth(),
+            identityApi.testAD(),
+            identityApi.getADSummary(),
+            identityApi.getADUsers(),
+            identityApi.getADGroups(),
+            identityApi.getADDevices(),
+            identityApi.getADHealth(),
         ])
-            .then(([dcRes, domRes, forRes, ouRes, uRes, gRes, cRes, gpoRes, fsmoRes, dnsRes, dhcpRes]) => {
-                setDCs(dcRes.domain_controllers);
-                setDomain(domRes.domain);
-                setForest(forRes.forest);
-                setOUs(ouRes.organizational_units);
+            .then(([testRes, sumRes, uRes, gRes, dRes, hRes]) => {
+                setConnTest(testRes);
+                setSummary(sumRes);
                 setUsers(uRes.users);
                 setGroups(gRes.groups);
-                setComputers(cRes.computers);
-                setGPOs(gpoRes.gpos);
-                setFSMO(fsmoRes.fsmo_roles);
-                setDNS(dnsRes.dns_health);
-                setDHCP(dhcpRes.dhcp_health);
+                setDevices(dRes.devices);
+                setHealth(hRes);
             })
             .catch((e) => setError(e.message))
             .finally(() => setLoading(false));
@@ -59,80 +52,45 @@ export default function ActiveDirectoryPage() {
     const tabs: { key: ADTab; label: string }[] = [
         { key: "overview", label: "Overview" },
         { key: "users", label: "Users" },
-        { key: "computers", label: "Computers" },
         { key: "groups", label: "Groups" },
-        { key: "ous", label: "OUs" },
-        { key: "gpos", label: "GPOs" },
-        { key: "fsmo", label: "FSMO" },
-        { key: "dns", label: "DNS" },
-        { key: "dhcp", label: "DHCP" },
+        { key: "devices", label: "Devices" },
+        { key: "health", label: "Health" },
     ];
 
-    const userColumns: Column<UserSummary>[] = [
+    const userColumns: Column<ADUser>[] = [
         { key: "sam_account_name", header: "Username" },
         { key: "display_name", header: "Display Name" },
         { key: "email", header: "Email" },
         { key: "department", header: "Department" },
         { key: "title", header: "Title" },
-        { key: "ou", header: "OU" },
         {
             key: "enabled",
             header: "Status",
-            render: (row) => <StatusBadge status={row.enabled ? "healthy" : "error"} label={row.enabled ? "Enabled" : "Disabled"} />,
+            render: (row) => (
+                <StatusBadge
+                    status={row.enabled ? "healthy" : "error"}
+                    label={row.enabled ? "Enabled" : "Disabled"}
+                />
+            ),
         },
     ];
 
-    const computerColumns: Column<ComputerSummary>[] = [
+    const groupColumns: Column<ADGroup>[] = [
         { key: "name", header: "Name" },
-        { key: "ip_address", header: "IP Address" },
-        { key: "os_version", header: "OS" },
-        { key: "ou", header: "OU" },
-        {
-            key: "is_domain_controller",
-            header: "Role",
-            render: (row) => <span className="tag">{row.is_domain_controller ? "DC" : "Member"}</span>,
-        },
-        {
-            key: "enabled",
-            header: "Status",
-            render: (row) => <StatusBadge status={row.enabled ? "healthy" : "error"} label={row.enabled ? "Enabled" : "Disabled"} />,
-        },
-    ];
-
-    const groupColumns: Column<GroupSummary>[] = [
-        { key: "name", header: "Name" },
-        { key: "scope", header: "Scope" },
-        { key: "category", header: "Category" },
-        { key: "member_count", header: "Members" },
         { key: "description", header: "Description" },
     ];
 
-    const ouColumns: Column<OrganizationalUnit>[] = [
+    const deviceColumns: Column<ADDevice>[] = [
         { key: "name", header: "Name" },
-        { key: "path", header: "Path" },
-        { key: "user_count", header: "Users" },
-        { key: "computer_count", header: "Computers" },
-        { key: "group_count", header: "Groups" },
-        { key: "gpo_count", header: "GPOs" },
-    ];
-
-    const gpoColumns: Column<GPO>[] = [
-        { key: "name", header: "Name" },
-        { key: "version", header: "Version" },
-        {
-            key: "enabled",
-            header: "Status",
-            render: (row) => <StatusBadge status={row.enabled ? "healthy" : "error"} label={row.enabled ? "Enabled" : "Disabled"} />,
-        },
-        { key: "computer_count", header: "Computers" },
-        { key: "user_count", header: "Users" },
+        { key: "dns_name", header: "DNS Name" },
+        { key: "os_version", header: "OS" },
     ];
 
     return (
         <>
             <PageHeader
                 title="Active Directory"
-                subtitle={domain ? `${domain.name} (${domain.netbios_name})` : "Active Directory management"}
+                subtitle={summary?.domain?.name ?? "Active Directory management"}
             />
             <div className="tab-bar">
                 {tabs.map((t) => (
@@ -145,113 +103,81 @@ export default function ActiveDirectoryPage() {
                     </button>
                 ))}
             </div>
-            {tab === "overview" && domain && forest && (
+            {tab === "overview" && summary && (
                 <div className="ad-overview">
                     <div className="ad-info-grid">
                         <div className="ad-info-card">
-                            <h4>Domain</h4>
-                            <p><strong>Name:</strong> {domain.name}</p>
-                            <p><strong>NetBIOS:</strong> {domain.netbios_name}</p>
-                            <p><strong>Functional Level:</strong> {domain.functional_level}</p>
-                            <p><strong>Users:</strong> {domain.user_count}</p>
-                            <p><strong>Computers:</strong> {domain.computer_count}</p>
-                            <p><strong>Groups:</strong> {domain.group_count}</p>
-                            <p><strong>OUs:</strong> {domain.ou_count}</p>
-                        </div>
-                        <div className="ad-info-card">
-                            <h4>Forest</h4>
-                            <p><strong>Name:</strong> {forest.name}</p>
-                            <p><strong>Functional Level:</strong> {forest.functional_level}</p>
-                            <p><strong>Domains:</strong> {forest.domain_count}</p>
-                            <p><strong>Global Catalogs:</strong> {forest.global_catalog_count}</p>
-                            <p><strong>Sites:</strong> {forest.site_count}</p>
-                            <p><strong>Schema Master:</strong> {forest.schema_master}</p>
-                        </div>
-                        <div className="ad-info-card">
-                            <h4>Domain Controllers</h4>
-                            {dcs.map((dc) => (
-                                <div key={dc.name} className="ad-dc-item">
-                                    <StatusBadge status={dc.status === "online" ? "healthy" : "error"} label={dc.status} />
-                                    <span>{dc.name} ({dc.ip_address})</span>
-                                    <span className="tag">{dc.site}</span>
-                                    {dc.is_global_catalog && <span className="tag">GC</span>}
-                                    {dc.is_fsmo && <span className="tag">FSMO</span>}
-                                </div>
-                            ))}
-                        </div>
-                    </div>
-                </div>
-            )}
-            {tab === "users" && <DataTable columns={userColumns} data={users} emptyMessage="No users found" />}
-            {tab === "computers" && <DataTable columns={computerColumns} data={computers} emptyMessage="No computers found" />}
-            {tab === "groups" && <DataTable columns={groupColumns} data={groups} emptyMessage="No groups found" />}
-            {tab === "ous" && <DataTable columns={ouColumns} data={ous} emptyMessage="No OUs found" />}
-            {tab === "gpos" && <DataTable columns={gpoColumns} data={gpos} emptyMessage="No GPOs found" />}
-            {tab === "fsmo" && fsmo && (
-                <div className="ad-overview">
-                    <div className="ad-info-grid">
-                        <div className="ad-info-card">
-                            <h4>Forest Roles</h4>
-                            {Object.entries(fsmo.forest_roles).map(([key, role]) => (
-                                <div key={key} className="ad-fsmo-item">
-                                    <strong>{role.role}:</strong> {role.holder}
-                                    <StatusBadge status={role.status === "online" ? "healthy" : "error"} label={role.status} />
-                                </div>
-                            ))}
-                        </div>
-                        <div className="ad-info-card">
-                            <h4>Domain Roles</h4>
-                            {Object.entries(fsmo.domain_roles).map(([key, role]) => (
-                                <div key={key} className="ad-fsmo-item">
-                                    <strong>{role.role}:</strong> {role.holder}
-                                    <StatusBadge status={role.status === "online" ? "healthy" : "error"} label={role.status} />
-                                </div>
-                            ))}
-                            {fsmo.all_roles_held_by_single_dc && (
-                                <p className="warning-text">⚠ All roles held by a single DC</p>
+                            <h4>Connection</h4>
+                            <p>
+                                <strong>Status:</strong>{" "}
+                                <StatusBadge
+                                    status={connTest?.connected ? "healthy" : "error"}
+                                    label={connTest?.connected ? "Connected" : "Disconnected"}
+                                />
+                            </p>
+                            {connTest?.latency_ms != null && (
+                                <p><strong>Latency:</strong> {connTest.latency_ms}ms</p>
+                            )}
+                            {connTest?.message && (
+                                <p><strong>Message:</strong> {connTest.message}</p>
                             )}
                         </div>
+                        <div className="ad-info-card">
+                            <h4>Domain</h4>
+                            <p><strong>Name:</strong> {summary.domain?.name ?? "N/A"}</p>
+                            <p><strong>Base DN:</strong> {summary.domain?.base_dn ?? "N/A"}</p>
+                        </div>
+                        <div className="ad-info-card">
+                            <h4>Counts</h4>
+                            <p><strong>Users:</strong> {summary.user_count}</p>
+                            <p><strong>Groups:</strong> {summary.group_count}</p>
+                            <p><strong>Computers:</strong> {summary.computer_count}</p>
+                        </div>
+                        {health && (
+                            <div className="ad-info-card">
+                                <h4>Replication</h4>
+                                <p>
+                                    <strong>Status:</strong>{" "}
+                                    <StatusBadge
+                                        status={health.replication?.status === "healthy" ? "healthy" : "warning"}
+                                        label={health.replication?.status ?? "unknown"}
+                                    />
+                                </p>
+                                <p><strong>Pending:</strong> {health.replication?.pending_replications ?? 0}</p>
+                                <p><strong>Failed:</strong> {health.replication?.failed_replications ?? 0}</p>
+                            </div>
+                        )}
                     </div>
                 </div>
             )}
-            {tab === "dns" && dns && (
-                <div className="ad-overview">
-                    <div className="ad-info-grid">
-                        {dns.servers.map((srv) => (
-                            <div key={srv.name} className="ad-info-card">
-                                <h4>{srv.name} ({srv.ip_address})</h4>
-                                <p><strong>Status:</strong> <StatusBadge status={srv.status === "healthy" ? "healthy" : "error"} label={srv.status} /></p>
-                                <p><strong>Zones:</strong> {srv.zones_count}</p>
-                                <p><strong>Records:</strong> {srv.records_count}</p>
-                                <p><strong>Response Time:</strong> {srv.response_time_ms}ms</p>
-                                <p><strong>Forwarders:</strong> {srv.forwarders.join(", ")}</p>
-                            </div>
-                        ))}
-                    </div>
-                    <div className="ad-summary">
-                        <p><strong>Total Zones:</strong> {dns.total_zones}</p>
-                        <p><strong>Total Records:</strong> {dns.total_records}</p>
-                        <p><strong>DNSSEC:</strong> {dns.dnssec_enabled ? "Enabled" : "Disabled"}</p>
-                    </div>
-                </div>
+            {tab === "users" && (
+                <DataTable columns={userColumns} data={users} emptyMessage="No users found" />
             )}
-            {tab === "dhcp" && dhcp && (
+            {tab === "groups" && (
+                <DataTable columns={groupColumns} data={groups} emptyMessage="No groups found" />
+            )}
+            {tab === "devices" && (
+                <DataTable columns={deviceColumns} data={devices} emptyMessage="No devices found" />
+            )}
+            {tab === "health" && health && (
                 <div className="ad-overview">
                     <div className="ad-info-grid">
-                        {dhcp.servers.map((srv) => (
-                            <div key={srv.name} className="ad-info-card">
-                                <h4>{srv.name} ({srv.ip_address})</h4>
-                                <p><strong>Status:</strong> <StatusBadge status={srv.status === "healthy" ? "healthy" : "error"} label={srv.status} /></p>
-                                <p><strong>Scopes:</strong> {srv.scopes_count}</p>
-                                <p><strong>Utilization:</strong> {srv.utilization_percent}%</p>
-                                <p><strong>Used:</strong> {srv.used_addresses} / {srv.total_addresses}</p>
-                            </div>
-                        ))}
-                    </div>
-                    <div className="ad-summary">
-                        <p><strong>Total Scopes:</strong> {dhcp.total_scopes}</p>
-                        <p><strong>Overall Utilization:</strong> {dhcp.overall_utilization_percent}%</p>
-                        <p><strong>Authorized:</strong> {dhcp.authorized ? "Yes" : "No"}</p>
+                        <div className="ad-info-card">
+                            <h4>Overall Health</h4>
+                            <p>
+                                <strong>Status:</strong>{" "}
+                                <StatusBadge
+                                    status={health.status === "healthy" ? "healthy" : "warning"}
+                                    label={health.status}
+                                />
+                            </p>
+                        </div>
+                        <div className="ad-info-card">
+                            <h4>Replication</h4>
+                            <p><strong>Status:</strong> {health.replication?.status ?? "unknown"}</p>
+                            <p><strong>Pending:</strong> {health.replication?.pending_replications ?? 0}</p>
+                            <p><strong>Failed:</strong> {health.replication?.failed_replications ?? 0}</p>
+                        </div>
                     </div>
                 </div>
             )}
