@@ -749,6 +749,187 @@ class SSHProvider(RemoteBaseProvider):
                 username, hostname, command, e, start_time
             )
 
+    # ------------------------------------------------------------------ #
+    # File Transfer                                                       #
+    # ------------------------------------------------------------------ #
+
+    async def upload_file(
+        self,
+        hostname: str,
+        port: int,
+        username: str,
+        password: str | None,
+        ssh_key: str | None,
+        remote_path: str,
+        content: bytes,
+        ip_address: str | None,
+    ) -> dict:
+        """Upload a file to the remote host via SFTP."""
+        logger.info(
+            "SSH: upload_file user=%s host=%s path=%s",
+            username, hostname, remote_path,
+        )
+        client = None
+        try:
+            client = self._build_client(
+                hostname, port, username, password, ssh_key
+            )
+            return _ssh_upload_file(client, remote_path, content)
+        except Exception as e:
+            logger.warning(
+                "SSH: upload_file user=%s host=%s error=%s",
+                username, hostname, type(e).__name__,
+            )
+            return {
+                "success": False,
+                "message": f"Upload failed: {e}",
+                "remote_path": remote_path,
+            }
+        finally:
+            if client:
+                self._close_client(client)
+
+    async def download_file(
+        self,
+        hostname: str,
+        port: int,
+        username: str,
+        password: str | None,
+        ssh_key: str | None,
+        remote_path: str,
+        ip_address: str | None,
+    ) -> dict:
+        """Download a file from the remote host via SFTP."""
+        logger.info(
+            "SSH: download_file user=%s host=%s path=%s",
+            username, hostname, remote_path,
+        )
+        client = None
+        try:
+            client = self._build_client(
+                hostname, port, username, password, ssh_key
+            )
+            return _ssh_download_file(client, remote_path)
+        except Exception as e:
+            logger.warning(
+                "SSH: download_file user=%s host=%s error=%s",
+                username, hostname, type(e).__name__,
+            )
+            return {
+                "success": False,
+                "message": f"Download failed: {e}",
+                "remote_path": remote_path,
+            }
+        finally:
+            if client:
+                self._close_client(client)
+
+    async def list_directory(
+        self,
+        hostname: str,
+        port: int,
+        username: str,
+        password: str | None,
+        ssh_key: str | None,
+        remote_path: str,
+        ip_address: str | None,
+    ) -> dict:
+        """List contents of a remote directory via SFTP."""
+        logger.info(
+            "SSH: list_directory user=%s host=%s path=%s",
+            username, hostname, remote_path,
+        )
+        client = None
+        try:
+            client = self._build_client(
+                hostname, port, username, password, ssh_key
+            )
+            return _ssh_list_directory(client, remote_path)
+        except Exception as e:
+            logger.warning(
+                "SSH: list_directory user=%s host=%s error=%s",
+                username, hostname, type(e).__name__,
+            )
+            return {
+                "success": False,
+                "message": f"List failed: {e}",
+                "path": remote_path,
+                "items": [],
+            }
+        finally:
+            if client:
+                self._close_client(client)
+
+    async def create_directory(
+        self,
+        hostname: str,
+        port: int,
+        username: str,
+        password: str | None,
+        ssh_key: str | None,
+        remote_path: str,
+        ip_address: str | None,
+    ) -> dict:
+        """Create a directory on the remote host via SFTP."""
+        logger.info(
+            "SSH: create_directory user=%s host=%s path=%s",
+            username, hostname, remote_path,
+        )
+        client = None
+        try:
+            client = self._build_client(
+                hostname, port, username, password, ssh_key
+            )
+            return _ssh_create_directory(client, remote_path)
+        except Exception as e:
+            logger.warning(
+                "SSH: create_directory user=%s host=%s error=%s",
+                username, hostname, type(e).__name__,
+            )
+            return {
+                "success": False,
+                "message": f"Mkdir failed: {e}",
+                "remote_path": remote_path,
+            }
+        finally:
+            if client:
+                self._close_client(client)
+
+    async def delete_file(
+        self,
+        hostname: str,
+        port: int,
+        username: str,
+        password: str | None,
+        ssh_key: str | None,
+        remote_path: str,
+        ip_address: str | None,
+    ) -> dict:
+        """Delete a file on the remote host via SFTP."""
+        logger.info(
+            "SSH: delete_file user=%s host=%s path=%s",
+            username, hostname, remote_path,
+        )
+        client = None
+        try:
+            client = self._build_client(
+                hostname, port, username, password, ssh_key
+            )
+            return _ssh_delete_file(client, remote_path)
+        except Exception as e:
+            logger.warning(
+                "SSH: delete_file user=%s host=%s error=%s",
+                username, hostname, type(e).__name__,
+            )
+            return {
+                "success": False,
+                "message": f"Delete failed: {e}",
+                "remote_path": remote_path,
+            }
+        finally:
+            if client:
+                self._close_client(client)
+
 
 def _get_max_command_timeout() -> int:
     """Get max command timeout from config."""
@@ -758,3 +939,114 @@ def _get_max_command_timeout() -> int:
         return get_settings().remote_max_command_timeout
     except Exception:
         return 3600
+
+
+# ------------------------------------------------------------------ #
+# File Transfer Methods (added to SSHProvider below)                  #
+# ------------------------------------------------------------------ #
+
+import base64
+import stat
+
+
+def _ssh_upload_file(
+    client: paramiko.SSHClient,
+    remote_path: str,
+    content: bytes,
+) -> dict:
+    """Upload bytes to a remote file via SFTP."""
+    sftp = client.open_sftp()
+    try:
+        with sftp.open(remote_path, "w") as f:
+            f.write(content.decode("utf-8", errors="replace"))
+        return {
+            "success": True,
+            "message": f"File uploaded to {remote_path}",
+            "remote_path": remote_path,
+            "size_bytes": len(content),
+        }
+    finally:
+        sftp.close()
+
+
+def _ssh_download_file(
+    client: paramiko.SSHClient,
+    remote_path: str,
+) -> dict:
+    """Download a remote file via SFTP."""
+    sftp = client.open_sftp()
+    try:
+        with sftp.open(remote_path, "r") as f:
+            content = f.read()
+        return {
+            "success": True,
+            "message": f"File downloaded from {remote_path}",
+            "remote_path": remote_path,
+            "content": content,
+            "size_bytes": len(content),
+        }
+    finally:
+        sftp.close()
+
+
+def _ssh_list_directory(
+    client: paramiko.SSHClient,
+    remote_path: str,
+) -> dict:
+    """List contents of a remote directory via SFTP."""
+    sftp = client.open_sftp()
+    try:
+        entries = []
+        for item in sftp.listdir_attr(remote_path):
+            full_path = f"{remote_path.rstrip('/')}/{item.filename}"
+            is_dir = stat.S_ISDIR(item.st_mode)
+            entries.append({
+                "name": item.filename,
+                "path": full_path,
+                "is_directory": is_dir,
+                "size_bytes": item.st_size if not is_dir else None,
+                "modified_at": str(item.st_mtime) if item.st_mtime else None,
+                "permissions": oct(item.st_mode)[-3:],
+            })
+        entries.sort(key=lambda x: (not x["is_directory"], x["name"]))
+        return {
+            "success": True,
+            "path": remote_path,
+            "items": entries,
+        }
+    finally:
+        sftp.close()
+
+
+def _ssh_create_directory(
+    client: paramiko.SSHClient,
+    remote_path: str,
+) -> dict:
+    """Create a directory on the remote host via SFTP."""
+    sftp = client.open_sftp()
+    try:
+        sftp.mkdir(remote_path)
+        return {
+            "success": True,
+            "message": f"Directory created: {remote_path}",
+            "remote_path": remote_path,
+        }
+    finally:
+        sftp.close()
+
+
+def _ssh_delete_file(
+    client: paramiko.SSHClient,
+    remote_path: str,
+) -> dict:
+    """Delete a file on the remote host via SFTP."""
+    sftp = client.open_sftp()
+    try:
+        sftp.remove(remote_path)
+        return {
+            "success": True,
+            "message": f"File deleted: {remote_path}",
+            "remote_path": remote_path,
+        }
+    finally:
+        sftp.close()

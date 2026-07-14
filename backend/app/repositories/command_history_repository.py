@@ -90,6 +90,10 @@ class CommandHistoryRepository:
         success: bool,
         duration_ms: int,
         executed_by: str | None = None,
+        credential_id: int | None = None,
+        username: str | None = None,
+        working_directory: str | None = None,
+        execution_source: str = "manual",
     ) -> CommandHistory:
         """Persist a new command history record."""
         entity = CommandHistory(
@@ -102,6 +106,10 @@ class CommandHistoryRepository:
             success=success,
             duration_ms=duration_ms,
             executed_by=executed_by,
+            credential_id=credential_id,
+            username=username,
+            working_directory=working_directory,
+            execution_source=execution_source,
         )
         db.add(entity)
         db.commit()
@@ -133,6 +141,7 @@ class CommandHistoryRepository:
                 "id": r.id,
                 "host_id": r.host_id,
                 "host_name": hosts.get(r.host_id),
+                "credential_id": r.credential_id,
                 "command": r.command,
                 "shell": r.shell,
                 "stdout": r.stdout,
@@ -143,6 +152,9 @@ class CommandHistoryRepository:
                 "started_at": r.started_at,
                 "completed_at": r.completed_at,
                 "executed_by": r.executed_by,
+                "username": r.username,
+                "working_directory": r.working_directory,
+                "execution_source": r.execution_source,
             }
             for r in records
         ]

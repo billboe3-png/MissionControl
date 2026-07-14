@@ -1,10 +1,9 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import LoadingButton from "../common/LoadingButton";
-import { hostsApi, HostCreateInput } from "../../services/remote";
-import { RemoteHost } from "../../types/dashboard";
+import { hostsApi, HostCreateInput, HostData, credentialsApi, CredentialData } from "../../services/remote";
 
 interface HostModalProps {
-    host?: RemoteHost;
+    host?: HostData;
     onSave: () => void;
     onCancel: () => void;
     onError: (message: string) => void;
@@ -23,9 +22,17 @@ export default function HostModal({
     const [connectionType, setConnectionType] = useState(host?.connection_type ?? "ssh");
     const [port, setPort] = useState(String(host?.port ?? 22));
     const [enabled, setEnabled] = useState(host?.enabled ?? true);
+    const [credentialProfileId, setCredentialProfileId] = useState<string>(
+        host?.credential_profile_id != null ? String(host.credential_profile_id) : ""
+    );
     const [loading, setLoading] = useState(false);
+    const [credentials, setCredentials] = useState<CredentialData[]>([]);
 
     const isEditing = host !== undefined;
+
+    useEffect(() => {
+        credentialsApi.list().then((data) => setCredentials(data.items)).catch(() => {});
+    }, []);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -40,6 +47,7 @@ export default function HostModal({
                 connection_type: connectionType,
                 port: parseInt(port, 10) || 22,
                 enabled,
+                credential_profile_id: credentialProfileId ? Number(credentialProfileId) : null,
             };
 
             if (isEditing) {
@@ -141,6 +149,23 @@ export default function HostModal({
                             placeholder="e.g. Ubuntu 22.04, Windows Server 2022"
                             maxLength={100}
                         />
+                    </div>
+
+                    <div className="form-group">
+                        <label htmlFor="host-credential">Credential Profile</label>
+                        <select
+                            id="host-credential"
+                            className="form-input"
+                            value={credentialProfileId}
+                            onChange={(e) => setCredentialProfileId(e.target.value)}
+                        >
+                            <option value="">None</option>
+                            {credentials.map((c) => (
+                                <option key={c.id} value={c.id}>
+                                    {c.name} ({c.username})
+                                </option>
+                            ))}
+                        </select>
                     </div>
 
                     <div className="form-group form-group-inline">

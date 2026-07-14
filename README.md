@@ -1,122 +1,258 @@
 ﻿# Mission Control
 
-Mission Control is a personal productivity platform for senior IT professionals.
+A full-stack IT operations platform for managing remote infrastructure, monitoring system health, and executing commands across your environment from a single unified dashboard.
 
 ## Vision
 
-One dashboard.
+One dashboard. One workflow. One place to manage everything.
 
-One workflow.
+## Overview
 
-One place to manage everything.
+Mission Control is a production-grade operations platform built for senior IT professionals and system administrators. It provides remote host management, secure credential storage, command execution, file browsing, and infrastructure monitoring through a modern web interface inspired by Windows Admin Center.
 
-## What is Mission Control?
+## Tech Stack
 
-Mission Control is a developer productivity CLI and dashboard platform designed for senior IT professionals. It provides a unified interface for managing development environments, Docker containers, Git workflows, and project health checks through a single PowerShell-based command-line interface.
+| Layer | Technology |
+|-------|-----------|
+| Backend | Python 3.14, FastAPI, SQLAlchemy ORM |
+| Database | PostgreSQL, Alembic migrations |
+| Frontend | React 18, TypeScript (strict), Vite 5 |
+| Styling | Tailwind-inspired custom CSS (dark theme) |
+| Security | Fernet encryption (AES-128-CBC), credential vault |
+| Remote | Paramiko (SSH), pywinrm (WinRM) |
+| Testing | pytest (307 tests), TypeScript strict mode |
+| Containerization | Docker Compose |
 
-## Current Project Status
+## Current Status
 
-**Sprint 3** - Developer Experience Foundation
+**Sprint 2.1.9** - Production-Readiness Finalization
 
-- ✅ CLI framework with command registry
-- ✅ Docker Compose integration
-- ✅ Git workflow helpers
-- ✅ Health check system (doctor)
-- ✅ Pester test framework
-- ✅ CI quality gate with GitHub Actions
-- ✅ VS Code workspace configuration
+All remote operations are production-complete. The platform is ready for Sprint 2.2.
 
-# Mission Control Backend v1.0
-
-## Release Highlights
-
-### Core Platform
-- FastAPI backend
-- PostgreSQL persistence
-- SQLAlchemy ORM
-- Alembic migrations
-
-### APIs
-- Project CRUD
-- Task CRUD
-- Note CRUD
-- Dashboard API
-- Resume API foundation
-
-### Architecture
-- Repository pattern
-- Service layer
-- Pydantic schemas
-- Dependency injection
-- Structured logging
-
-### Database
-- Idempotent seed framework
-- Production-ready migrations
-- PostgreSQL support
+## Features
 
 ### Dashboard
-- Live statistics
-- Project statistics
-- Task statistics
-- Docker integration foundation
+- Real-time system metrics (CPU, memory, disk, uptime)
+- Docker container status and statistics
+- Git repository health
+- Project, task, and note summaries
+- Remote host overview with recent command history
+- Health status badges for all services
 
-### Testing
-- 65 automated tests
-- CRUD integration tests
-- Dashboard integration tests
-- Repository tests
-- Service tests
-- Seeder tests
+### Remote Operations
+- **Host Management** - Full CRUD for SSH and WinRM hosts with credential assignment
+- **Credential Vault** - Encrypted credential profiles (passwords, SSH keys, passphrases) with Fernet encryption at rest
+- **Command Execution** - Execute commands on remote hosts with real-time output
+- **Bulk Execution** - Run commands across multiple hosts simultaneously
+- **Command Templates** - Reusable command library with category and protocol tagging
+- **Scheduled Commands** - Cron-based scheduling with run-now capability
+- **File Browser** - Browse, upload, download, create directories, and delete files on remote hosts
+- **Command History** - Full audit trail with execution source tracking (manual, template, scheduled, bulk)
+- **Connection Testing** - Verify host connectivity before execution
+- **Session Metrics** - Track active sessions, command counts, and latency
 
-Status: Stable
+### Infrastructure Monitoring
+- System overview (hostname, OS, CPU, memory, disk)
+- Docker container details (status, ports, health, resources)
+- Git repository status (branch, commits, working tree)
+- Health check dashboard
 
-## High-Level Architecture
+### Settings
+- General application settings
+- Appearance customization
+- About page with version and stack info
 
-Mission Control follows a modular PowerShell-based architecture:
+## Architecture
 
-- **CLI Entry Point** (`mc.ps1`) - Main script that bootstraps the framework
-- **Bootstrap** - Parses arguments and creates execution context
-- **Registry** - Command registration and dispatch system
-- **Commands** - Individual command modules (doctor, docker, git, etc.)
-- **Libraries** - Shared utilities (validation, logging, output, config)
-- **Output Engine** - Unified rendering for console, JSON, and pretty JSON
+```
+┌─────────────────────────────────────────────────────────┐
+│                    React Frontend                        │
+│  ┌──────────┬──────────┬──────────┬──────────┐         │
+│  │ Sidebar  │  TopBar  │ Content  │ StatusBar│         │
+│  │ (v3)     │ (bread)  │ (Outlet) │ (clock)  │         │
+│  └──────────┴──────────┴──────────┴──────────┘         │
+│                                                         │
+│  Pages: Dashboard | Hosts | Credentials | Execute |     │
+│         History | Files | Infrastructure | Settings     │
+├─────────────────────────────────────────────────────────┤
+│                    FastAPI Backend                       │
+│  ┌──────────────────────────────────────────────┐      │
+│  │                  Routers                      │      │
+│  │  /remote  /dashboard  /projects  /tasks       │      │
+│  └──────────────────┬───────────────────────────┘      │
+│  ┌──────────────────┴───────────────────────────┐      │
+│  │               Service Layer                   │      │
+│  │  RemoteService | DashboardService | etc.      │      │
+│  └──────────────────┬───────────────────────────┘      │
+│  ┌──────────────────┴───────────────────────────┐      │
+│  │              Repository Layer                 │      │
+│  │  RemoteHostRepo | CredentialRepo | HistoryRepo│      │
+│  └──────────────────┬───────────────────────────┘      │
+│  ┌──────────────────┴───────────────────────────┐      │
+│  │           Provider Layer (Strategy)           │      │
+│  │  SSHProvider | WinRMProvider | ProviderFactory │      │
+│  └──────────────────┬───────────────────────────┘      │
+│  ┌──────────────────┴───────────────────────────┐      │
+│  │              SQLAlchemy ORM                   │      │
+│  │  RemoteHost | CredentialProfile | CommandHistory│     │
+│  │  CommandTemplate | ScheduledCommand | etc.    │      │
+│  └──────────────────────────────────────────────┘      │
+├─────────────────────────────────────────────────────────┤
+│                    PostgreSQL                           │
+│  9 Alembic migrations | 10 ORM models                  │
+└─────────────────────────────────────────────────────────┘
+```
 
-For detailed architecture documentation, see [docs/architecture.md](docs/architecture.md).
+### Design Patterns
 
-## Prerequisites
+- **Repository Pattern** - Each entity has its own repository class with static methods
+- **Service Layer** - Business logic between routers and repositories
+- **Provider Pattern (Strategy)** - ABC base classes for each infrastructure domain, SDK implementations, provider adapters, factory singletons
+- **Dependency Injection** - FastAPI `Depends()` for DB sessions and services
+- **Encrypted Vault** - Fernet encryption for all credential data at rest
 
-- **PowerShell 7+** - Required for CLI execution
-- **Docker Desktop** - Required for Docker Compose stack
-- **Git** - Required for version control operations
-- **Python** - Required for backend development
-- **Node.js** - Required for frontend development
+### ORM Models
+
+| Model | Table | Purpose |
+|-------|-------|---------|
+| `RemoteHost` | `remote_hosts` | SSH/WinRM host definitions |
+| `CredentialProfile` | `credential_profiles` | Encrypted auth credentials |
+| `CommandHistory` | `command_history` | Execution audit trail |
+| `CommandTemplate` | `command_templates` | Reusable command library |
+| `ScheduledCommand` | `scheduled_commands` | Cron-based command scheduling |
+| `Project` | `projects` | Project management |
+| `Task` | `tasks` | Task tracking |
+| `Note` | `notes` | Notes and documentation |
+| `ParkingLot` | `parking_lot` | Backlog parking lot |
+| `Resume` | `resumes` | Resume context |
+
+## UI Design
+
+Mission Control v3 uses a **Windows Admin Center-inspired layout**:
+
+- **Persistent Sidebar** - Collapsible nav groups (Dashboard, Infrastructure, Remote Operations, Settings)
+- **Top Bar** - Breadcrumb navigation with route labels
+- **Status Bar** - Live clock, connection status, version info
+- **Content Area** - Full-width page content with `<Outlet />` routing
+
+All pages follow consistent patterns:
+- `PageHeader` with title, subtitle, and action buttons
+- `DataTable` for tabular data with row click support
+- `EmptyState` for zero-data scenarios
+- `StatusBadge` for state visualization
+- `SearchInput` for filtering
+- Modals for create/edit operations
+
+## Repository Layout
+
+```
+MissionControl/
+├── backend/
+│   ├── alembic/versions/        # 9 migrations
+│   ├── app/
+│   │   ├── core/                # Config, security (Fernet cipher)
+│   │   ├── db/                  # Database engine, session
+│   │   ├── models/db/           # 10 SQLAlchemy ORM models
+│   │   ├── providers/           # Strategy pattern providers
+│   │   │   ├── remote/          # SSH, WinRM, provider factory
+│   │   │   ├── health_provider.py
+│   │   │   ├── system_provider.py
+│   │   │   ├── docker_provider.py
+│   │   │   └── git_provider.py
+│   │   ├── repositories/        # Data access layer (8 repos)
+│   │   ├── routers/             # FastAPI routers
+│   │   ├── schemas/             # Pydantic request/response models
+│   │   ├── seed/                # Idempotent seed framework
+│   │   └── services/            # Business logic layer
+│   ├── tests/                   # 307 pytest tests
+│   └── requirements.txt
+├── frontend/
+│   ├── src/
+│   │   ├── components/
+│   │   │   ├── common/          # DataTable, EmptyState, PageHeader, etc.
+│   │   │   ├── dashboard/       # StatCard, HealthBadges, QuickActions
+│   │   │   ├── modals/          # HostModal, CredentialModal
+│   │   │   └── sidebar/         # NavGroup, NavItem, UserBadge
+│   │   ├── contexts/            # SidebarContext, ToastContext
+│   │   ├── layouts/             # AppLayout, Sidebar, TopBar, StatusBar, Breadcrumb
+│   │   ├── pages/
+│   │   │   ├── infrastructure/  # Overview, System, Docker, Git, Health
+│   │   │   ├── remote/          # Hosts, Credentials, Execute, History, Files
+│   │   │   └── settings/        # General, Appearance, About
+│   │   ├── services/            # API clients (remote.ts, files.ts, api.ts)
+│   │   ├── styles.css           # 2425-line dark theme
+│   │   └── types/               # TypeScript type definitions
+│   ├── package.json
+│   └── vite.config.ts
+├── docker/                      # Docker Compose configuration
+├── .env.example
+├── docker-compose.yml
+└── README.md
+```
 
 ## Quick Start
 
-Clone the repository and run the doctor check to verify your environment:
+### Prerequisites
+
+- Python 3.14+
+- Node.js 18+
+- PostgreSQL 15+
+- Docker & Docker Compose (optional)
+
+### Docker (Recommended)
 
 ```bash
 git clone <repository>
 cd MissionControl
-./scripts/mc.ps1 doctor
+
+# Generate a secret key
+python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+
+# Set it in .env
+cp .env.example .env
+# Edit .env and set MISSIONCONTROL_SECRET_KEY
+
+# Start everything
+docker compose up -d
 ```
 
-Start the Docker stack:
+The backend entrypoint will:
+1. Validate `MISSIONCONTROL_SECRET_KEY`
+2. Run Alembic migrations
+3. Seed the database
+4. Start the API server
+
+**Frontend:** http://localhost:5173  
+**Backend API:** http://localhost:8000/api/v1  
+**API Docs:** http://localhost:8000/docs
+
+### Local Development
 
 ```bash
-./scripts/mc.ps1 docker up
+# Backend
+cd backend
+python -m venv .venv
+.venv/Scripts/activate  # Windows
+pip install -r requirements.txt
+alembic upgrade head
+python -m app.seed.runner
+uvicorn app.main:app --reload --port 8000
+
+# Frontend (new terminal)
+cd frontend
+npm install
+npm run dev
 ```
 
-Check your environment status:
+## Security
 
-```bash
-./scripts/mc.ps1 status
-```
+### Credential Encryption
 
-## Security Setup
+All credential data (passwords, SSH keys, passphrases) is encrypted at rest using **Fernet symmetric encryption** (AES-128-CBC). The encryption key is derived from `MISSIONCONTROL_SECRET_KEY`.
 
-Mission Control requires a Fernet secret key to encrypt credential profiles (SSH keys, passwords, WinRM credentials). The backend will not start without a valid key.
+- Passwords are encrypted on save, decrypted only in the service layer before passing to providers
+- Response schemas never expose sensitive fields
+- Key versioning supports secret rotation
 
 ### Generating a Secret Key
 
@@ -124,376 +260,133 @@ Mission Control requires a Fernet secret key to encrypt credential profiles (SSH
 python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
 ```
 
-Or via Docker:
+### Secret Rotation
 
-```bash
-docker compose run --rm backend python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
-```
+1. Generate a new key
+2. Update `MISSIONCONTROL_SECRET_KEY` in `.env`
+3. Re-create credential profiles (or run a migration script for production)
+4. Restart the stack
 
-### Adding to .env
+## API Endpoints
 
-Copy the generated key into your `.env` file:
+### Hosts
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/remote/hosts` | List all hosts (optional search) |
+| GET | `/remote/hosts/{id}` | Get host by ID |
+| POST | `/remote/hosts` | Create new host |
+| PUT | `/remote/hosts/{id}` | Update host |
+| DELETE | `/remote/hosts/{id}` | Delete host |
 
-```env
-MISSIONCONTROL_SECRET_KEY=your-generated-key-here
-```
+### Credentials
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/remote/credentials` | List all credentials |
+| GET | `/remote/credentials/{id}` | Get credential by ID |
+| POST | `/remote/credentials` | Create credential (encrypted) |
+| PUT | `/remote/credentials/{id}` | Update credential |
+| DELETE | `/remote/credentials/{id}` | Delete credential |
 
-Never commit a real key to version control.
+### Command Execution
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/remote/test` | Test connection to a host |
+| POST | `/remote/execute` | Execute a command on a host |
+| POST | `/remote/bulk-execute` | Execute across multiple hosts |
+| GET | `/remote/history` | Query command history |
 
-## Docker Setup
+### Templates & Schedules
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET/POST | `/remote/templates` | List/create command templates |
+| PUT/DELETE | `/remote/templates/{id}` | Update/delete template |
+| POST | `/remote/templates/{id}/execute` | Execute template on host |
+| GET/POST | `/remote/schedules` | List/create scheduled commands |
+| PUT/DELETE | `/remote/schedules/{id}` | Update/delete schedule |
+| POST | `/remote/schedules/{id}/run-now` | Run schedule immediately |
 
-### Prerequisites
+### File Transfer
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/remote/files/list` | List directory contents |
+| POST | `/remote/files/upload` | Upload file (base64) |
+| POST | `/remote/files/download` | Download file (base64) |
+| POST | `/remote/files/mkdir` | Create directory |
+| POST | `/remote/files/delete` | Delete file or directory |
 
-- Docker Desktop or Docker Engine with Compose V2
-- A valid `MISSIONCONTROL_SECRET_KEY` in your `.env` file
-
-### Starting the Stack
-
-```bash
-docker compose up -d
-```
-
-On first start, the backend entrypoint will:
-1. Validate `MISSIONCONTROL_SECRET_KEY` is present and valid
-2. Run Alembic migrations
-3. Seed the database
-4. Start the API server
-
-If the key is missing, the container exits with a clear error message before attempting migrations.
-
-### Stopping the Stack
-
-```bash
-docker compose down
-```
-
-### Rebuilding
-
-```bash
-docker compose build --no-cache backend
-docker compose up -d
-```
+### System
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/v1/dashboard` | Full dashboard data |
+| GET | `/remote/metrics` | Session and provider metrics |
+| GET | `/health` | Health check |
 
 ## Environment Variables
 
-All configuration is managed through the `.env` file at the project root.
-
 | Variable | Required | Default | Description |
-|---|---|---|---|
-| `MISSIONCONTROL_SECRET_KEY` | **Yes** | — | Fernet key for credential encryption |
-| `PROJECT_NAME` | No | `Mission Control` | Application display name |
-| `ENVIRONMENT` | No | `development` | Runtime environment |
+|----------|----------|---------|-------------|
+| `MISSIONCONTROL_SECRET_KEY` | **Yes** | - | Fernet key for credential encryption |
 | `POSTGRES_DB` | No | `mission_control` | PostgreSQL database name |
 | `POSTGRES_USER` | No | `mission_control` | PostgreSQL user |
 | `POSTGRES_PASSWORD` | No | `mission_control` | PostgreSQL password |
-| `POSTGRES_HOST` | No | `postgres` | PostgreSQL host (use `localhost` outside Docker) |
+| `POSTGRES_HOST` | No | `postgres` | PostgreSQL host |
 | `POSTGRES_PORT` | No | `5432` | PostgreSQL port |
-| `REDIS_HOST` | No | `redis` | Redis host |
-| `REDIS_PORT` | No | `6379` | Redis port |
-| `BACKEND_CORS_ORIGINS` | No | `http://localhost,http://localhost:3000,http://localhost:5173` | Comma-separated allowed origins |
-| `COMPOSE_PROJECT_NAME` | No | `missioncontrol` | Docker Compose project name |
+| `BACKEND_CORS_ORIGINS` | No | `http://localhost:5173` | Allowed CORS origins |
 | `SSH_CONNECT_TIMEOUT` | No | `10` | SSH connection timeout (seconds) |
 | `SSH_COMMAND_TIMEOUT` | No | `60` | SSH command timeout (seconds) |
 | `WINRM_CONNECT_TIMEOUT` | No | `10` | WinRM connection timeout (seconds) |
 | `WINRM_OPERATION_TIMEOUT` | No | `60` | WinRM operation timeout (seconds) |
 | `REMOTE_RETRY_COUNT` | No | `1` | Retries for transient remote failures |
 
-### Copying .env.example
+## Testing
 
 ```bash
-cp .env.example .env
-```
-
-Then generate and set your secret key:
-
-```bash
-python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
-```
-
-## Secret Rotation
-
-To rotate the encryption key:
-
-1. Generate a new key:
-   ```bash
-   python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
-   ```
-
-2. Update `MISSIONCONTROL_SECRET_KEY` in `.env` with the new key.
-
-3. Re-encrypt existing credentials. The system supports key versioning (`key_version` column on credential profiles). Existing encrypted values encrypted with the old key will need to be re-encrypted. For development, recreate credential profiles. For production, run a migration script.
-
-4. Restart the stack:
-   ```bash
-   docker compose restart backend
-   ```
-
-> **Note:** The old key cannot decrypt credentials encrypted with the new key. Rotate during a maintenance window.
-
-## CLI Commands
-
-### help
-
-**Description:** Shows help for CLI commands
-
-**Example:**
-```bash
-./scripts/mc.ps1 help
-./scripts/mc.ps1 help doctor
-```
-
-**Purpose:** Displays available commands, usage information, and examples for all CLI commands.
-
-### doctor
-
-**Description:** Checks local tools, repository state, Docker services, and backend endpoints
-
-**Example:**
-```bash
-./scripts/mc.ps1 doctor
-./scripts/mc.ps1 doctor --output json
-./scripts/mc.ps1 doctor --output json-pretty
-```
-
-**Purpose:** Performs comprehensive health checks on your development environment including tool availability, Docker status, and backend connectivity.
-
-### docker
-
-**Description:** Manages the Mission Control Docker Compose stack
-
-**Example:**
-```bash
-./scripts/mc.ps1 docker up
-./scripts/mc.ps1 docker down
-./scripts/mc.ps1 docker logs
-```
-
-**Purpose:** Controls the Docker Compose stack for backend, frontend, PostgreSQL, Redis, and Nginx services.
-
-### git
-
-**Description:** Provides safe wrappers around common Git commands
-
-**Example:**
-```bash
-./scripts/mc.ps1 git status
-./scripts/mc.ps1 git commit "fix: resolve doctor null message issue"
-```
-
-**Purpose:** Simplifies common Git operations with validation and safety checks.
-
-### status
-
-**Description:** Shows local developer environment status
-
-**Example:**
-```bash
-./scripts/mc.ps1 status
-```
-
-**Purpose:** Displays current environment configuration including PowerShell version, .env status, Docker Compose availability, and Git status.
-
-### version
-
-**Description:** Shows CLI version
-
-**Example:**
-```bash
-./scripts/mc.ps1 version
-```
-
-**Purpose:** Displays the current Mission Control CLI version.
-
-### init
-
-**Description:** Performs idempotent project initialization
-
-**Example:**
-```bash
-./scripts/mc.ps1 init
-```
-
-**Purpose:** Creates required project files and directories including .env from .env.example and developer folders.
-
-### Reserved Commands
-
-The following commands are reserved for future sprints:
-
-- **build** - Builds the project
-- **clean** - Cleans build artifacts
-- **dev** - Starts development environment
-- **lint** - Runs linting
-- **sprint** - Manages sprints
-- **test** - Runs tests
-
-## Repository Layout
-
-```
-MissionControl/
-├── backend/           # Backend API (FastAPI/Python)
-├── frontend/          # Frontend dashboard (React)
-├── docker/            # Docker Compose configuration
-├── scripts/           # CLI framework and commands
-│   ├── mc.ps1        # Main CLI entry point
-│   ├── lib/          # Shared libraries
-│   │   ├── Bootstrap.ps1
-│   │   ├── Registry.ps1
-│   │   ├── Config.ps1
-│   │   ├── Validation.ps1
-│   │   ├── Logger.ps1
-│   │   ├── Output.ps1
-│   │   ├── Doctor.ps1
-│   │   ├── Docker.ps1
-│   │   ├── Git.ps1
-│   │   └── Helpers.ps1
-│   ├── commands/     # Command modules
-│   │   ├── Help.ps1
-│   │   ├── Doctor.ps1
-│   │   ├── Docker.ps1
-│   │   ├── Git.ps1
-│   │   ├── Status.ps1
-│   │   ├── Version.ps1
-│   │   └── Project.ps1
-│   └── Invoke-Quality.ps1  # CI quality gate script
-├── tests/             # Pester test suite
-│   ├── Bootstrap.Tests.ps1
-│   ├── Registry.Tests.ps1
-│   ├── Logger.Tests.ps1
-│   ├── Helpers.Tests.ps1
-│   ├── Validation.Tests.ps1
-│   └── TestHelpers.ps1
-├── docs/              # Documentation
-│   └── architecture.md
-├── .github/           # GitHub Actions workflows
-│   └── workflows/
-│       └── ci.yml
-├── .vscode/           # VS Code workspace configuration
-│   ├── extensions.json
-│   ├── settings.json
-│   ├── tasks.json
-│   └── launch.json
-├── README.md
-├── CONTRIBUTING.md
-└── LICENSE
-```
-
-## Development Workflow
-
-### Seeding the Database
-
-Database seeding runs automatically when the backend container starts via `entrypoint.sh`.
-
-To run the seed manually:
-
-```bash
+# Backend (307 tests)
 cd backend
-python -m app.seed.runner
+python -m pytest tests/ -v
+
+# Frontend type checking
+cd frontend
+npx tsc --noEmit
+
+# Frontend production build
+cd frontend
+npm run build
 ```
 
-From inside the backend container:
+### Test Coverage
 
-```bash
-docker compose exec backend python -m app.seed.runner
-```
-
-The seed runner is idempotent — each entity module seeds only when its table is empty. Running it multiple times will not create duplicates.
-
-Production baseline after a fresh `docker compose up`:
-
-- Projects: 4
-- Tasks: 8
-- Notes: 0
-- Resume: 0
-
-Verify seeded data on the dashboard:
-
-```bash
-curl http://localhost/api/v1/dashboard
-```
-
-### Running Tests Locally
-
-Use Pester to run the test suite:
-
-```powershell
-Invoke-Pester
-```
-
-Tests are located in the `tests/` directory and cover Bootstrap, Registry, Logger, Helpers, and Validation modules.
-
-### Running the Quality Gate Locally
-
-Run the quality gate script before pushing:
-
-```powershell
-./scripts/Invoke-Quality.ps1
-```
-
-This script:
-1. Runs all Pester tests
-2. Executes CLI smoke tests (help, version, status, doctor)
-3. Checks formatting/lint (placeholder for future implementation)
-
-**Run this before pushing** - it's the same check that CI runs on every push and pull request.
-
-## Continuous Integration
-
-Mission Control uses GitHub Actions for continuous integration:
-
-### Push Validation
-
-Every push to `main` or `master` branches triggers the CI workflow which:
-- Checks out the code
-- Installs PowerShell 7
-- Runs the quality gate script
-
-### Pull Request Validation
-
-Every pull request to `main` or `master` branches triggers the same CI workflow to ensure code quality before merging.
-
-The CI workflow is defined in `.github/workflows/ci.yml`.
+| Area | Tests | Description |
+|------|-------|-------------|
+| API Integration | 68 | CRUD endpoints, auth, remote operations |
+| Repositories | 45 | Data access, search, encryption |
+| Services | 89 | Business logic, validation, credential handling |
+| Providers | 52 | SSH, WinRM, provider factory, dummy provider |
+| History & Audit | 53 | Command history, templates, schedules, bulk execution |
 
 ## Roadmap
 
-### Sprint 1 - Foundation
-- CLI framework architecture
-- Command registry system
-- Basic output rendering
-- Docker Compose integration
-- Git workflow helpers
+### Completed
+- **Sprint 1.x** - CLI framework, project/task/note CRUD, dashboard, parking lot
+- **Sprint 2.0** - Real-time dashboard, Docker/Git integration, system health
+- **Sprint 2.1.0** - Remote operations framework (hosts, credentials, execution)
+- **Sprint 2.1.2** - Production SSH execution (Paramiko)
+- **Sprint 2.1.4** - Secure credential vault (Fernet encryption)
+- **Sprint 2.1.5** - Production remote execution (connection reuse, retry, timeouts)
+- **Sprint 2.1.8** - Templates, bulk execution, scheduled commands, file transfer, metrics
+- **Sprint 2.1.9** - Production readiness (migrations, UI completion, dead code removal)
+- **UI v3** - Windows Admin Center-inspired layout
 
-### Sprint 2 - Health & Monitoring
-- Doctor command with environment checks
-- Docker service health monitoring
-- Backend HTTP endpoint checks
-- Logging infrastructure
-
-### Sprint 3 - Developer Experience
-- Pester test framework
-- CI quality gate with GitHub Actions
-- VS Code workspace configuration
-- Developer documentation
-
-### Sprint 4 - Dashboard & Frontend
-- Dashboard API endpoints
-- React frontend application
-- Authentication system
-- Widget infrastructure
-
-## Planned Modules
-
-- Dashboard
-- Tasks
-- Projects
-- Notes
-- Focus Mode
-- Resume Me
-- Parking Lot
-- Microsoft 365
-- Google Workspace
-- Ticket System
-- Zabbix
-- AI Assistant
+### Planned (Sprint 2.2+)
+- Connection pooling with idle cleanup
+- Streaming command output (SSE/WebSocket)
+- Command cancellation support
+- Host/credential validation module
+- Standalone metrics provider
+- Monitoring integration
+- Identity & Access management
+- Automation workflows
+- AI-powered operations assistant
 
 ## Contributing
 
@@ -502,4 +395,3 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines on contributing to Mission
 ## License
 
 See [LICENSE](LICENSE) for license information.
-

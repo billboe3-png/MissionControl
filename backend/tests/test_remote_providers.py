@@ -1230,6 +1230,21 @@ def test_ssh_stream_command_default_implementation():
                 "completed_at": "2025-01-01T00:00:00+00:00",
             }
 
+        async def upload_file(self, **kwargs):
+            return {"success": True, "message": "ok", "remote_path": kwargs.get("remote_path", "")}
+
+        async def download_file(self, **kwargs):
+            return {"success": True, "message": "ok", "remote_path": kwargs.get("remote_path", ""), "content": b"", "size_bytes": 0}
+
+        async def list_directory(self, **kwargs):
+            return {"success": True, "path": kwargs.get("remote_path", ""), "items": []}
+
+        async def create_directory(self, **kwargs):
+            return {"success": True, "message": "ok", "remote_path": kwargs.get("remote_path", "")}
+
+        async def delete_file(self, **kwargs):
+            return {"success": True, "message": "ok", "remote_path": kwargs.get("remote_path", "")}
+
     provider = DummyProvider()
 
     mock_result = {

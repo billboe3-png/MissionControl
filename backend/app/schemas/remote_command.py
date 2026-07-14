@@ -130,6 +130,10 @@ class CommandHistoryItem(BaseModel):
         default=None,
         description="Display name of the remote host.",
     )
+    credential_id: int | None = Field(
+        default=None,
+        description="ID of the credential profile used.",
+    )
     command: str = Field(
         ...,
         description="Command that was executed.",
@@ -169,6 +173,18 @@ class CommandHistoryItem(BaseModel):
     executed_by: str | None = Field(
         default=None,
         description="Who executed the command.",
+    )
+    username: str | None = Field(
+        default=None,
+        description="SSH/WinRM username used.",
+    )
+    working_directory: str | None = Field(
+        default=None,
+        description="Working directory on remote host.",
+    )
+    execution_source: str = Field(
+        default="manual",
+        description="Source: manual, template, scheduled, bulk.",
     )
 
 

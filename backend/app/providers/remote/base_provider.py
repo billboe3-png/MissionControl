@@ -4,7 +4,7 @@ Mission Control Remote Provider Base
 Abstract base class defining the contract for all remote connection providers.
 Each provider implements SSH or WinRM connection logic.
 
-Sprint 2.1.6 - Real WinRM Command Execution.
+Sprint 2.1.8 - Remote Operations Finalization.
 """
 
 from abc import ABC, abstractmethod
@@ -18,15 +18,11 @@ class RemoteBaseProvider(ABC):
     Each concrete provider (SSH, WinRM) must implement:
     - test_connection: Verify connectivity to a remote host
     - execute_command: Run a command on a remote host
-
-    execute_command returns a dict with:
-        - stdout: str
-        - stderr: str
-        - exit_code: int
-        - success: bool
-        - duration_ms: int
-        - started_at: str (ISO 8601)
-        - completed_at: str (ISO 8601)
+    - upload_file: Upload a file to the remote host
+    - download_file: Download a file from the remote host
+    - list_directory: List contents of a remote directory
+    - create_directory: Create a directory on the remote host
+    - delete_file: Delete a file on the remote host
     """
 
     @abstractmethod
@@ -55,6 +51,77 @@ class RemoteBaseProvider(ABC):
         ip_address: str | None,
     ) -> dict:
         """Execute a command on a remote host."""
+        ...
+
+    @abstractmethod
+    async def upload_file(
+        self,
+        hostname: str,
+        port: int,
+        username: str,
+        password: str | None,
+        ssh_key: str | None,
+        remote_path: str,
+        content: bytes,
+        ip_address: str | None,
+    ) -> dict:
+        """Upload a file to the remote host."""
+        ...
+
+    @abstractmethod
+    async def download_file(
+        self,
+        hostname: str,
+        port: int,
+        username: str,
+        password: str | None,
+        ssh_key: str | None,
+        remote_path: str,
+        ip_address: str | None,
+    ) -> dict:
+        """Download a file from the remote host."""
+        ...
+
+    @abstractmethod
+    async def list_directory(
+        self,
+        hostname: str,
+        port: int,
+        username: str,
+        password: str | None,
+        ssh_key: str | None,
+        remote_path: str,
+        ip_address: str | None,
+    ) -> dict:
+        """List contents of a remote directory."""
+        ...
+
+    @abstractmethod
+    async def create_directory(
+        self,
+        hostname: str,
+        port: int,
+        username: str,
+        password: str | None,
+        ssh_key: str | None,
+        remote_path: str,
+        ip_address: str | None,
+    ) -> dict:
+        """Create a directory on the remote host."""
+        ...
+
+    @abstractmethod
+    async def delete_file(
+        self,
+        hostname: str,
+        port: int,
+        username: str,
+        password: str | None,
+        ssh_key: str | None,
+        remote_path: str,
+        ip_address: str | None,
+    ) -> dict:
+        """Delete a file on the remote host."""
         ...
 
     def stream_command(

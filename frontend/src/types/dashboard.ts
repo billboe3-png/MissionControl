@@ -198,62 +198,6 @@ export interface Integrations {
     github: IntegrationStatus;
 }
 
-export interface RemoteHost {
-    id: number;
-    name: string;
-    hostname: string;
-    ip_address: string | null;
-    operating_system: string | null;
-    connection_type: string;
-    port: number;
-    enabled: boolean;
-    credential_profile_id: number | null;
-    credential_profile_name: string | null;
-    created_at: string;
-    updated_at: string;
-}
-
-export interface CredentialProfile {
-    id: number;
-    name: string;
-    authentication_type: string;
-    username: string;
-    description: string | null;
-    created_at: string;
-    updated_at: string;
-}
-
-export interface CommandHistoryItem {
-    id: number;
-    host_id: number;
-    host_name: string | null;
-    command: string;
-    shell: string;
-    stdout: string | null;
-    stderr: string | null;
-    exit_code: number | null;
-    success: boolean;
-    duration_ms: number | null;
-    started_at: string;
-    completed_at: string | null;
-    executed_by: string | null;
-}
-
-export interface RemoteHostsData {
-    count: number;
-    items: RemoteHost[];
-}
-
-export interface CredentialProfilesData {
-    count: number;
-    items: CredentialProfile[];
-}
-
-export interface RemoteHistoryData {
-    count: number;
-    items: CommandHistoryItem[];
-}
-
 export interface RemoteCommand {
     id: number;
     host_id: number;

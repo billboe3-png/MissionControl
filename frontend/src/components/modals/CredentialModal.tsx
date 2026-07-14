@@ -1,10 +1,9 @@
 import { useState } from "react";
 import LoadingButton from "../common/LoadingButton";
-import { credentialsApi, CredentialCreateInput } from "../../services/remote";
-import { CredentialProfile } from "../../types/dashboard";
+import { credentialsApi, CredentialCreateInput, CredentialData } from "../../services/remote";
 
 interface CredentialModalProps {
-    credential?: CredentialProfile;
+    credential?: CredentialData;
     onSave: () => void;
     onCancel: () => void;
     onError: (message: string) => void;
@@ -32,7 +31,7 @@ export default function CredentialModal({
         setLoading(true);
 
         try {
-            const payload: CredentialCreateInput & { passphrase?: string } = {
+            const payload: CredentialCreateInput = {
                 name,
                 authentication_type: authType,
                 username,
@@ -43,7 +42,15 @@ export default function CredentialModal({
             };
 
             if (isEditing) {
-                await credentialsApi.update(credential.id, payload);
+                await credentialsApi.update(credential.id, {
+                    name,
+                    authentication_type: authType,
+                    username,
+                    password: password || undefined,
+                    ssh_key: sshKey || undefined,
+                    passphrase: passphrase || undefined,
+                    description: description || undefined,
+                });
             } else {
                 await credentialsApi.create(payload);
             }
@@ -115,7 +122,7 @@ export default function CredentialModal({
                                 className="form-input"
                                 value={password}
                                 onChange={(e) => setPassword(e.target.value)}
-                                placeholder={isEditing ? "\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022" : ""}
+                                placeholder={isEditing ? "Leave blank to keep existing" : ""}
                             />
                         </div>
                     )}

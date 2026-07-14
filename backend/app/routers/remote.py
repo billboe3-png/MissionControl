@@ -1,40 +1,64 @@
 """
 Mission Control Remote Operations Router
 
-Sprint 2.1.0 - Remote Operations Framework.
+Sprint 2.1.8 - Remote Operations Finalization.
 """
 
-from fastapi import APIRouter
-from fastapi import Depends
-from fastapi import Query
-from fastapi import status
+from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.orm import Session
 
 from app.db import get_db
-from app.schemas.credential_profile import CredentialProfileCreate
-from app.schemas.credential_profile import CredentialProfileListResponse
-from app.schemas.credential_profile import CredentialProfileResponse
-from app.schemas.credential_profile import CredentialProfileUpdate
-from app.schemas.remote_command import RemoteExecuteRequest
-from app.schemas.remote_command import RemoteExecuteResponse
-from app.schemas.remote_command import RemoteHistoryResponse
-from app.schemas.remote_command import RemoteTestConnectionRequest
-from app.schemas.remote_command import RemoteTestConnectionResponse
-from app.schemas.remote_host import RemoteHostCreate
-from app.schemas.remote_host import RemoteHostListResponse
-from app.schemas.remote_host import RemoteHostResponse
-from app.schemas.remote_host import RemoteHostUpdate
-from app.services.remote_service import RemoteService
-from app.services.remote_service import remote_service
-
-router = APIRouter(
-    prefix="/remote",
-    tags=["Remote Operations"],
+from app.schemas.bulk_command import (
+    BulkExecuteRequest,
+    BulkExecuteResponse,
+    SessionMetricsResponse,
 )
+from app.schemas.command_template import (
+    CommandTemplateCreate,
+    CommandTemplateListResponse,
+    CommandTemplateResponse,
+    CommandTemplateUpdate,
+)
+from app.schemas.credential_profile import (
+    CredentialProfileCreate,
+    CredentialProfileListResponse,
+    CredentialProfileResponse,
+    CredentialProfileUpdate,
+)
+from app.schemas.file_transfer import (
+    FileDeleteRequest,
+    FileDownloadRequest,
+    FileDownloadResponse,
+    FileListResponse,
+    FileMkdirRequest,
+    FileTransferResponse,
+    FileUploadRequest,
+)
+from app.schemas.remote_command import (
+    RemoteExecuteRequest,
+    RemoteExecuteResponse,
+    RemoteHistoryResponse,
+    RemoteTestConnectionRequest,
+    RemoteTestConnectionResponse,
+)
+from app.schemas.remote_host import (
+    RemoteHostCreate,
+    RemoteHostListResponse,
+    RemoteHostResponse,
+    RemoteHostUpdate,
+)
+from app.schemas.scheduled_command import (
+    ScheduledCommandCreate,
+    ScheduledCommandListResponse,
+    ScheduledCommandResponse,
+    ScheduledCommandUpdate,
+)
+from app.services.remote_service import RemoteService, remote_service
+
+router = APIRouter(prefix="/remote", tags=["Remote Operations"])
 
 
 def get_remote_service() -> RemoteService:
-    """Provide the shared remote service instance."""
     return remote_service
 
 
@@ -42,42 +66,16 @@ def get_remote_service() -> RemoteService:
 # Host Endpoints                                                      #
 # ------------------------------------------------------------------ #
 
-
-@router.get(
-    "/hosts",
-    summary="List remote hosts",
-    description="Return all remote hosts with optional search.",
-    response_model=RemoteHostListResponse,
-    responses={
-        status.HTTP_200_OK: {
-            "description": "Remote hosts retrieved successfully.",
-            "model": RemoteHostListResponse,
-        },
-    },
-)
+@router.get("/hosts", response_model=RemoteHostListResponse)
 async def list_hosts(
-    search: str | None = Query(None, description="Search by name, hostname, or IP."),
+    search: str | None = Query(None),
     db: Session = Depends(get_db),
     service: RemoteService = Depends(get_remote_service),
 ) -> RemoteHostListResponse:
     return await service.get_hosts(db, search)
 
 
-@router.get(
-    "/hosts/{host_id}",
-    summary="Get remote host",
-    description="Return a single remote host by its identifier.",
-    response_model=RemoteHostResponse,
-    responses={
-        status.HTTP_200_OK: {
-            "description": "Remote host retrieved successfully.",
-            "model": RemoteHostResponse,
-        },
-        status.HTTP_404_NOT_FOUND: {
-            "description": "Remote host not found.",
-        },
-    },
-)
+@router.get("/hosts/{host_id}", response_model=RemoteHostResponse)
 async def get_host(
     host_id: int,
     db: Session = Depends(get_db),
@@ -88,25 +86,8 @@ async def get_host(
 
 @router.post(
     "/hosts",
-    summary="Create remote host",
-    description="Create a new remote host record.",
-    response_model=RemoteHostResponse,
     status_code=status.HTTP_201_CREATED,
-    responses={
-        status.HTTP_201_CREATED: {
-            "description": "Remote host created successfully.",
-            "model": RemoteHostResponse,
-        },
-        status.HTTP_400_BAD_REQUEST: {
-            "description": "Invalid connection type.",
-        },
-        status.HTTP_404_NOT_FOUND: {
-            "description": "Credential profile not found.",
-        },
-        status.HTTP_422_UNPROCESSABLE_ENTITY: {
-            "description": "Validation error.",
-        },
-    },
+    response_model=RemoteHostResponse,
 )
 async def create_host(
     payload: RemoteHostCreate,
@@ -116,27 +97,7 @@ async def create_host(
     return await service.create_host(db, payload)
 
 
-@router.put(
-    "/hosts/{host_id}",
-    summary="Update remote host",
-    description="Update fields on an existing remote host.",
-    response_model=RemoteHostResponse,
-    responses={
-        status.HTTP_200_OK: {
-            "description": "Remote host updated successfully.",
-            "model": RemoteHostResponse,
-        },
-        status.HTTP_400_BAD_REQUEST: {
-            "description": "Invalid connection type.",
-        },
-        status.HTTP_404_NOT_FOUND: {
-            "description": "Remote host not found.",
-        },
-        status.HTTP_422_UNPROCESSABLE_ENTITY: {
-            "description": "Validation error.",
-        },
-    },
-)
+@router.put("/hosts/{host_id}", response_model=RemoteHostResponse)
 async def update_host(
     host_id: int,
     payload: RemoteHostUpdate,
@@ -148,17 +109,7 @@ async def update_host(
 
 @router.delete(
     "/hosts/{host_id}",
-    summary="Delete remote host",
-    description="Remove a remote host by its identifier.",
     status_code=status.HTTP_204_NO_CONTENT,
-    responses={
-        status.HTTP_204_NO_CONTENT: {
-            "description": "Remote host deleted successfully.",
-        },
-        status.HTTP_404_NOT_FOUND: {
-            "description": "Remote host not found.",
-        },
-    },
 )
 async def delete_host(
     host_id: int,
@@ -172,19 +123,7 @@ async def delete_host(
 # Credential Profile Endpoints                                        #
 # ------------------------------------------------------------------ #
 
-
-@router.get(
-    "/credentials",
-    summary="List credential profiles",
-    description="Return all credential profiles.",
-    response_model=CredentialProfileListResponse,
-    responses={
-        status.HTTP_200_OK: {
-            "description": "Credential profiles retrieved successfully.",
-            "model": CredentialProfileListResponse,
-        },
-    },
-)
+@router.get("/credentials", response_model=CredentialProfileListResponse)
 async def list_credentials(
     db: Session = Depends(get_db),
     service: RemoteService = Depends(get_remote_service),
@@ -192,21 +131,7 @@ async def list_credentials(
     return await service.get_credentials(db)
 
 
-@router.get(
-    "/credentials/{profile_id}",
-    summary="Get credential profile",
-    description="Return a single credential profile by its identifier.",
-    response_model=CredentialProfileResponse,
-    responses={
-        status.HTTP_200_OK: {
-            "description": "Credential profile retrieved successfully.",
-            "model": CredentialProfileResponse,
-        },
-        status.HTTP_404_NOT_FOUND: {
-            "description": "Credential profile not found.",
-        },
-    },
-)
+@router.get("/credentials/{profile_id}", response_model=CredentialProfileResponse)
 async def get_credential(
     profile_id: int,
     db: Session = Depends(get_db),
@@ -217,22 +142,8 @@ async def get_credential(
 
 @router.post(
     "/credentials",
-    summary="Create credential profile",
-    description="Create a new credential profile record.",
-    response_model=CredentialProfileResponse,
     status_code=status.HTTP_201_CREATED,
-    responses={
-        status.HTTP_201_CREATED: {
-            "description": "Credential profile created successfully.",
-            "model": CredentialProfileResponse,
-        },
-        status.HTTP_409_CONFLICT: {
-            "description": "Credential profile name already exists.",
-        },
-        status.HTTP_422_UNPROCESSABLE_ENTITY: {
-            "description": "Validation error.",
-        },
-    },
+    response_model=CredentialProfileResponse,
 )
 async def create_credential(
     payload: CredentialProfileCreate,
@@ -242,27 +153,7 @@ async def create_credential(
     return await service.create_credential(db, payload)
 
 
-@router.put(
-    "/credentials/{profile_id}",
-    summary="Update credential profile",
-    description="Update fields on an existing credential profile.",
-    response_model=CredentialProfileResponse,
-    responses={
-        status.HTTP_200_OK: {
-            "description": "Credential profile updated successfully.",
-            "model": CredentialProfileResponse,
-        },
-        status.HTTP_404_NOT_FOUND: {
-            "description": "Credential profile not found.",
-        },
-        status.HTTP_409_CONFLICT: {
-            "description": "Credential profile name already exists.",
-        },
-        status.HTTP_422_UNPROCESSABLE_ENTITY: {
-            "description": "Validation error.",
-        },
-    },
-)
+@router.put("/credentials/{profile_id}", response_model=CredentialProfileResponse)
 async def update_credential(
     profile_id: int,
     payload: CredentialProfileUpdate,
@@ -274,17 +165,7 @@ async def update_credential(
 
 @router.delete(
     "/credentials/{profile_id}",
-    summary="Delete credential profile",
-    description="Remove a credential profile by its identifier.",
     status_code=status.HTTP_204_NO_CONTENT,
-    responses={
-        status.HTTP_204_NO_CONTENT: {
-            "description": "Credential profile deleted successfully.",
-        },
-        status.HTTP_404_NOT_FOUND: {
-            "description": "Credential profile not found.",
-        },
-    },
 )
 async def delete_credential(
     profile_id: int,
@@ -298,25 +179,7 @@ async def delete_credential(
 # Command Execution                                                   #
 # ------------------------------------------------------------------ #
 
-
-@router.post(
-    "/test",
-    summary="Test connection",
-    description="Test connectivity to a remote host.",
-    response_model=RemoteTestConnectionResponse,
-    responses={
-        status.HTTP_200_OK: {
-            "description": "Connection test completed.",
-            "model": RemoteTestConnectionResponse,
-        },
-        status.HTTP_400_BAD_REQUEST: {
-            "description": "Remote host is disabled.",
-        },
-        status.HTTP_404_NOT_FOUND: {
-            "description": "Remote host not found.",
-        },
-    },
-)
+@router.post("/test", response_model=RemoteTestConnectionResponse)
 async def test_connection(
     payload: RemoteTestConnectionRequest,
     db: Session = Depends(get_db),
@@ -325,24 +188,7 @@ async def test_connection(
     return await service.test_connection(db, payload)
 
 
-@router.post(
-    "/execute",
-    summary="Execute command",
-    description="Execute a command on a remote host.",
-    response_model=RemoteExecuteResponse,
-    responses={
-        status.HTTP_200_OK: {
-            "description": "Command execution completed.",
-            "model": RemoteExecuteResponse,
-        },
-        status.HTTP_400_BAD_REQUEST: {
-            "description": "Invalid shell or host disabled.",
-        },
-        status.HTTP_404_NOT_FOUND: {
-            "description": "Remote host not found.",
-        },
-    },
-)
+@router.post("/execute", response_model=RemoteExecuteResponse)
 async def execute_command(
     payload: RemoteExecuteRequest,
     db: Session = Depends(get_db),
@@ -351,24 +197,214 @@ async def execute_command(
     return await service.execute_command(db, payload)
 
 
-@router.get(
-    "/history",
-    summary="Get command history",
-    description="Return command execution history with optional filters.",
-    response_model=RemoteHistoryResponse,
-    responses={
-        status.HTTP_200_OK: {
-            "description": "Command history retrieved successfully.",
-            "model": RemoteHistoryResponse,
-        },
-    },
-)
+@router.post("/bulk-execute", response_model=BulkExecuteResponse)
+async def bulk_execute(
+    payload: BulkExecuteRequest,
+    db: Session = Depends(get_db),
+    service: RemoteService = Depends(get_remote_service),
+) -> BulkExecuteResponse:
+    return await service.bulk_execute(db, payload)
+
+
+@router.get("/history", response_model=RemoteHistoryResponse)
 async def get_history(
-    search: str | None = Query(None, description="Filter by command text."),
-    host_id: int | None = Query(None, description="Filter by host ID."),
-    success: bool | None = Query(None, description="Filter by success status."),
-    limit: int = Query(50, ge=1, le=500, description="Max records to return."),
+    search: str | None = Query(None),
+    host_id: int | None = Query(None),
+    success: bool | None = Query(None),
+    limit: int = Query(50, ge=1, le=500),
     db: Session = Depends(get_db),
     service: RemoteService = Depends(get_remote_service),
 ) -> RemoteHistoryResponse:
     return await service.get_history(db, search, host_id, success, limit)
+
+
+# ------------------------------------------------------------------ #
+# Command Templates                                                   #
+# ------------------------------------------------------------------ #
+
+@router.get("/templates", response_model=CommandTemplateListResponse)
+async def list_templates(
+    db: Session = Depends(get_db),
+    service: RemoteService = Depends(get_remote_service),
+) -> CommandTemplateListResponse:
+    return await service.get_templates(db)
+
+
+@router.get("/templates/{template_id}", response_model=CommandTemplateResponse)
+async def get_template(
+    template_id: int,
+    db: Session = Depends(get_db),
+    service: RemoteService = Depends(get_remote_service),
+) -> CommandTemplateResponse:
+    return await service.get_template_by_id(db, template_id)
+
+
+@router.post(
+    "/templates",
+    status_code=status.HTTP_201_CREATED,
+    response_model=CommandTemplateResponse,
+)
+async def create_template(
+    payload: CommandTemplateCreate,
+    db: Session = Depends(get_db),
+    service: RemoteService = Depends(get_remote_service),
+) -> CommandTemplateResponse:
+    return await service.create_template(db, payload)
+
+
+@router.put("/templates/{template_id}", response_model=CommandTemplateResponse)
+async def update_template(
+    template_id: int,
+    payload: CommandTemplateUpdate,
+    db: Session = Depends(get_db),
+    service: RemoteService = Depends(get_remote_service),
+) -> CommandTemplateResponse:
+    return await service.update_template(db, template_id, payload)
+
+
+@router.delete(
+    "/templates/{template_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def delete_template(
+    template_id: int,
+    db: Session = Depends(get_db),
+    service: RemoteService = Depends(get_remote_service),
+) -> None:
+    await service.delete_template(db, template_id)
+
+
+@router.post("/templates/{template_id}/execute", response_model=RemoteExecuteResponse)
+async def execute_template(
+    template_id: int,
+    host_id: int = Query(..., description="Host ID to execute against"),
+    db: Session = Depends(get_db),
+    service: RemoteService = Depends(get_remote_service),
+) -> RemoteExecuteResponse:
+    return await service.execute_template(db, template_id, host_id)
+
+
+# ------------------------------------------------------------------ #
+# Scheduled Commands                                                  #
+# ------------------------------------------------------------------ #
+
+@router.get("/schedules", response_model=ScheduledCommandListResponse)
+async def list_schedules(
+    db: Session = Depends(get_db),
+    service: RemoteService = Depends(get_remote_service),
+) -> ScheduledCommandListResponse:
+    return await service.get_schedules(db)
+
+
+@router.get("/schedules/{schedule_id}", response_model=ScheduledCommandResponse)
+async def get_schedule(
+    schedule_id: int,
+    db: Session = Depends(get_db),
+    service: RemoteService = Depends(get_remote_service),
+) -> ScheduledCommandResponse:
+    return await service.get_schedule_by_id(db, schedule_id)
+
+
+@router.post(
+    "/schedules",
+    status_code=status.HTTP_201_CREATED,
+    response_model=ScheduledCommandResponse,
+)
+async def create_schedule(
+    payload: ScheduledCommandCreate,
+    db: Session = Depends(get_db),
+    service: RemoteService = Depends(get_remote_service),
+) -> ScheduledCommandResponse:
+    return await service.create_schedule(db, payload)
+
+
+@router.put("/schedules/{schedule_id}", response_model=ScheduledCommandResponse)
+async def update_schedule(
+    schedule_id: int,
+    payload: ScheduledCommandUpdate,
+    db: Session = Depends(get_db),
+    service: RemoteService = Depends(get_remote_service),
+) -> ScheduledCommandResponse:
+    return await service.update_schedule(db, schedule_id, payload)
+
+
+@router.delete(
+    "/schedules/{schedule_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def delete_schedule(
+    schedule_id: int,
+    db: Session = Depends(get_db),
+    service: RemoteService = Depends(get_remote_service),
+) -> None:
+    await service.delete_schedule(db, schedule_id)
+
+
+@router.post("/schedules/{schedule_id}/run-now", response_model=RemoteExecuteResponse)
+async def run_schedule_now(
+    schedule_id: int,
+    db: Session = Depends(get_db),
+    service: RemoteService = Depends(get_remote_service),
+) -> RemoteExecuteResponse:
+    return await service.run_schedule_now(db, schedule_id)
+
+
+# ------------------------------------------------------------------ #
+# File Transfer                                                       #
+# ------------------------------------------------------------------ #
+
+@router.post("/files/upload", response_model=FileTransferResponse)
+async def upload_file(
+    payload: FileUploadRequest,
+    db: Session = Depends(get_db),
+    service: RemoteService = Depends(get_remote_service),
+) -> FileTransferResponse:
+    return await service.upload_file(db, payload)
+
+
+@router.post("/files/download", response_model=FileDownloadResponse)
+async def download_file(
+    payload: FileDownloadRequest,
+    db: Session = Depends(get_db),
+    service: RemoteService = Depends(get_remote_service),
+) -> FileDownloadResponse:
+    return await service.download_file(db, payload)
+
+
+@router.get("/files/list", response_model=FileListResponse)
+async def list_directory(
+    host_id: int = Query(...),
+    path: str = Query("/", description="Remote directory path"),
+    db: Session = Depends(get_db),
+    service: RemoteService = Depends(get_remote_service),
+) -> FileListResponse:
+    return await service.list_directory(db, host_id, path)
+
+
+@router.post("/files/mkdir", response_model=FileTransferResponse)
+async def create_directory(
+    payload: FileMkdirRequest,
+    db: Session = Depends(get_db),
+    service: RemoteService = Depends(get_remote_service),
+) -> FileTransferResponse:
+    return await service.create_directory(db, payload)
+
+
+@router.post("/files/delete", response_model=FileTransferResponse)
+async def delete_file(
+    payload: FileDeleteRequest,
+    db: Session = Depends(get_db),
+    service: RemoteService = Depends(get_remote_service),
+) -> FileTransferResponse:
+    return await service.delete_file(db, payload)
+
+
+# ------------------------------------------------------------------ #
+# Session Metrics                                                     #
+# ------------------------------------------------------------------ #
+
+@router.get("/metrics", response_model=SessionMetricsResponse)
+async def get_metrics(
+    service: RemoteService = Depends(get_remote_service),
+) -> SessionMetricsResponse:
+    return await service.get_session_metrics()

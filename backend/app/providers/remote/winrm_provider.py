@@ -543,3 +543,281 @@ class WinRMProvider(RemoteBaseProvider):
             return self._handle_execute_error(
                 username, hostname, command, e, start_time
             )
+
+    # ------------------------------------------------------------------ #
+    # File Transfer                                                       #
+    # ------------------------------------------------------------------ #
+
+    async def upload_file(
+        self,
+        hostname: str,
+        port: int,
+        username: str,
+        password: str | None,
+        ssh_key: str | None,
+        remote_path: str,
+        content: bytes,
+        ip_address: str | None,
+    ) -> dict:
+        """Upload a file to a Windows host via WinRM shell."""
+        logger.info(
+            "WinRM: upload_file user=%s host=%s path=%s",
+            username, hostname, remote_path,
+        )
+        try:
+            session = self._build_session(
+                hostname=hostname, port=port,
+                username=username, password=password,
+            )
+            import base64 as b64
+            encoded = b64.b64encode(content).decode("ascii")
+            ps_cmd = (
+                f"$data = [Convert]::FromBase64String('{encoded}'); "
+                f"[System.IO.File]::WriteAllBytes('{remote_path}', $data)"
+            )
+            result = session.run_cmd(f"powershell -Command \"{ps_cmd}\"")
+            if result.status_code == 0:
+                return {
+                    "success": True,
+                    "message": f"File uploaded to {remote_path}",
+                    "remote_path": remote_path,
+                    "size_bytes": len(content),
+                }
+            stderr = result.std_err or ""
+            if isinstance(stderr, bytes):
+                stderr = stderr.decode("utf-8", errors="replace")
+            return {
+                "success": False,
+                "message": f"Upload failed: {stderr}",
+                "remote_path": remote_path,
+            }
+        except Exception as e:
+            logger.warning(
+                "WinRM: upload_file user=%s host=%s error=%s",
+                username, hostname, type(e).__name__,
+            )
+            return {
+                "success": False,
+                "message": f"Upload failed: {e}",
+                "remote_path": remote_path,
+            }
+
+    async def download_file(
+        self,
+        hostname: str,
+        port: int,
+        username: str,
+        password: str | None,
+        ssh_key: str | None,
+        remote_path: str,
+        ip_address: str | None,
+    ) -> dict:
+        """Download a file from a Windows host via WinRM shell."""
+        logger.info(
+            "WinRM: download_file user=%s host=%s path=%s",
+            username, hostname, remote_path,
+        )
+        try:
+            session = self._build_session(
+                hostname=hostname, port=port,
+                username=username, password=password,
+            )
+            ps_cmd = (
+                f"$data = [System.IO.File]::ReadAllBytes('{remote_path}'); "
+                f"[Convert]::ToBase64String($data)"
+            )
+            result = session.run_cmd(f"powershell -Command \"{ps_cmd}\"")
+            stdout = result.std_out or ""
+            if isinstance(stdout, bytes):
+                stdout = stdout.decode("utf-8", errors="replace")
+            if result.status_code == 0 and stdout.strip():
+                import base64 as b64
+                content = b64.b64decode(stdout.strip())
+                return {
+                    "success": True,
+                    "message": f"File downloaded from {remote_path}",
+                    "remote_path": remote_path,
+                    "content": content,
+                    "size_bytes": len(content),
+                }
+            stderr = result.std_err or ""
+            if isinstance(stderr, bytes):
+                stderr = stderr.decode("utf-8", errors="replace")
+            return {
+                "success": False,
+                "message": f"Download failed: {stderr}",
+                "remote_path": remote_path,
+            }
+        except Exception as e:
+            logger.warning(
+                "WinRM: download_file user=%s host=%s error=%s",
+                username, hostname, type(e).__name__,
+            )
+            return {
+                "success": False,
+                "message": f"Download failed: {e}",
+                "remote_path": remote_path,
+            }
+
+    async def list_directory(
+        self,
+        hostname: str,
+        port: int,
+        username: str,
+        password: str | None,
+        ssh_key: str | None,
+        remote_path: str,
+        ip_address: str | None,
+    ) -> dict:
+        """List contents of a remote directory via WinRM."""
+        logger.info(
+            "WinRM: list_directory user=%s host=%s path=%s",
+            username, hostname, remote_path,
+        )
+        try:
+            session = self._build_session(
+                hostname=hostname, port=port,
+                username=username, password=password,
+            )
+            ps_cmd = (
+                f"Get-ChildItem '{remote_path}' | "
+                f"Select-Object Name,FullName,PSIsContainer,"
+                f"Length,LastWriteTime | ConvertTo-Json"
+            )
+            result = session.run_cmd(f"powershell -Command \"{ps_cmd}\"")
+            stdout = result.std_out or ""
+            if isinstance(stdout, bytes):
+                stdout = stdout.decode("utf-8", errors="replace")
+            if result.status_code == 0 and stdout.strip():
+                import json
+                data = json.loads(stdout.strip())
+                if isinstance(data, dict):
+                    data = [data]
+                items = []
+                for entry in data:
+                    items.append({
+                        "name": entry.get("Name", ""),
+                        "path": entry.get("FullName", ""),
+                        "is_directory": entry.get("PSIsContainer", False),
+                        "size_bytes": entry.get("Length"),
+                        "modified_at": str(entry.get("LastWriteTime", "")),
+                        "permissions": None,
+                    })
+                items.sort(key=lambda x: (not x["is_directory"], x["name"]))
+                return {
+                    "success": True,
+                    "path": remote_path,
+                    "items": items,
+                }
+            return {
+                "success": True,
+                "path": remote_path,
+                "items": [],
+            }
+        except Exception as e:
+            logger.warning(
+                "WinRM: list_directory user=%s host=%s error=%s",
+                username, hostname, type(e).__name__,
+            )
+            return {
+                "success": False,
+                "message": f"List failed: {e}",
+                "path": remote_path,
+                "items": [],
+            }
+
+    async def create_directory(
+        self,
+        hostname: str,
+        port: int,
+        username: str,
+        password: str | None,
+        ssh_key: str | None,
+        remote_path: str,
+        ip_address: str | None,
+    ) -> dict:
+        """Create a directory on a Windows host via WinRM."""
+        logger.info(
+            "WinRM: create_directory user=%s host=%s path=%s",
+            username, hostname, remote_path,
+        )
+        try:
+            session = self._build_session(
+                hostname=hostname, port=port,
+                username=username, password=password,
+            )
+            result = session.run_cmd(
+                f'powershell -Command "New-Item -ItemType Directory -Path \'{remote_path}\' -Force"'
+            )
+            if result.status_code == 0:
+                return {
+                    "success": True,
+                    "message": f"Directory created: {remote_path}",
+                    "remote_path": remote_path,
+                }
+            stderr = result.std_err or ""
+            if isinstance(stderr, bytes):
+                stderr = stderr.decode("utf-8", errors="replace")
+            return {
+                "success": False,
+                "message": f"Mkdir failed: {stderr}",
+                "remote_path": remote_path,
+            }
+        except Exception as e:
+            logger.warning(
+                "WinRM: create_directory user=%s host=%s error=%s",
+                username, hostname, type(e).__name__,
+            )
+            return {
+                "success": False,
+                "message": f"Mkdir failed: {e}",
+                "remote_path": remote_path,
+            }
+
+    async def delete_file(
+        self,
+        hostname: str,
+        port: int,
+        username: str,
+        password: str | None,
+        ssh_key: str | None,
+        remote_path: str,
+        ip_address: str | None,
+    ) -> dict:
+        """Delete a file on a Windows host via WinRM."""
+        logger.info(
+            "WinRM: delete_file user=%s host=%s path=%s",
+            username, hostname, remote_path,
+        )
+        try:
+            session = self._build_session(
+                hostname=hostname, port=port,
+                username=username, password=password,
+            )
+            result = session.run_cmd(
+                f'powershell -Command "Remove-Item \'{remote_path}\' -Force"'
+            )
+            if result.status_code == 0:
+                return {
+                    "success": True,
+                    "message": f"File deleted: {remote_path}",
+                    "remote_path": remote_path,
+                }
+            stderr = result.std_err or ""
+            if isinstance(stderr, bytes):
+                stderr = stderr.decode("utf-8", errors="replace")
+            return {
+                "success": False,
+                "message": f"Delete failed: {stderr}",
+                "remote_path": remote_path,
+            }
+        except Exception as e:
+            logger.warning(
+                "WinRM: delete_file user=%s host=%s error=%s",
+                username, hostname, type(e).__name__,
+            )
+            return {
+                "success": False,
+                "message": f"Delete failed: {e}",
+                "remote_path": remote_path,
+            }
