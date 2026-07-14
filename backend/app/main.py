@@ -8,6 +8,7 @@ from app.routers import (
     doctor,
     git,
     health,
+    hyperv,
     identity,
     integration,
     notes,
@@ -75,6 +76,7 @@ app.include_router(remote.router, prefix="/api/v1")
 app.include_router(identity.router, prefix="/api/v1")
 app.include_router(integration.router, prefix="/api/v1")
 app.include_router(zabbix.router, prefix="/api/v1")
+app.include_router(hyperv.router, prefix="/api/v1")
 
 
 @app.get("/api/v1")

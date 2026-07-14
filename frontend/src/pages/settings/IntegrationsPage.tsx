@@ -10,8 +10,9 @@ import {
 import ZabbixConfigModal from "../../components/modals/ZabbixConfigModal";
 import ADConfigModal from "../../components/modals/ADConfigModal";
 import M365ConfigModal from "../../components/modals/M365ConfigModal";
+import HypervConfigModal from "../../components/modals/HypervConfigModal";
 
-type ConfigModalType = "zabbix" | "active_directory" | "microsoft_365" | null;
+type ConfigModalType = "zabbix" | "active_directory" | "microsoft_365" | "hyperv" | null;
 
 const INTEGRATION_DEFS: {
     type: ConfigModalType;
@@ -36,6 +37,12 @@ const INTEGRATION_DEFS: {
         label: "Microsoft 365",
         icon: "☁️",
         description: "Microsoft Graph — users, groups, licenses and tenant information.",
+    },
+    {
+        type: "hyperv",
+        label: "Hyper-V",
+        icon: "🖥️",
+        description: "Hyper-V virtualization — VMs, hosts, networks, storage and checkpoints.",
     },
 ];
 
@@ -280,6 +287,17 @@ export default function IntegrationsPage() {
             )}
             {modalType === "microsoft_365" && (
                 <M365ConfigModal
+                    profile={editingProfile}
+                    onSave={handleModalSave}
+                    onCancel={() => {
+                        setModalType(null);
+                        setEditingProfile(null);
+                    }}
+                    onError={(msg) => setError(msg)}
+                />
+            )}
+            {modalType === "hyperv" && (
+                <HypervConfigModal
                     profile={editingProfile}
                     onSave={handleModalSave}
                     onCancel={() => {

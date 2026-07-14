@@ -31,6 +31,12 @@ import ZabbixItemsPage from "./pages/zabbix/ItemsPage";
 import ZabbixMapsPage from "./pages/zabbix/MapsPage";
 import ZabbixDashboardsPage from "./pages/zabbix/DashboardsPage";
 import ZabbixHealthPage from "./pages/zabbix/HealthPage";
+import HyperVOverviewPage from "./pages/hyperv/OverviewPage";
+import VirtualMachinesPage from "./pages/hyperv/VirtualMachinesPage";
+import NetworksPage from "./pages/hyperv/NetworksPage";
+import StoragePage from "./pages/hyperv/StoragePage";
+import CheckpointsPage from "./pages/hyperv/CheckpointsPage";
+import HyperVHealthPage from "./pages/hyperv/HealthPage";
 import PlaceholderPage from "./pages/PlaceholderPage";
 
 export default function App() {
@@ -69,6 +75,13 @@ export default function App() {
                             <Route path="/identity" element={<IdentityOverviewPage />} />
                             <Route path="/identity/active-directory" element={<ActiveDirectoryPage />} />
                             <Route path="/identity/microsoft-365" element={<Microsoft365Page />} />
+
+                            <Route path="/hyperv" element={<HyperVOverviewPage />} />
+                            <Route path="/hyperv/vms" element={<VirtualMachinesPage />} />
+                            <Route path="/hyperv/networks" element={<NetworksPage />} />
+                            <Route path="/hyperv/storage" element={<StoragePage />} />
+                            <Route path="/hyperv/checkpoints" element={<CheckpointsPage />} />
+                            <Route path="/hyperv/health" element={<HyperVHealthPage />} />
 
                             <Route path="/settings" element={<GeneralPage />} />
                             <Route path="/settings/integrations" element={<IntegrationsPage />} />

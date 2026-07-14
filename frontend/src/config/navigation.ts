@@ -56,6 +56,18 @@ export const navigation: NavGroup[] = [
         ],
     },
     {
+        label: "Hyper-V",
+        icon: "🖥️",
+        items: [
+            { label: "Overview", path: "/hyperv", icon: "📊" },
+            { label: "Virtual Machines", path: "/hyperv/vms", icon: "🖥️" },
+            { label: "Networks", path: "/hyperv/networks", icon: "🌐" },
+            { label: "Storage", path: "/hyperv/storage", icon: "💾" },
+            { label: "Checkpoints", path: "/hyperv/checkpoints", icon: "📸" },
+            { label: "Health", path: "/hyperv/health", icon: "❤️" },
+        ],
+    },
+    {
         label: "Settings",
         icon: "⚙️",
         items: [

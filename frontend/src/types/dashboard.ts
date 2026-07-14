@@ -213,6 +213,17 @@ export interface Integrations {
     profiles: IntegrationListData;
 }
 
+export interface HyperVStatus {
+    connected: boolean;
+    total_vms: number;
+    running: number;
+    stopped: number;
+    paused: number;
+    total_memory_gb: number;
+    used_memory_gb: number;
+    error: string | null;
+}
+
 export interface RemoteCommand {
     id: number;
     host_id: number;
@@ -251,4 +262,5 @@ export interface DashboardResponse {
     parking_lot: ParkingLotData;
     remote: RemoteData;
     integrations: Integrations;
+    hyperv: HyperVStatus;
 }

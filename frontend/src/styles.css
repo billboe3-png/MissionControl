@@ -2631,3 +2631,297 @@ select.form-input {
 .btn-link:hover {
     text-decoration: underline;
 }
+
+/* ==========================================================================
+   Hyper-V — Sprint 2.4
+   ========================================================================== */
+
+.hyperv-overview-stats {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 16px;
+    margin-bottom: 20px;
+}
+
+.hyperv-stat-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.hyperv-stat-icon {
+    font-size: 1.5rem;
+}
+
+.hyperv-stat-info {
+    display: flex;
+    flex-direction: column;
+}
+
+.hyperv-stat-value {
+    font-size: 1.3rem;
+    font-weight: 700;
+}
+
+.hyperv-stat-label {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+}
+
+.hyperv-resource-bars {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.hyperv-resource-item {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.hyperv-resource-label {
+    font-size: 0.88rem;
+}
+
+.hyperv-progress-bar {
+    height: 6px;
+    background: var(--border);
+    border-radius: 3px;
+    overflow: hidden;
+}
+
+.hyperv-progress-fill {
+    height: 100%;
+    background: var(--success);
+    border-radius: 3px;
+    transition: width 0.3s;
+}
+
+.hyperv-progress-fill.warning {
+    background: var(--warning);
+}
+
+.hyperv-host-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.hyperv-host-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.hyperv-host-meta {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+}
+
+/* VM Cards */
+
+.hyperv-vm-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+    gap: 16px;
+}
+
+.hyperv-vm-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.hyperv-vm-card.state-running {
+    border-left: 3px solid var(--success);
+}
+
+.hyperv-vm-card.state-stopped {
+    border-left: 3px solid var(--danger);
+}
+
+.hyperv-vm-card.state-paused {
+    border-left: 3px solid var(--warning);
+}
+
+.hyperv-vm-card.state-saved {
+    border-left: 3px solid var(--text-muted);
+}
+
+.hyperv-vm-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.hyperv-vm-header h3 {
+    margin: 0;
+    font-size: 0.95rem;
+}
+
+.hyperv-vm-meta {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    font-size: 0.82rem;
+    color: var(--text-muted);
+}
+
+.hyperv-vm-actions {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    padding-top: 6px;
+    border-top: 1px solid var(--border);
+}
+
+/* Network Cards */
+
+.hyperv-network-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 16px;
+}
+
+.hyperv-network-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.hyperv-network-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.hyperv-network-header h3 {
+    margin: 0;
+    font-size: 0.95rem;
+}
+
+.hyperv-network-meta {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    font-size: 0.82rem;
+    color: var(--text-muted);
+}
+
+/* Storage Table */
+
+.hyperv-storage-table {
+    overflow-x: auto;
+}
+
+.hyperv-storage-usage {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 120px;
+}
+
+.hyperv-storage-usage span {
+    font-size: 0.82rem;
+    color: var(--text-muted);
+    min-width: 32px;
+}
+
+/* Checkpoint Table */
+
+.hyperv-checkpoint-table {
+    overflow-x: auto;
+}
+
+/* Health Grid */
+
+.hyperv-health-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+    gap: 16px;
+}
+
+.hyperv-health-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.hyperv-health-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.hyperv-health-header h3 {
+    margin: 0;
+}
+
+.hyperv-health-metrics {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.hyperv-health-metric {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.hyperv-metric-label {
+    font-size: 0.82rem;
+    color: var(--text-muted);
+    min-width: 50px;
+}
+
+.hyperv-metric-value {
+    font-size: 0.82rem;
+    color: var(--text-muted);
+    min-width: 36px;
+}
+
+.hyperv-health-meta {
+    display: flex;
+    gap: 12px;
+    font-size: 0.82rem;
+    color: var(--text-muted);
+    padding-top: 6px;
+    border-top: 1px solid var(--border);
+}
+
+/* Dashboard Hyper-V Card */
+
+.hyperv-card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.hyperv-card-header h3 {
+    margin: 0;
+}
+
+.hyperv-card-stats {
+    display: flex;
+    gap: 12px;
+    font-size: 0.88rem;
+    margin-top: 6px;
+}

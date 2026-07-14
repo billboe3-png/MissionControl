@@ -5,6 +5,7 @@ import StatCard from "../components/dashboard/StatCard";
 import HealthBadges from "../components/dashboard/HealthBadges";
 import QuickActions from "../components/dashboard/QuickActions";
 import IntegrationsCard from "../components/dashboard/IntegrationsCard";
+import HyperVCard from "../components/dashboard/HyperVCard";
 import PageHeader from "../components/common/PageHeader";
 
 export default function DashboardPage() {
@@ -89,6 +90,9 @@ export default function DashboardPage() {
                 </div>
                 {data.integrations?.profiles && (
                     <IntegrationsCard items={data.integrations.profiles.items} />
+                )}
+                {data.hyperv && (
+                    <HyperVCard data={data.hyperv} />
                 )}
             </div>
         </>
