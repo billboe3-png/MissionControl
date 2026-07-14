@@ -11,8 +11,9 @@ import ZabbixConfigModal from "../../components/modals/ZabbixConfigModal";
 import ADConfigModal from "../../components/modals/ADConfigModal";
 import M365ConfigModal from "../../components/modals/M365ConfigModal";
 import HypervConfigModal from "../../components/modals/HypervConfigModal";
+import ProxmoxConfigModal from "../../components/modals/ProxmoxConfigModal";
 
-type ConfigModalType = "zabbix" | "active_directory" | "microsoft_365" | "hyperv" | null;
+type ConfigModalType = "zabbix" | "active_directory" | "microsoft_365" | "hyperv" | "proxmox" | null;
 
 const INTEGRATION_DEFS: {
     type: ConfigModalType;
@@ -43,6 +44,12 @@ const INTEGRATION_DEFS: {
         label: "Hyper-V",
         icon: "🖥️",
         description: "Hyper-V virtualization — VMs, hosts, networks, storage and checkpoints.",
+    },
+    {
+        type: "proxmox",
+        label: "Proxmox VE",
+        icon: "🐧",
+        description: "Proxmox Virtual Environment — nodes, VMs, LXC containers, storage and networks.",
     },
 ];
 
@@ -298,6 +305,17 @@ export default function IntegrationsPage() {
             )}
             {modalType === "hyperv" && (
                 <HypervConfigModal
+                    profile={editingProfile}
+                    onSave={handleModalSave}
+                    onCancel={() => {
+                        setModalType(null);
+                        setEditingProfile(null);
+                    }}
+                    onError={(msg) => setError(msg)}
+                />
+            )}
+            {modalType === "proxmox" && (
+                <ProxmoxConfigModal
                     profile={editingProfile}
                     onSave={handleModalSave}
                     onCancel={() => {

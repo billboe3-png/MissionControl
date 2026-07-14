@@ -10,7 +10,7 @@ Fernet symmetric encryption via CredentialCipher.
 
 from datetime import UTC, datetime
 
-from sqlalchemy import Boolean, DateTime, Integer, String, Text
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.database import Base
@@ -31,6 +31,13 @@ class IntegrationProfile(Base):
     id: Mapped[int] = mapped_column(
         Integer,
         primary_key=True,
+        index=True,
+    )
+
+    site_id: Mapped[int | None] = mapped_column(
+        Integer,
+        ForeignKey("sites.id", ondelete="SET NULL"),
+        nullable=True,
         index=True,
     )
 

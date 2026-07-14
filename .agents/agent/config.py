@@ -1,0 +1,129 @@
+"""Mission Control Agent Configuration."""
+
+import os
+from pathlib import Path
+
+import yaml
+from pydantic import BaseModel, Field
+from pydantic_settings import BaseSettings
+
+
+DEFAULT_CONFIG_DIR = Path.home() / ".config" / "mission-control-agent"
+DEFAULT_DATA_DIR = Path.home() / ".local" / "share" / "mission-control-agent"
+
+
+class AgentSettings(BaseSettings):
+    """Agent configuration with environment variable overrides."""
+
+    server_url: str = Field(
+        default="https://localhost:8000",
+        description="Mission Control server URL.",
+        alias="MC_SERVER_URL",
+    )
+
+    api_key: str = Field(
+        default="",
+        description="Agent API key for authentication.",
+        alias="MC_API_KEY",
+    )
+
+    agent_id: int | None = Field(
+        default=None,
+        description="Registered agent ID.",
+        alias="MC_AGENT_ID",
+    )
+
+    agent_name: str = Field(
+        default="",
+        description="Display name for this agent.",
+        alias="MC_AGENT_NAME",
+    )
+
+    heartbeat_interval: int = Field(
+        default=30,
+        description="Seconds between heartbeats.",
+        alias="MC_HEARTBEAT_INTERVAL",
+    )
+
+    inventory_interval: int = Field(
+        default=300,
+        description="Seconds between inventory collection.",
+        alias="MC_INVENTORY_INTERVAL",
+    )
+
+    verify_ssl: bool = Field(
+        default=True,
+        description="Verify TLS certificates.",
+        alias="MC_VERIFY_SSL",
+    )
+
+    log_level: str = Field(
+        default="INFO",
+        description="Logging level.",
+        alias="MC_LOG_LEVEL",
+    )
+
+    log_file: str | None = Field(
+        default=None,
+        description="Log file path.",
+        alias="MC_LOG_FILE",
+    )
+
+    config_dir: Path = Field(
+        default=DEFAULT_CONFIG_DIR,
+        description="Configuration directory.",
+        alias="MC_CONFIG_DIR",
+    )
+
+    data_dir: Path = Field(
+        default=DEFAULT_DATA_DIR,
+        description="Data directory for queues and cache.",
+        alias="MC_DATA_DIR",
+    )
+
+    command_timeout: int = Field(
+        default=60,
+        description="Default command timeout in seconds.",
+        alias="MC_COMMAND_TIMEOUT",
+    )
+
+    reconnect_delay: int = Field(
+        default=5,
+        description="Initial reconnect delay in seconds.",
+        alias="MC_RECONNECT_DELAY",
+    )
+
+    max_reconnect_delay: int = Field(
+        default=300,
+        description="Maximum reconnect delay in seconds.",
+        alias="MC_MAX_RECONNECT_DELAY",
+    )
+
+    offline_buffer_max: int = Field(
+        default=1000,
+        description="Maximum number of results to buffer offline.",
+        alias="MC_OFFLINE_BUFFER_MAX",
+    )
+
+    model_config = {"env_prefix": "", "extra": "ignore"}
+
+
+def load_config(config_path: str | Path | None = None) -> AgentSettings:
+    """Load configuration from file and environment."""
+    settings_kwargs: dict = {}
+
+    if config_path is None:
+        default_path = DEFAULT_CONFIG_DIR / "config.yaml"
+        if default_path.exists():
+            config_path = default_path
+
+    if config_path and Path(config_path).exists():
+        with open(config_path) as f:
+            file_config = yaml.safe_load(f) or {}
+        settings_kwargs = {
+            k: v
+            for k, v in file_config.items()
+            if v is not None
+        }
+
+    return AgentSettings(**settings_kwargs)

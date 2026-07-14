@@ -3,6 +3,9 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import get_settings
 from app.routers import (
+    agent,
+    ai,
+    automation,
     dashboard,
     docker,
     doctor,
@@ -14,8 +17,10 @@ from app.routers import (
     notes,
     parking_lot,
     projects,
+    proxmox,
     remote,
     resume,
+    site,
     status,
     tasks,
     version,
@@ -77,6 +82,11 @@ app.include_router(identity.router, prefix="/api/v1")
 app.include_router(integration.router, prefix="/api/v1")
 app.include_router(zabbix.router, prefix="/api/v1")
 app.include_router(hyperv.router, prefix="/api/v1")
+app.include_router(proxmox.router, prefix="/api/v1")
+app.include_router(site.router, prefix="/api/v1")
+app.include_router(ai.router, prefix="/api/v1")
+app.include_router(agent.router, prefix="/api/v1")
+app.include_router(automation.router, prefix="/api/v1")
 
 
 @app.get("/api/v1")

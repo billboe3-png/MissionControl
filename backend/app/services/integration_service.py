@@ -83,7 +83,7 @@ class IntegrationService:
         self, db: Session, data: IntegrationProfileCreate
     ) -> IntegrationProfileResponse:
         """Create a new integration profile with encrypted secrets."""
-        valid_types = ("zabbix", "active_directory", "microsoft_365", "hyperv")
+        valid_types = ("zabbix", "active_directory", "microsoft_365", "hyperv", "proxmox")
         if data.integration_type not in valid_types:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -271,6 +271,8 @@ class IntegrationService:
             return await self._test_m365(profile)
         elif profile.integration_type == "hyperv":
             return await self._test_hyperv(profile)
+        elif profile.integration_type == "proxmox":
+            return await self._test_proxmox(profile)
         else:
             return {
                 "connected": False,
@@ -321,6 +323,15 @@ class IntegrationService:
             password=_decrypt(profile.encrypted_secret) or "",
             timeout=profile.timeout or 30,
         )
+        return await provider.test_connection()
+
+    async def _test_proxmox(
+        self, profile: IntegrationProfile
+    ) -> dict:
+        """Test Proxmox connection using profile config."""
+        from app.providers.proxmox.mock_provider import MockProxmoxProvider
+
+        provider = MockProxmoxProvider()
         return await provider.test_connection()
 
     # ------------------------------------------------------------------ #

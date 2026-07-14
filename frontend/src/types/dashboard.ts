@@ -224,6 +224,25 @@ export interface HyperVStatus {
     error: string | null;
 }
 
+export interface ProxmoxStatus {
+    connected: boolean;
+    cluster_name: string | null;
+    nodes_online: number;
+    nodes_total: number;
+    total_vms: number;
+    running: number;
+    stopped: number;
+    paused: number;
+    total_lxc: number;
+    running_lxc: number;
+    stopped_lxc: number;
+    total_memory_gb: number;
+    used_memory_gb: number;
+    total_storage_gb: number;
+    used_storage_gb: number;
+    error: string | null;
+}
+
 export interface RemoteCommand {
     id: number;
     host_id: number;
@@ -263,4 +282,5 @@ export interface DashboardResponse {
     remote: RemoteData;
     integrations: Integrations;
     hyperv: HyperVStatus;
+    proxmox: ProxmoxStatus;
 }

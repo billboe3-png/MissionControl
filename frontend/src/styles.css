@@ -2925,3 +2925,376 @@ select.form-input {
     font-size: 0.88rem;
     margin-top: 6px;
 }
+
+/* ================================================================== */
+/* Proxmox VE                                                          */
+/* ================================================================== */
+
+.proxmox-overview-stats {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 16px;
+    margin-bottom: 20px;
+}
+
+.proxmox-stat-card {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 16px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+}
+
+.proxmox-stat-icon {
+    font-size: 1.6rem;
+}
+
+.proxmox-stat-info {
+    display: flex;
+    flex-direction: column;
+}
+
+.proxmox-stat-value {
+    font-size: 1.3rem;
+    font-weight: 600;
+    color: var(--text);
+}
+
+.proxmox-stat-label {
+    font-size: 0.82rem;
+    color: var(--text-muted);
+}
+
+.proxmox-resource-bars {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.proxmox-resource-item {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.proxmox-resource-label {
+    font-size: 0.88rem;
+    color: var(--text);
+}
+
+.proxmox-progress-bar {
+    height: 8px;
+    background: var(--border);
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.proxmox-progress-fill {
+    height: 100%;
+    background: var(--color-primary, #3b82f6);
+    border-radius: 4px;
+    transition: width 0.3s ease;
+}
+
+.proxmox-node-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.proxmox-node-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 12px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+}
+
+.proxmox-node-meta {
+    font-size: 0.82rem;
+    color: var(--text-muted);
+}
+
+.proxmox-card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.proxmox-card-header h3 {
+    margin: 0;
+}
+
+.proxmox-card-stats {
+    display: flex;
+    gap: 12px;
+    font-size: 0.88rem;
+    margin-top: 6px;
+}
+
+/* ==========================================================================
+   Agents — Sprint 2.7
+   ========================================================================== */
+
+.agent-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
+    gap: 16px;
+    margin-top: 16px;
+}
+
+.agent-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    transition: border-color 0.15s;
+}
+
+.agent-card.online {
+    border-left: 3px solid var(--success);
+}
+
+.agent-card.offline {
+    border-left: 3px solid var(--danger);
+    opacity: 0.8;
+}
+
+.agent-card-header {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.agent-card-title {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.agent-card-title h3 {
+    margin: 0;
+    font-size: 1rem;
+    font-weight: 600;
+}
+
+.agent-card-hostname {
+    font-size: 0.82rem;
+    color: var(--text-muted);
+}
+
+.agent-card-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    font-size: 0.82rem;
+    color: var(--text-muted);
+}
+
+.agent-meta-item {
+    padding: 2px 8px;
+    background: rgba(148, 163, 184, 0.1);
+    border-radius: 4px;
+}
+
+.agent-card-health {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.agent-health-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.agent-health-label {
+    font-size: 0.78rem;
+    color: var(--text-muted);
+    min-width: 32px;
+}
+
+.agent-health-track {
+    flex: 1;
+    height: 6px;
+    background: var(--border);
+    border-radius: 3px;
+    overflow: hidden;
+}
+
+.agent-health-fill {
+    height: 100%;
+    border-radius: 3px;
+    transition: width 0.3s;
+}
+
+.agent-health-value {
+    font-size: 0.78rem;
+    color: var(--text-muted);
+    min-width: 40px;
+    text-align: right;
+}
+
+.agent-card-footer {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.78rem;
+    color: var(--text-muted);
+    padding-top: 8px;
+    border-top: 1px solid var(--border);
+}
+
+.agent-plugins {
+    color: var(--primary);
+}
+
+/* Agent Detail Page */
+
+.agent-detail-tabs {
+    display: flex;
+    gap: 4px;
+    margin-bottom: 16px;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 0;
+}
+
+.tab-btn {
+    background: none;
+    border: none;
+    padding: 8px 16px;
+    cursor: pointer;
+    font-size: 0.88rem;
+    color: var(--text-muted);
+    border-bottom: 2px solid transparent;
+    transition: all 0.15s;
+    margin-bottom: -1px;
+}
+
+.tab-btn:hover {
+    color: var(--text);
+}
+
+.tab-btn.active {
+    color: var(--primary);
+    border-bottom-color: var(--primary);
+}
+
+.agent-detail-overview {
+    margin-top: 16px;
+}
+
+.detail-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    gap: 16px;
+}
+
+.detail-item {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 12px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+}
+
+.detail-item label {
+    font-size: 0.78rem;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.detail-item span {
+    font-size: 0.92rem;
+}
+
+.agent-commands-list {
+    margin-top: 16px;
+}
+
+.cmd-text {
+    font-family: monospace;
+    font-size: 0.82rem;
+    max-width: 400px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.agent-inventory {
+    margin-top: 16px;
+}
+
+.inventory-data {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px;
+    font-family: monospace;
+    font-size: 0.82rem;
+    overflow-x: auto;
+    max-height: 600px;
+    overflow-y: auto;
+    white-space: pre-wrap;
+}
+
+.agent-execute {
+    margin-top: 16px;
+}
+
+.execute-form {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    max-width: 600px;
+}
+
+.form-row {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.form-row label {
+    font-size: 0.82rem;
+    color: var(--text-muted);
+    font-weight: 500;
+}
+
+.form-row select,
+.form-row input,
+.form-row textarea {
+    background: var(--background);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 8px 12px;
+    color: var(--text);
+    font-size: 0.88rem;
+    font-family: inherit;
+}
+
+.form-row textarea {
+    font-family: monospace;
+    resize: vertical;
+}
+
+.form-row select:focus,
+.form-row input:focus,
+.form-row textarea:focus {
+    outline: none;
+    border-color: var(--primary);
+}

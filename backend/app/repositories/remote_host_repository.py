@@ -67,6 +67,24 @@ class RemoteHostRepository:
         return {"enabled": enabled, "disabled": disabled}
 
     @staticmethod
+    def get_by_site(db: Session, site_id: int) -> list[RemoteHost]:
+        """Return all remote hosts for a given site."""
+        stmt = select(RemoteHost).where(
+            RemoteHost.site_id == site_id
+        ).order_by(RemoteHost.created_at.desc())
+        return list(db.scalars(stmt).all())
+
+    @staticmethod
+    def count_by_site(db: Session, site_id: int) -> int:
+        """Return the number of remote hosts for a given site."""
+        stmt = (
+            select(func.count())
+            .select_from(RemoteHost)
+            .where(RemoteHost.site_id == site_id)
+        )
+        return db.scalar(stmt) or 0
+
+    @staticmethod
     def create(db: Session, data: RemoteHostCreate) -> RemoteHost:
         """Persist a new remote host."""
         entity = RemoteHost(

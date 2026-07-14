@@ -68,6 +68,39 @@ export const navigation: NavGroup[] = [
         ],
     },
     {
+        label: "Proxmox VE",
+        icon: "🐧",
+        items: [
+            { label: "Overview", path: "/proxmox", icon: "📊" },
+            { label: "Nodes", path: "/proxmox/nodes", icon: "🖧" },
+            { label: "Virtual Machines", path: "/proxmox/vms", icon: "🖥️" },
+            { label: "Containers", path: "/proxmox/lxc", icon: "📦" },
+            { label: "Storage", path: "/proxmox/storage", icon: "💾" },
+            { label: "Networks", path: "/proxmox/networks", icon: "🌐" },
+            { label: "Tasks", path: "/proxmox/tasks", icon: "📋" },
+        ],
+    },
+    {
+        label: "Agents",
+        icon: "🤖",
+        items: [
+            { label: "Overview", path: "/agents", icon: "📊" },
+        ],
+    },
+    {
+        label: "Automation",
+        icon: "⚙️",
+        items: [
+            { label: "Overview", path: "/automation", icon: "📊" },
+            { label: "Playbooks", path: "/automation/playbooks", icon: "📋" },
+            { label: "Executions", path: "/automation/executions", icon: "⚡" },
+            { label: "Approvals", path: "/automation/approvals", icon: "✅" },
+            { label: "Schedules", path: "/automation/schedules", icon: "⏰" },
+            { label: "Triggers", path: "/automation/triggers", icon: "🔔" },
+            { label: "Audit Trail", path: "/automation/audit", icon: "📜" },
+        ],
+    },
+    {
         label: "Settings",
         icon: "⚙️",
         items: [

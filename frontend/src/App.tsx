@@ -37,7 +37,24 @@ import NetworksPage from "./pages/hyperv/NetworksPage";
 import StoragePage from "./pages/hyperv/StoragePage";
 import CheckpointsPage from "./pages/hyperv/CheckpointsPage";
 import HyperVHealthPage from "./pages/hyperv/HealthPage";
+import ProxmoxOverviewPage from "./pages/proxmox/OverviewPage";
+import ProxmoxNodesPage from "./pages/proxmox/NodesPage";
+import ProxmoxVirtualMachinesPage from "./pages/proxmox/VirtualMachinesPage";
+import ProxmoxContainersPage from "./pages/proxmox/ContainersPage";
+import ProxmoxStoragePage from "./pages/proxmox/StoragePage";
+import ProxmoxNetworksPage from "./pages/proxmox/NetworksPage";
+import ProxmoxTasksPage from "./pages/proxmox/TasksPage";
 import PlaceholderPage from "./pages/PlaceholderPage";
+import AutomationOverviewPage from "./pages/automation/OverviewPage";
+import PlaybooksPage from "./pages/automation/PlaybooksPage";
+import PlaybookDetailPage from "./pages/automation/PlaybookDetailPage";
+import ExecutionsPage from "./pages/automation/ExecutionsPage";
+import ApprovalsPage from "./pages/automation/ApprovalsPage";
+import SchedulesPage from "./pages/automation/SchedulesPage";
+import TriggersPage from "./pages/automation/TriggersPage";
+import AuditPage from "./pages/automation/AuditPage";
+import AgentsOverviewPage from "./pages/agents/AgentsOverviewPage";
+import AgentDetailPage from "./pages/agents/AgentDetailPage";
 
 export default function App() {
     return (
@@ -83,12 +100,32 @@ export default function App() {
                             <Route path="/hyperv/checkpoints" element={<CheckpointsPage />} />
                             <Route path="/hyperv/health" element={<HyperVHealthPage />} />
 
+                            <Route path="/proxmox" element={<ProxmoxOverviewPage />} />
+                            <Route path="/proxmox/nodes" element={<ProxmoxNodesPage />} />
+                            <Route path="/proxmox/vms" element={<ProxmoxVirtualMachinesPage />} />
+                            <Route path="/proxmox/lxc" element={<ProxmoxContainersPage />} />
+                            <Route path="/proxmox/storage" element={<ProxmoxStoragePage />} />
+                            <Route path="/proxmox/networks" element={<ProxmoxNetworksPage />} />
+                            <Route path="/proxmox/tasks" element={<ProxmoxTasksPage />} />
+
                             <Route path="/settings" element={<GeneralPage />} />
                             <Route path="/settings/integrations" element={<IntegrationsPage />} />
                             <Route path="/settings/appearance" element={<AppearancePage />} />
                             <Route path="/settings/about" element={<AboutPage />} />
 
-                            <Route path="/automation" element={<PlaceholderPage title="Automation" />} />
+                            <Route path="/agents" element={<AgentsOverviewPage />} />
+                            <Route path="/agents/:id" element={<AgentDetailPage />} />
+
+                            <Route path="/automation" element={<AutomationOverviewPage />} />
+                            <Route path="/automation/playbooks" element={<PlaybooksPage />} />
+                            <Route path="/automation/playbooks/new" element={<PlaybookDetailPage />} />
+                            <Route path="/automation/playbooks/:id" element={<PlaybookDetailPage />} />
+                            <Route path="/automation/playbooks/:id/steps/new" element={<PlaybookDetailPage />} />
+                            <Route path="/automation/executions" element={<ExecutionsPage />} />
+                            <Route path="/automation/approvals" element={<ApprovalsPage />} />
+                            <Route path="/automation/schedules" element={<SchedulesPage />} />
+                            <Route path="/automation/triggers" element={<TriggersPage />} />
+                            <Route path="/automation/audit" element={<AuditPage />} />
                             <Route path="/ai-ops" element={<PlaceholderPage title="AI Ops" />} />
                         </Route>
                     </Routes>

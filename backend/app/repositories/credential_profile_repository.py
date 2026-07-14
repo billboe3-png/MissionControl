@@ -58,6 +58,14 @@ class CredentialProfileRepository:
         return db.scalar(stmt)
 
     @staticmethod
+    def get_by_site(db: Session, site_id: int) -> list[CredentialProfile]:
+        """Return all credential profiles for a given site."""
+        stmt = select(CredentialProfile).where(
+            CredentialProfile.site_id == site_id
+        ).order_by(CredentialProfile.created_at.desc())
+        return list(db.scalars(stmt).all())
+
+    @staticmethod
     def create(
         db: Session, data: CredentialProfileCreate
     ) -> CredentialProfile:

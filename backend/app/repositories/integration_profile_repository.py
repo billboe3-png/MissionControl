@@ -77,6 +77,24 @@ class IntegrationProfileRepository:
         return db.scalar(stmt) or 0
 
     @staticmethod
+    def get_by_site(db: Session, site_id: int) -> list[IntegrationProfile]:
+        """Return all integration profiles for a given site."""
+        stmt = select(IntegrationProfile).where(
+            IntegrationProfile.site_id == site_id
+        ).order_by(IntegrationProfile.created_at.desc())
+        return list(db.scalars(stmt).all())
+
+    @staticmethod
+    def count_by_site(db: Session, site_id: int) -> int:
+        """Return the number of integration profiles for a given site."""
+        stmt = (
+            select(func.count())
+            .select_from(IntegrationProfile)
+            .where(IntegrationProfile.site_id == site_id)
+        )
+        return db.scalar(stmt) or 0
+
+    @staticmethod
     def create(
         db: Session,
         name: str,

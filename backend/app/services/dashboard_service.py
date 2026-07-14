@@ -54,6 +54,7 @@ class DashboardService:
         remote = await self._remote_provider.get_remote_data(db)
         zabbix = await self._get_zabbix_data()
         hyperv = await self._get_hyperv_data(db)
+        proxmox = await self._get_proxmox_data(db)
         integrations = await self._get_integrations_data(db)
 
         return {
@@ -90,6 +91,7 @@ class DashboardService:
             "remote": remote,
             "zabbix": zabbix,
             "hyperv": hyperv,
+            "proxmox": proxmox,
             "integrations": integrations,
         }
 
@@ -121,6 +123,23 @@ class DashboardService:
             return await virtualization_dashboard_provider.get_virtualization_data(db)
         except Exception as e:
             logger.warning("Dashboard: Hyper-V data failed: %s", e)
+            return {
+                "connected": False,
+                "total_vms": 0,
+                "running": 0,
+                "stopped": 0,
+                "total_memory_gb": 0,
+                "used_memory_gb": 0,
+            }
+
+    async def _get_proxmox_data(self, db: Session) -> dict:
+        """Get Proxmox data for the dashboard, never raise."""
+        try:
+            from app.providers.proxmox_dashboard import proxmox_dashboard_provider
+
+            return await proxmox_dashboard_provider.get_proxmox_data(db)
+        except Exception as e:
+            logger.warning("Dashboard: Proxmox data failed: %s", e)
             return {
                 "connected": False,
                 "total_vms": 0,
