@@ -30,6 +30,15 @@ export const navigation: NavGroup[] = [
         ],
     },
     {
+        label: "Identity",
+        icon: "🔐",
+        items: [
+            { label: "Overview", path: "/identity", icon: "📊" },
+            { label: "Active Directory", path: "/identity/active-directory", icon: "🏢" },
+            { label: "Microsoft 365", path: "/identity/microsoft-365", icon: "☁️" },
+        ],
+    },
+    {
         label: "Settings",
         icon: "⚙️",
         items: [

@@ -13,6 +13,9 @@ import CredentialsPage from "./pages/remote/CredentialsPage";
 import ExecutePage from "./pages/remote/ExecutePage";
 import HistoryPage from "./pages/remote/HistoryPage";
 import FileBrowserPage from "./pages/remote/FileBrowserPage";
+import IdentityOverviewPage from "./pages/identity/IdentityOverviewPage";
+import ActiveDirectoryPage from "./pages/identity/ActiveDirectoryPage";
+import Microsoft365Page from "./pages/identity/Microsoft365Page";
 import GeneralPage from "./pages/settings/GeneralPage";
 import AppearancePage from "./pages/settings/AppearancePage";
 import AboutPage from "./pages/settings/AboutPage";
@@ -41,11 +44,14 @@ export default function App() {
 
                             <Route path="/monitoring" element={<PlaceholderPage title="Monitoring" />} />
 
+                            <Route path="/identity" element={<IdentityOverviewPage />} />
+                            <Route path="/identity/active-directory" element={<ActiveDirectoryPage />} />
+                            <Route path="/identity/microsoft-365" element={<Microsoft365Page />} />
+
                             <Route path="/settings" element={<GeneralPage />} />
                             <Route path="/settings/appearance" element={<AppearancePage />} />
                             <Route path="/settings/about" element={<AboutPage />} />
 
-                            <Route path="/identity" element={<PlaceholderPage title="Identity & Access" />} />
                             <Route path="/automation" element={<PlaceholderPage title="Automation" />} />
                             <Route path="/ai-ops" element={<PlaceholderPage title="AI Ops" />} />
                         </Route>
