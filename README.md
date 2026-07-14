@@ -114,6 +114,122 @@ Check your environment status:
 ./scripts/mc.ps1 status
 ```
 
+## Security Setup
+
+Mission Control requires a Fernet secret key to encrypt credential profiles (SSH keys, passwords, WinRM credentials). The backend will not start without a valid key.
+
+### Generating a Secret Key
+
+```bash
+python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+```
+
+Or via Docker:
+
+```bash
+docker compose run --rm backend python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+```
+
+### Adding to .env
+
+Copy the generated key into your `.env` file:
+
+```env
+MISSIONCONTROL_SECRET_KEY=your-generated-key-here
+```
+
+Never commit a real key to version control.
+
+## Docker Setup
+
+### Prerequisites
+
+- Docker Desktop or Docker Engine with Compose V2
+- A valid `MISSIONCONTROL_SECRET_KEY` in your `.env` file
+
+### Starting the Stack
+
+```bash
+docker compose up -d
+```
+
+On first start, the backend entrypoint will:
+1. Validate `MISSIONCONTROL_SECRET_KEY` is present and valid
+2. Run Alembic migrations
+3. Seed the database
+4. Start the API server
+
+If the key is missing, the container exits with a clear error message before attempting migrations.
+
+### Stopping the Stack
+
+```bash
+docker compose down
+```
+
+### Rebuilding
+
+```bash
+docker compose build --no-cache backend
+docker compose up -d
+```
+
+## Environment Variables
+
+All configuration is managed through the `.env` file at the project root.
+
+| Variable | Required | Default | Description |
+|---|---|---|---|
+| `MISSIONCONTROL_SECRET_KEY` | **Yes** | — | Fernet key for credential encryption |
+| `PROJECT_NAME` | No | `Mission Control` | Application display name |
+| `ENVIRONMENT` | No | `development` | Runtime environment |
+| `POSTGRES_DB` | No | `mission_control` | PostgreSQL database name |
+| `POSTGRES_USER` | No | `mission_control` | PostgreSQL user |
+| `POSTGRES_PASSWORD` | No | `mission_control` | PostgreSQL password |
+| `POSTGRES_HOST` | No | `postgres` | PostgreSQL host (use `localhost` outside Docker) |
+| `POSTGRES_PORT` | No | `5432` | PostgreSQL port |
+| `REDIS_HOST` | No | `redis` | Redis host |
+| `REDIS_PORT` | No | `6379` | Redis port |
+| `BACKEND_CORS_ORIGINS` | No | `http://localhost,http://localhost:3000,http://localhost:5173` | Comma-separated allowed origins |
+| `COMPOSE_PROJECT_NAME` | No | `missioncontrol` | Docker Compose project name |
+| `SSH_CONNECT_TIMEOUT` | No | `10` | SSH connection timeout (seconds) |
+| `SSH_COMMAND_TIMEOUT` | No | `60` | SSH command timeout (seconds) |
+| `WINRM_CONNECT_TIMEOUT` | No | `10` | WinRM connection timeout (seconds) |
+| `WINRM_OPERATION_TIMEOUT` | No | `60` | WinRM operation timeout (seconds) |
+| `REMOTE_RETRY_COUNT` | No | `1` | Retries for transient remote failures |
+
+### Copying .env.example
+
+```bash
+cp .env.example .env
+```
+
+Then generate and set your secret key:
+
+```bash
+python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+```
+
+## Secret Rotation
+
+To rotate the encryption key:
+
+1. Generate a new key:
+   ```bash
+   python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+   ```
+
+2. Update `MISSIONCONTROL_SECRET_KEY` in `.env` with the new key.
+
+3. Re-encrypt existing credentials. The system supports key versioning (`key_version` column on credential profiles). Existing encrypted values encrypted with the old key will need to be re-encrypted. For development, recreate credential profiles. For production, run a migration script.
+
+4. Restart the stack:
+   ```bash
+   docker compose restart backend
+   ```
+
+> **Note:** The old key cannot decrypt credentials encrypted with the new key. Rotate during a maintenance window.
+
 ## CLI Commands
 
 ### help

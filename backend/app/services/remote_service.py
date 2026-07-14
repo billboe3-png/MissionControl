@@ -4,37 +4,72 @@ Mission Control Remote Service
 Business logic for remote operations: host management,
 connection testing, command execution, and history.
 
-Sprint 2.1.0 - Remote Operations Framework.
+Sprint 2.1.4 - Secure Credential Vault.
+
+Credentials are encrypted at rest using Fernet symmetric encryption.
+The service layer handles all encryption/decryption transparently.
+Providers always receive decrypted credentials.
 """
 
 import logging
-from datetime import UTC
-from datetime import datetime
+from datetime import UTC, datetime
 
-from fastapi import HTTPException
-from fastapi import status
+from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
-from app.repositories.command_history_repository import CommandHistoryRepository
-from app.repositories.credential_profile_repository import CredentialProfileRepository
-from app.repositories.remote_host_repository import RemoteHostRepository
-from app.schemas.credential_profile import CredentialProfileCreate
-from app.schemas.credential_profile import CredentialProfileListResponse
-from app.schemas.credential_profile import CredentialProfileResponse
-from app.schemas.credential_profile import CredentialProfileUpdate
-from app.schemas.remote_command import CommandHistoryItem
-from app.schemas.remote_command import RemoteExecuteRequest
-from app.schemas.remote_command import RemoteExecuteResponse
-from app.schemas.remote_command import RemoteHistoryResponse
-from app.schemas.remote_command import RemoteTestConnectionRequest
-from app.schemas.remote_command import RemoteTestConnectionResponse
-from app.schemas.remote_host import RemoteHostCreate
-from app.schemas.remote_host import RemoteHostListResponse
-from app.schemas.remote_host import RemoteHostResponse
-from app.schemas.remote_host import RemoteHostUpdate
+from app.core.security import CredentialCipher
 from app.providers.remote.provider_factory import get_remote_provider
+from app.repositories.command_history_repository import CommandHistoryRepository
+from app.repositories.credential_profile_repository import (
+    CredentialProfileRepository,
+)
+from app.repositories.remote_host_repository import RemoteHostRepository
+from app.schemas.credential_profile import (
+    CredentialProfileCreate,
+    CredentialProfileListResponse,
+    CredentialProfileResponse,
+    CredentialProfileUpdate,
+)
+from app.schemas.remote_command import (
+    CommandHistoryItem,
+    RemoteExecuteRequest,
+    RemoteExecuteResponse,
+    RemoteHistoryResponse,
+    RemoteTestConnectionRequest,
+    RemoteTestConnectionResponse,
+)
+from app.schemas.remote_host import (
+    RemoteHostCreate,
+    RemoteHostListResponse,
+    RemoteHostResponse,
+    RemoteHostUpdate,
+)
 
 logger = logging.getLogger(__name__)
+
+
+def _get_cipher() -> CredentialCipher:
+    """Get a CredentialCipher instance using application settings."""
+    from app.core.config import get_settings
+
+    settings = get_settings()
+    return CredentialCipher(settings.missioncontrol_secret_key)
+
+
+def _encrypt_credential(value: str | None) -> str | None:
+    """Encrypt a credential value if non-empty, else return None."""
+    if not value:
+        return None
+    cipher = _get_cipher()
+    return cipher.encrypt(value)
+
+
+def _decrypt_credential(value: str | None) -> str | None:
+    """Decrypt a credential value if non-empty, else return None."""
+    if not value:
+        return None
+    cipher = _get_cipher()
+    return cipher.decrypt(value)
 
 
 class RemoteService:
@@ -155,7 +190,7 @@ class RemoteService:
     async def get_credentials(
         self, db: Session
     ) -> CredentialProfileListResponse:
-        """Return all credential profiles."""
+        """Return all credential profiles (no sensitive data)."""
         logger.info("Fetching credential profiles")
         profiles = CredentialProfileRepository.get_all(db)
         items = [
@@ -166,7 +201,7 @@ class RemoteService:
     async def get_credential_by_id(
         self, db: Session, profile_id: int
     ) -> CredentialProfileResponse:
-        """Return a single credential profile by identifier."""
+        """Return a single credential profile by identifier (no sensitive data)."""
         logger.info("Fetching credential profile id=%s", profile_id)
         profile = CredentialProfileRepository.get_by_id(db, profile_id)
         if profile is None:
@@ -179,7 +214,7 @@ class RemoteService:
     async def create_credential(
         self, db: Session, data: CredentialProfileCreate
     ) -> CredentialProfileResponse:
-        """Create a new credential profile."""
+        """Create a new credential profile with encrypted sensitive fields."""
         logger.info("Creating credential profile: %s", data.name)
 
         existing = CredentialProfileRepository.get_by_name(db, data.name)
@@ -200,7 +235,14 @@ class RemoteService:
                 detail="authentication_type must be password, ssh_key, ntlm, or basic",
             )
 
-        profile = CredentialProfileRepository.create(db, data)
+        # Encrypt sensitive fields before persistence
+        profile = CredentialProfileRepository.create_encrypted(
+            db,
+            data,
+            password_encrypted=_encrypt_credential(data.password),
+            private_key_encrypted=_encrypt_credential(data.ssh_key),
+            passphrase_encrypted=_encrypt_credential(data.passphrase),
+        )
         return CredentialProfileResponse.model_validate(profile)
 
     async def update_credential(
@@ -209,7 +251,7 @@ class RemoteService:
         profile_id: int,
         data: CredentialProfileUpdate,
     ) -> CredentialProfileResponse:
-        """Update an existing credential profile."""
+        """Update an existing credential profile with encrypted sensitive fields."""
         logger.info("Updating credential profile id=%s", profile_id)
 
         existing = CredentialProfileRepository.get_by_id(db, profile_id)
@@ -241,10 +283,46 @@ class RemoteService:
             ):
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="authentication_type must be password, ssh_key, ntlm, or basic",
+                    detail=(
+                        "authentication_type must be "
+                        "password, ssh_key, ntlm, or basic"
+                    ),
                 )
 
-        updated = CredentialProfileRepository.update(db, profile_id, data)
+        # Determine encrypted values for sensitive fields
+        # Empty string = preserve existing, non-empty = replace, None = no change
+        password_encrypted = None
+        private_key_encrypted = None
+        passphrase_encrypted = None
+
+        if data.password is not None:
+            if data.password == "":
+                # Empty string preserves existing encrypted value
+                password_encrypted = existing.password_encrypted
+            else:
+                # Non-empty replaces encrypted value
+                password_encrypted = _encrypt_credential(data.password)
+
+        if data.ssh_key is not None:
+            if data.ssh_key == "":
+                private_key_encrypted = existing.private_key_encrypted
+            else:
+                private_key_encrypted = _encrypt_credential(data.ssh_key)
+
+        if data.passphrase is not None:
+            if data.passphrase == "":
+                passphrase_encrypted = existing.passphrase_encrypted
+            else:
+                passphrase_encrypted = _encrypt_credential(data.passphrase)
+
+        updated = CredentialProfileRepository.update_encrypted(
+            db,
+            profile_id,
+            data,
+            password_encrypted=password_encrypted,
+            private_key_encrypted=private_key_encrypted,
+            passphrase_encrypted=passphrase_encrypted,
+        )
         if updated is None:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -276,8 +354,8 @@ class RemoteService:
         """
         Test connectivity to a remote host.
 
-        Loads the host and credential profile, then delegates
-        to the appropriate provider (SSH or WinRM).
+        Loads the host and credential profile, decrypts credentials,
+        then delegates to the appropriate provider (SSH or WinRM).
         """
         logger.info(
             "Testing connection for host id=%s", request.host_id
@@ -306,8 +384,11 @@ class RemoteService:
             )
             if profile is not None:
                 username = profile.username
-                password = profile.password
-                ssh_key = profile.ssh_key
+                # Decrypt credentials for provider
+                password = _decrypt_credential(profile.password_encrypted)
+                ssh_key = _decrypt_credential(
+                    profile.private_key_encrypted
+                )
 
         provider = get_remote_provider(host.connection_type)
         result = await provider.test_connection(
@@ -340,8 +421,8 @@ class RemoteService:
         """
         Execute a command on a remote host.
 
-        Validates the host, delegates to the provider, and records
-        the result in command_history.
+        Validates the host, decrypts credentials, delegates to the
+        provider, and records the result in command_history.
         """
         logger.info(
             "Executing command on host id=%s: %s",
@@ -379,8 +460,11 @@ class RemoteService:
             )
             if profile is not None:
                 username = profile.username
-                password = profile.password
-                ssh_key = profile.ssh_key
+                # Decrypt credentials for provider
+                password = _decrypt_credential(profile.password_encrypted)
+                ssh_key = _decrypt_credential(
+                    profile.private_key_encrypted
+                )
 
         provider = get_remote_provider(host.connection_type)
         result = await provider.execute_command(
@@ -402,7 +486,7 @@ class RemoteService:
             stdout=result["stdout"],
             stderr=result["stderr"],
             exit_code=result["exit_code"],
-            success=result["exit_code"] == 0,
+            success=result["success"],
             duration_ms=result["duration_ms"],
             executed_by=username,
         )
@@ -414,7 +498,7 @@ class RemoteService:
             stdout=result["stdout"],
             stderr=result["stderr"],
             exit_code=result["exit_code"],
-            success=result["exit_code"] == 0,
+            success=result["success"],
             duration_ms=result["duration_ms"],
             timestamp=datetime.now(UTC).isoformat(),
         )

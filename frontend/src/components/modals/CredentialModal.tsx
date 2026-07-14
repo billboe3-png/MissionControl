@@ -19,8 +19,9 @@ export default function CredentialModal({
     const [name, setName] = useState(credential?.name ?? "");
     const [authType, setAuthType] = useState(credential?.authentication_type ?? "password");
     const [username, setUsername] = useState(credential?.username ?? "");
-    const [password, setPassword] = useState(credential?.password ?? "");
-    const [sshKey, setSshKey] = useState(credential?.ssh_key ?? "");
+    const [password, setPassword] = useState("");
+    const [sshKey, setSshKey] = useState("");
+    const [passphrase, setPassphrase] = useState("");
     const [description, setDescription] = useState(credential?.description ?? "");
     const [loading, setLoading] = useState(false);
 
@@ -31,12 +32,13 @@ export default function CredentialModal({
         setLoading(true);
 
         try {
-            const payload: CredentialCreateInput = {
+            const payload: CredentialCreateInput & { passphrase?: string } = {
                 name,
                 authentication_type: authType,
                 username,
                 password: password || undefined,
                 ssh_key: sshKey || undefined,
+                passphrase: passphrase || undefined,
                 description: description || undefined,
             };
 
@@ -113,23 +115,37 @@ export default function CredentialModal({
                                 className="form-input"
                                 value={password}
                                 onChange={(e) => setPassword(e.target.value)}
-                                placeholder={isEditing ? "Leave blank to keep existing" : ""}
+                                placeholder={isEditing ? "\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022" : ""}
                             />
                         </div>
                     )}
 
                     {authType === "ssh_key" && (
-                        <div className="form-group">
-                            <label htmlFor="cred-ssh-key">SSH Private Key</label>
-                            <textarea
-                                id="cred-ssh-key"
-                                className="form-input form-textarea"
-                                value={sshKey}
-                                onChange={(e) => setSshKey(e.target.value)}
-                                placeholder="Paste SSH private key content"
-                                rows={4}
-                            />
-                        </div>
+                        <>
+                            <div className="form-group">
+                                <label htmlFor="cred-ssh-key">SSH Private Key</label>
+                                <textarea
+                                    id="cred-ssh-key"
+                                    className="form-input form-textarea"
+                                    value={sshKey}
+                                    onChange={(e) => setSshKey(e.target.value)}
+                                    placeholder={isEditing ? "Leave blank to keep existing" : "Paste SSH private key content"}
+                                    rows={4}
+                                />
+                            </div>
+
+                            <div className="form-group">
+                                <label htmlFor="cred-passphrase">Key Passphrase (optional)</label>
+                                <input
+                                    id="cred-passphrase"
+                                    type="password"
+                                    className="form-input"
+                                    value={passphrase}
+                                    onChange={(e) => setPassphrase(e.target.value)}
+                                    placeholder={isEditing ? "Leave blank to keep existing" : ""}
+                                />
+                            </div>
+                        </>
                     )}
 
                     <div className="form-group">

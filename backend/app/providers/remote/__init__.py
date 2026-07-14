@@ -1,7 +1,7 @@
 """
 Mission Control Remote Provider Package
 
-Sprint 2.1.0 - Remote Operations Framework.
+Sprint 2.1.6 - Real WinRM Command Execution.
 """
 
 from app.providers.remote.base_provider import RemoteBaseProvider

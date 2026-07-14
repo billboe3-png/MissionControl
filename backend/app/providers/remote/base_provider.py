@@ -4,11 +4,11 @@ Mission Control Remote Provider Base
 Abstract base class defining the contract for all remote connection providers.
 Each provider implements SSH or WinRM connection logic.
 
-Sprint 2.1.0 - Remote Operations Framework.
+Sprint 2.1.6 - Real WinRM Command Execution.
 """
 
-from abc import ABC
-from abc import abstractmethod
+from abc import ABC, abstractmethod
+from collections.abc import Generator
 
 
 class RemoteBaseProvider(ABC):
@@ -18,6 +18,15 @@ class RemoteBaseProvider(ABC):
     Each concrete provider (SSH, WinRM) must implement:
     - test_connection: Verify connectivity to a remote host
     - execute_command: Run a command on a remote host
+
+    execute_command returns a dict with:
+        - stdout: str
+        - stderr: str
+        - exit_code: int
+        - success: bool
+        - duration_ms: int
+        - started_at: str (ISO 8601)
+        - completed_at: str (ISO 8601)
     """
 
     @abstractmethod
@@ -30,14 +39,7 @@ class RemoteBaseProvider(ABC):
         ssh_key: str | None,
         ip_address: str | None,
     ) -> dict:
-        """
-        Test connectivity to a remote host.
-
-        Returns a dict with:
-            - success: bool
-            - latency_ms: int
-            - message: str
-        """
+        """Test connectivity to a remote host."""
         ...
 
     @abstractmethod
@@ -52,13 +54,48 @@ class RemoteBaseProvider(ABC):
         shell: str,
         ip_address: str | None,
     ) -> dict:
-        """
-        Execute a command on a remote host.
-
-        Returns a dict with:
-            - stdout: str
-            - stderr: str
-            - exit_code: int
-            - duration_ms: int
-        """
+        """Execute a command on a remote host."""
         ...
+
+    def stream_command(
+        self,
+        hostname: str,
+        port: int,
+        username: str,
+        password: str | None,
+        ssh_key: str | None,
+        command: str,
+        shell: str,
+        ip_address: str | None,
+    ) -> Generator[dict, None, None]:
+        """
+        Stream command output line by line.
+
+        Internal generator for future WebSocket support.
+        Yields dicts with {type, data} where type is
+        'stdout', 'stderr', 'exit_code', or 'error'.
+
+        Default implementation runs execute_command and yields
+        the complete output. Subclasses may override for real
+        streaming support.
+        """
+        import asyncio
+
+        result = asyncio.get_event_loop().run_until_complete(
+            self.execute_command(
+                hostname=hostname,
+                port=port,
+                username=username,
+                password=password,
+                ssh_key=ssh_key,
+                command=command,
+                shell=shell,
+                ip_address=ip_address,
+            )
+        )
+
+        if result["stdout"]:
+            yield {"type": "stdout", "data": result["stdout"]}
+        if result["stderr"]:
+            yield {"type": "stderr", "data": result["stderr"]}
+        yield {"type": "exit_code", "data": result["exit_code"]}

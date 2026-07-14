@@ -2,22 +2,37 @@
 Shared pytest fixtures for backend tests.
 """
 
+import os
+
+from cryptography.fernet import Fernet
+
+# Set secret key BEFORE any app imports trigger Settings()
+os.environ.setdefault(
+    "MISSIONCONTROL_SECRET_KEY",
+    Fernet.generate_key().decode(),
+)
+
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
-from app.db.database import Base
-from app.db.database import get_db
+from app.core.config import get_settings
+from app.db.database import Base, get_db
 from app.main import app
-from app.models.db import Note
-from app.models.db import Project
-from app.models.db import Resume
-from app.models.db import Task
-from app.models.db.remote_host import RemoteHost
 from app.models.db.credential_profile import CredentialProfile
-from app.models.db.command_history import CommandHistory
+from app.models.db.project import Project
+from app.models.db.remote_host import RemoteHost
+
+
+@pytest.fixture(autouse=True)
+def mock_secret_key(monkeypatch):
+    """Automatically set MISSIONCONTROL_SECRET_KEY for all tests."""
+    test_key = Fernet.generate_key().decode()
+    monkeypatch.setenv("MISSIONCONTROL_SECRET_KEY", test_key)
+    get_settings.cache_clear()
+    return test_key
 
 
 @pytest.fixture
@@ -99,7 +114,6 @@ def _fake_git_data():
 @pytest.fixture
 def mock_docker(monkeypatch):
     """Mock Docker, Health, Git, and System providers for dashboard tests."""
-    import asyncio
 
     async def fake_docker_data():
         return _fake_docker_data()
@@ -166,13 +180,17 @@ def sample_project(db_session):
 
 
 @pytest.fixture
-def sample_credential(db_session):
-    """Create a single credential profile for tests."""
+def sample_credential(db_session, mock_secret_key):
+    """Create a single credential profile for tests with encrypted fields."""
+    from app.core.security import CredentialCipher
+
+    cipher = CredentialCipher(mock_secret_key)
+
     credential = CredentialProfile(
         name="Test SSH Key",
         authentication_type="ssh_key",
         username="testuser",
-        ssh_key="fake-key-content",
+        private_key_encrypted=cipher.encrypt("fake-key-content"),
     )
     db_session.add(credential)
     db_session.commit()

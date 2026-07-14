@@ -68,6 +68,7 @@ export interface CredentialCreateInput {
     username: string;
     password?: string;
     ssh_key?: string;
+    passphrase?: string;
     description?: string;
 }
 
@@ -77,6 +78,7 @@ export interface CredentialUpdateInput {
     username?: string;
     password?: string;
     ssh_key?: string;
+    passphrase?: string;
     description?: string;
 }
 
@@ -85,8 +87,6 @@ export interface CredentialData {
     name: string;
     authentication_type: string;
     username: string;
-    password: string | null;
-    ssh_key: string | null;
     description: string | null;
     created_at: string;
     updated_at: string;

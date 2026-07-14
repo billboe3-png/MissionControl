@@ -4,6 +4,8 @@ Remote Operations API Tests
 Full CRUD and execution tests for the /api/v1/remote endpoints.
 """
 
+from unittest.mock import AsyncMock, patch
+
 REMOTE_BASE = "/api/v1/remote"
 
 
@@ -253,14 +255,28 @@ def test_test_connection(client):
     cred_id = _create_credential(client)
     host = _create_host(client, cred_id)
 
-    resp = client.post(
-        f"{REMOTE_BASE}/test",
-        json={"host_id": host["id"]},
-    )
+    mock_result = {
+        "success": True,
+        "latency_ms": 120,
+        "message": "SSH connection to 10.0.0.1:22 successful (120ms)",
+    }
+
+    mock_provider = AsyncMock()
+    mock_provider.test_connection.return_value = mock_result
+
+    with patch(
+        "app.services.remote_service.get_remote_provider",
+        return_value=mock_provider,
+    ):
+        resp = client.post(
+            f"{REMOTE_BASE}/test",
+            json={"host_id": host["id"]},
+        )
+
     assert resp.status_code == 200
     data = resp.json()
     assert data["success"] is True
-    assert data["latency_ms"] > 0
+    assert data["latency_ms"] == 120
     assert data["host"] == "Test Host"
 
 
@@ -296,16 +312,32 @@ def test_execute_command(client):
     cred_id = _create_credential(client)
     host = _create_host(client, cred_id)
 
-    resp = client.post(
-        f"{REMOTE_BASE}/execute",
-        json={"host_id": host["id"], "command": "hostname", "shell": "bash"},
-    )
+    mock_result = {
+        "success": True,
+        "stdout": "root\n",
+        "stderr": "",
+        "exit_code": 0,
+        "duration_ms": 250,
+    }
+
+    mock_provider = AsyncMock()
+    mock_provider.execute_command.return_value = mock_result
+
+    with patch(
+        "app.services.remote_service.get_remote_provider",
+        return_value=mock_provider,
+    ):
+        resp = client.post(
+            f"{REMOTE_BASE}/execute",
+            json={"host_id": host["id"], "command": "whoami", "shell": "bash"},
+        )
+
     assert resp.status_code == 200
     data = resp.json()
     assert data["success"] is True
     assert data["exit_code"] == 0
     assert data["host"] == "Test Host"
-    assert data["stdout"] == "test.server.local"
+    assert data["stdout"] == "root\n"
 
 
 def test_execute_command_invalid_shell(client):
@@ -334,10 +366,25 @@ def test_execute_command_recorded_in_history(client):
     cred_id = _create_credential(client)
     host = _create_host(client, cred_id)
 
-    client.post(
-        f"{REMOTE_BASE}/execute",
-        json={"host_id": host["id"], "command": "whoami"},
-    )
+    mock_result = {
+        "success": True,
+        "stdout": "root\n",
+        "stderr": "",
+        "exit_code": 0,
+        "duration_ms": 100,
+    }
+
+    mock_provider = AsyncMock()
+    mock_provider.execute_command.return_value = mock_result
+
+    with patch(
+        "app.services.remote_service.get_remote_provider",
+        return_value=mock_provider,
+    ):
+        client.post(
+            f"{REMOTE_BASE}/execute",
+            json={"host_id": host["id"], "command": "whoami"},
+        )
 
     resp = client.get(f"{REMOTE_BASE}/history")
     assert resp.status_code == 200
@@ -355,10 +402,25 @@ def test_get_history(client):
     cred_id = _create_credential(client)
     host = _create_host(client, cred_id)
 
-    client.post(
-        f"{REMOTE_BASE}/execute",
-        json={"host_id": host["id"], "command": "hostname"},
-    )
+    mock_result = {
+        "success": True,
+        "stdout": "test.server.local\n",
+        "stderr": "",
+        "exit_code": 0,
+        "duration_ms": 100,
+    }
+
+    mock_provider = AsyncMock()
+    mock_provider.execute_command.return_value = mock_result
+
+    with patch(
+        "app.services.remote_service.get_remote_provider",
+        return_value=mock_provider,
+    ):
+        client.post(
+            f"{REMOTE_BASE}/execute",
+            json={"host_id": host["id"], "command": "hostname"},
+        )
 
     resp = client.get(f"{REMOTE_BASE}/history")
     assert resp.status_code == 200
@@ -370,14 +432,37 @@ def test_get_history_filtered_by_search(client):
     cred_id = _create_credential(client)
     host = _create_host(client, cred_id)
 
-    client.post(
-        f"{REMOTE_BASE}/execute",
-        json={"host_id": host["id"], "command": "hostname"},
-    )
-    client.post(
-        f"{REMOTE_BASE}/execute",
-        json={"host_id": host["id"], "command": "uptime"},
-    )
+    mock_hostname = {
+        "success": True,
+        "stdout": "test.server.local\n",
+        "stderr": "",
+        "exit_code": 0,
+        "duration_ms": 100,
+    }
+    mock_uptime = {
+        "success": True,
+        "stdout": "up 42 days\n",
+        "stderr": "",
+        "exit_code": 0,
+        "duration_ms": 100,
+    }
+
+    mock_provider = AsyncMock()
+    mock_provider.execute_command.return_value = mock_hostname
+
+    with patch(
+        "app.services.remote_service.get_remote_provider",
+        return_value=mock_provider,
+    ):
+        client.post(
+            f"{REMOTE_BASE}/execute",
+            json={"host_id": host["id"], "command": "hostname"},
+        )
+        mock_provider.execute_command.return_value = mock_uptime
+        client.post(
+            f"{REMOTE_BASE}/execute",
+            json={"host_id": host["id"], "command": "uptime"},
+        )
 
     resp = client.get(f"{REMOTE_BASE}/history?search=host")
     assert resp.status_code == 200
@@ -390,10 +475,25 @@ def test_get_history_filtered_by_host(client):
     cred_id = _create_credential(client)
     host = _create_host(client, cred_id, "Host A")
 
-    client.post(
-        f"{REMOTE_BASE}/execute",
-        json={"host_id": host["id"], "command": "test"},
-    )
+    mock_result = {
+        "success": True,
+        "stdout": "ok\n",
+        "stderr": "",
+        "exit_code": 0,
+        "duration_ms": 100,
+    }
+
+    mock_provider = AsyncMock()
+    mock_provider.execute_command.return_value = mock_result
+
+    with patch(
+        "app.services.remote_service.get_remote_provider",
+        return_value=mock_provider,
+    ):
+        client.post(
+            f"{REMOTE_BASE}/execute",
+            json={"host_id": host["id"], "command": "test"},
+        )
 
     resp = client.get(f"{REMOTE_BASE}/history?host_id={host['id']}")
     assert resp.status_code == 200
@@ -406,10 +506,25 @@ def test_get_history_filtered_by_success(client):
     cred_id = _create_credential(client)
     host = _create_host(client, cred_id)
 
-    client.post(
-        f"{REMOTE_BASE}/execute",
-        json={"host_id": host["id"], "command": "hostname"},
-    )
+    mock_result = {
+        "success": True,
+        "stdout": "test.server.local\n",
+        "stderr": "",
+        "exit_code": 0,
+        "duration_ms": 100,
+    }
+
+    mock_provider = AsyncMock()
+    mock_provider.execute_command.return_value = mock_result
+
+    with patch(
+        "app.services.remote_service.get_remote_provider",
+        return_value=mock_provider,
+    ):
+        client.post(
+            f"{REMOTE_BASE}/execute",
+            json={"host_id": host["id"], "command": "hostname"},
+        )
 
     resp = client.get(f"{REMOTE_BASE}/history?success=true")
     assert resp.status_code == 200

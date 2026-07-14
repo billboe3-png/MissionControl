@@ -4,8 +4,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import get_settings
 from app.routers import (
     dashboard,
-    doctor,
     docker,
+    doctor,
     git,
     health,
     notes,
@@ -18,7 +18,23 @@ from app.routers import (
     version,
 )
 
-settings = get_settings()
+try:
+    settings = get_settings()
+except Exception as exc:
+    from app.core.startup_check import _fail
+
+    _fail(
+        message=f"Configuration error: {exc}",
+        instruction=(
+            "Check your .env file and ensure MISSIONCONTROL_SECRET_KEY "
+            "is set to a valid Fernet key.\n"
+            "\n"
+            "Generate one using:\n"
+            "\n"
+            '  python -c "from cryptography.fernet import Fernet; '
+            'print(Fernet.generate_key().decode())"'
+        ),
+    )
 
 app = FastAPI(
     title=settings.project_name,

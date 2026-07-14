@@ -24,6 +24,7 @@ services:
 
     environment:
       DOCKER_HOST: unix:///var/run/docker.sock
+      MISSIONCONTROL_SECRET_KEY: ${MISSIONCONTROL_SECRET_KEY:?MISSIONCONTROL_SECRET_KEY is required. Add it to your .env file.}
 
     healthcheck:
       test:

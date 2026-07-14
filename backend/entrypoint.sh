@@ -1,6 +1,9 @@
 #!/bin/sh
 set -e
 
+echo "Validating configuration..."
+python -c "from app.core.startup_check import validate_all; validate_all()"
+
 echo "Applying database migrations..."
 alembic upgrade head
 

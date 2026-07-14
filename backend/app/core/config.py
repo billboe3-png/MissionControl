@@ -1,6 +1,6 @@
 from functools import lru_cache
 
-from pydantic import Field, computed_field
+from pydantic import Field, computed_field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -23,6 +23,34 @@ class Settings(BaseSettings):
         default="missioncontrol",
         alias="COMPOSE_PROJECT_NAME",
     )
+
+    # ------------------------------------------------------------------
+    # Security
+    # ------------------------------------------------------------------
+
+    missioncontrol_secret_key: str = Field(
+        alias="MISSIONCONTROL_SECRET_KEY",
+    )
+
+    @field_validator("missioncontrol_secret_key")
+    @classmethod
+    def validate_secret_key(cls, v: str) -> str:
+        """Validate the secret key is a valid Fernet key."""
+        from cryptography.fernet import Fernet, InvalidToken
+
+        if not v:
+            raise ValueError(
+                "MISSIONCONTROL_SECRET_KEY must not be empty"
+            )
+        try:
+            Fernet(v.encode() if isinstance(v, str) else v)
+        except (InvalidToken, ValueError) as exc:
+            raise ValueError(
+                "MISSIONCONTROL_SECRET_KEY must be a valid Fernet key. "
+                "Generate one with: python -c \"from cryptography.fernet "
+                "import Fernet; print(Fernet.generate_key().decode())\""
+            ) from exc
+        return v
 
     # ------------------------------------------------------------------
     # PostgreSQL
@@ -93,6 +121,46 @@ class Settings(BaseSettings):
     terminal_max_sessions: int = Field(
         default=10,
         alias="TERMINAL_MAX_SESSIONS",
+    )
+
+    ssh_connect_timeout: int = Field(
+        default=10,
+        alias="SSH_CONNECT_TIMEOUT",
+    )
+
+    ssh_command_timeout: int = Field(
+        default=60,
+        alias="SSH_COMMAND_TIMEOUT",
+    )
+
+    ssh_idle_timeout: int = Field(
+        default=300,
+        alias="SSH_IDLE_TIMEOUT",
+    )
+
+    winrm_connect_timeout: int = Field(
+        default=10,
+        alias="WINRM_CONNECT_TIMEOUT",
+    )
+
+    winrm_operation_timeout: int = Field(
+        default=60,
+        alias="WINRM_OPERATION_TIMEOUT",
+    )
+
+    remote_max_command_timeout: int = Field(
+        default=3600,
+        alias="REMOTE_MAX_COMMAND_TIMEOUT",
+    )
+
+    remote_retry_count: int = Field(
+        default=1,
+        alias="REMOTE_RETRY_COUNT",
+    )
+
+    remote_connection_pool_size: int = Field(
+        default=5,
+        alias="REMOTE_CONNECTION_POOL_SIZE",
     )
 
     # ------------------------------------------------------------------

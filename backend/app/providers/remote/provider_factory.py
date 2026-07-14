@@ -4,7 +4,7 @@ Mission Control Remote Provider Factory
 Singleton factory that returns the correct provider
 based on connection type.
 
-Sprint 2.1.0 - Remote Operations Framework.
+Sprint 2.1.6 - Real WinRM Command Execution.
 """
 
 import logging

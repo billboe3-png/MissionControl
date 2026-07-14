@@ -69,7 +69,7 @@ def test_update_credential_profile(db_session, sample_credential):
     assert updated is not None
     assert updated.name == "Updated Key"
     assert updated.username == "newuser"
-    assert updated.ssh_key == "fake-key-content"
+    assert updated.private_key_encrypted is not None
 
 
 def test_update_credential_profile_not_found(db_session):

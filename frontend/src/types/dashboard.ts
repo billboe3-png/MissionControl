@@ -218,8 +218,6 @@ export interface CredentialProfile {
     name: string;
     authentication_type: string;
     username: string;
-    password: string | null;
-    ssh_key: string | null;
     description: string | null;
     created_at: string;
     updated_at: string;

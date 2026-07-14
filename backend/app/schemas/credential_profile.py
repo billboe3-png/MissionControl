@@ -3,14 +3,16 @@ Mission Control Credential Profile API Schemas
 
 Pydantic models for Credential Profile API endpoints.
 
-Sprint 2.1.0 - Remote Operations Framework.
+Sprint 2.1.4 - Secure Credential Vault.
+
+Responses never return sensitive fields (passwords, keys, passphrases).
+All sensitive data is encrypted at rest and decrypted only in the
+service layer immediately before use by providers.
 """
 
 from datetime import datetime
 
-from pydantic import BaseModel
-from pydantic import ConfigDict
-from pydantic import Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class CredentialProfileCreate(BaseModel):
@@ -38,11 +40,15 @@ class CredentialProfileCreate(BaseModel):
     )
     password: str | None = Field(
         default=None,
-        description="Password for authentication.",
+        description="Password for authentication (encrypted at rest).",
     )
     ssh_key: str | None = Field(
         default=None,
-        description="SSH private key content.",
+        description="SSH private key content (encrypted at rest).",
+    )
+    passphrase: str | None = Field(
+        default=None,
+        description="Passphrase for encrypted SSH keys (encrypted at rest).",
     )
     description: str | None = Field(
         default=None,
@@ -73,11 +79,23 @@ class CredentialProfileUpdate(BaseModel):
     )
     password: str | None = Field(
         default=None,
-        description="Updated password.",
+        description=(
+            "Updated password. Empty string preserves existing. "
+            "Non-empty replaces encrypted value."
+        ),
     )
     ssh_key: str | None = Field(
         default=None,
-        description="Updated SSH private key.",
+        description=(
+            "Updated SSH private key. Empty string preserves existing."
+        ),
+    )
+    passphrase: str | None = Field(
+        default=None,
+        description=(
+            "Updated passphrase for encrypted SSH keys. "
+            "Empty string preserves existing."
+        ),
     )
     description: str | None = Field(
         default=None,
@@ -87,7 +105,11 @@ class CredentialProfileUpdate(BaseModel):
 
 
 class CredentialProfileResponse(BaseModel):
-    """Credential profile returned by the API."""
+    """Credential profile returned by the API.
+
+    Never exposes sensitive fields: password, password_encrypted,
+    private_key, private_key_encrypted, passphrase, passphrase_encrypted.
+    """
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -106,14 +128,6 @@ class CredentialProfileResponse(BaseModel):
     username: str = Field(
         ...,
         description="Username.",
-    )
-    password: str | None = Field(
-        default=None,
-        description="Password (plain text in Sprint 2.1.0).",
-    )
-    ssh_key: str | None = Field(
-        default=None,
-        description="SSH private key (plain text in Sprint 2.1.0).",
     )
     description: str | None = Field(
         default=None,

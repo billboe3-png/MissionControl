@@ -1,28 +1,398 @@
 """
 Mission Control WinRM Provider
 
-Mocked WinRM provider for Sprint 2.1.0.
-Simulates WinRM connections without requiring pywinrm.
+Production WinRM provider using pywinrm for command execution
+against remote Windows hosts.
 
-Sprint 2.1.0 - Remote Operations Framework.
+Sprint 2.1.6 - Real WinRM Command Execution.
+
+Supports:
+- NTLM authentication
+- Basic authentication
+- HTTPS with certificate validation options
+- SSL/TLS error classification
+- Configurable timeouts
+- Retry for transient failures
+- Secure logging
 """
 
-import asyncio
 import logging
-import random
+import time
+from datetime import UTC, datetime
+
+import winrm
 
 from app.providers.remote.base_provider import RemoteBaseProvider
 
 logger = logging.getLogger(__name__)
 
 
+def _get_timeouts() -> dict:
+    """Get WinRM timeout settings from config."""
+    try:
+        from app.core.config import get_settings
+
+        settings = get_settings()
+        return {
+            "connect": settings.winrm_connect_timeout,
+            "operation": settings.winrm_operation_timeout,
+        }
+    except Exception:
+        return {"connect": 10, "operation": 60}
+
+
+def _get_retry_count() -> int:
+    """Get retry count from config."""
+    try:
+        from app.core.config import get_settings
+
+        return get_settings().remote_retry_count
+    except Exception:
+        return 1
+
+
+def _get_max_command_timeout() -> int:
+    """Get max command timeout from config."""
+    try:
+        from app.core.config import get_settings
+
+        return get_settings().remote_max_command_timeout
+    except Exception:
+        return 3600
+
+
 class WinRMProvider(RemoteBaseProvider):
     """
-    Mocked WinRM provider.
+    Production WinRM provider using pywinrm.
 
-    Simulates connection testing and command execution.
-    Real WinRM via pywinrm added in Sprint 2.2.
+    Supports NTLM, Basic, and HTTPS transport with
+    configurable certificate validation.
     """
+
+    def _build_session(
+        self,
+        hostname: str,
+        port: int,
+        username: str,
+        password: str | None,
+        transport: str = "ntlm",
+        https: bool = False,
+        cert_validation: bool = True,
+    ) -> winrm.Session:
+        """
+        Build a pywinrm Session.
+
+        Args:
+            hostname: Target host
+            port: WinRM port
+            username: Authentication username
+            password: Authentication password
+            transport: Auth transport (ntlm, basic, kerberos)
+            https: Use HTTPS instead of HTTP
+            cert_validation: Validate SSL certificates
+        """
+        scheme = "https" if https else "http"
+        endpoint = f"{scheme}://{hostname}:{port}/wsman"
+
+        session_kwargs: dict = {
+            "endpoint": endpoint,
+            "auth": (username, password) if password else (username, None),
+            "transport": transport,
+            "server_cert_validation": "validate" if cert_validation else "ignore",
+            "read_timeout": _get_timeouts()["operation"],
+            "operation_timeout_sec": _get_timeouts()["operation"],
+        }
+
+        return winrm.Session(**session_kwargs)
+
+    def _execute_with_retry(
+        self,
+        session: winrm.Session,
+        command: str,
+        retries: int,
+    ) -> winrm.Response:
+        """
+        Execute a command with retry for transient failures.
+
+        Does NOT retry authentication failures.
+        """
+        last_error = None
+
+        for attempt in range(1 + retries):
+            try:
+                result = session.run_cmd(command)
+                return result
+
+            except winrm.exceptions.WinRMError as e:
+                error_str = str(e).lower()
+
+                if "401" in error_str or "unauthorized" in error_str:
+                    raise
+
+                last_error = e
+                if attempt < retries:
+                    logger.info(
+                        "WinRM: retrying command attempt=%d",
+                        attempt + 1,
+                    )
+                    continue
+                raise
+
+        raise last_error  # type: ignore[misc]
+
+    def _handle_execute_error(
+        self,
+        username: str,
+        hostname: str,
+        command: str,
+        error: Exception,
+        start_time: float,
+    ) -> dict:
+        """Format an error response for execute_command failures."""
+        duration_ms = int((time.monotonic() - start_time) * 1000)
+        now = datetime.now(UTC).isoformat()
+
+        error_str = str(error).lower()
+
+        if "401" in error_str or "unauthorized" in error_str:
+            logger.warning(
+                "WinRM: execute_command user=%s host=%s "
+                "command_auth_failed",
+                username,
+                hostname,
+            )
+            return {
+                "success": False,
+                "stdout": "",
+                "stderr": "WinRM authentication failed",
+                "exit_code": -1,
+                "duration_ms": duration_ms,
+                "started_at": now,
+                "completed_at": now,
+            }
+
+        if "timed out" in error_str or "timeout" in error_str:
+            logger.warning(
+                "WinRM: execute_command user=%s host=%s "
+                "command_timeout",
+                username,
+                hostname,
+            )
+            return {
+                "success": False,
+                "stdout": "",
+                "stderr": "Command execution timed out",
+                "exit_code": -1,
+                "duration_ms": duration_ms,
+                "started_at": now,
+                "completed_at": now,
+            }
+
+        if "connection refused" in error_str:
+            logger.warning(
+                "WinRM: execute_command user=%s host=%s "
+                "command_refused",
+                username,
+                hostname,
+            )
+            return {
+                "success": False,
+                "stdout": "",
+                "stderr": "Connection refused",
+                "exit_code": -1,
+                "duration_ms": duration_ms,
+                "started_at": now,
+                "completed_at": now,
+            }
+
+        if "name or service not known" in error_str or "getaddrinfo" in error_str:
+            logger.warning(
+                "WinRM: execute_command user=%s host=%s "
+                "command_dns_failure",
+                username,
+                hostname,
+            )
+            return {
+                "success": False,
+                "stdout": "",
+                "stderr": "DNS resolution failed",
+                "exit_code": -1,
+                "duration_ms": duration_ms,
+                "started_at": now,
+                "completed_at": now,
+            }
+
+        if "unreachable" in error_str:
+            logger.warning(
+                "WinRM: execute_command user=%s host=%s "
+                "command_unreachable",
+                username,
+                hostname,
+            )
+            return {
+                "success": False,
+                "stdout": "",
+                "stderr": "Host unreachable",
+                "exit_code": -1,
+                "duration_ms": duration_ms,
+                "started_at": now,
+                "completed_at": now,
+            }
+
+        if "ssl" in error_str or "certificate" in error_str:
+            logger.warning(
+                "WinRM: execute_command user=%s host=%s "
+                "command_ssl_failure",
+                username,
+                hostname,
+            )
+            return {
+                "success": False,
+                "stdout": "",
+                "stderr": "SSL/TLS handshake failed",
+                "exit_code": -1,
+                "duration_ms": duration_ms,
+                "started_at": now,
+                "completed_at": now,
+            }
+
+        logger.warning(
+            "WinRM: execute_command user=%s host=%s "
+            "command_error=%s",
+            username,
+            hostname,
+            type(error).__name__,
+        )
+        return {
+            "success": False,
+            "stdout": "",
+            "stderr": f"WinRM error: {str(error).strip()}",
+            "exit_code": -1,
+            "duration_ms": duration_ms,
+            "started_at": now,
+            "completed_at": now,
+        }
+
+    def _handle_test_error(
+        self,
+        username: str,
+        target: str,
+        port: int,
+        error: Exception,
+        start_time: float,
+    ) -> dict:
+        """Format an error response for test_connection failures."""
+        elapsed_ms = int((time.monotonic() - start_time) * 1000)
+        error_str = str(error).lower()
+
+        if "401" in error_str or "unauthorized" in error_str:
+            logger.warning(
+                "WinRM: test_connection user=%s host=%s failed auth",
+                username,
+                target,
+            )
+            return {
+                "success": False,
+                "latency_ms": elapsed_ms,
+                "message": (
+                    f"WinRM connection to {target}:{port} failed: "
+                    "authentication failed"
+                ),
+            }
+
+        if "timed out" in error_str or "timeout" in error_str:
+            logger.warning(
+                "WinRM: test_connection user=%s host=%s "
+                "failed timeout",
+                username,
+                target,
+            )
+            return {
+                "success": False,
+                "latency_ms": elapsed_ms,
+                "message": (
+                    f"WinRM connection to {target}:{port} failed: "
+                    "connection timed out"
+                ),
+            }
+
+        if "connection refused" in error_str:
+            logger.warning(
+                "WinRM: test_connection user=%s host=%s "
+                "failed connection_refused",
+                username,
+                target,
+            )
+            return {
+                "success": False,
+                "latency_ms": elapsed_ms,
+                "message": (
+                    f"WinRM connection to {target}:{port} failed: "
+                    "connection refused"
+                ),
+            }
+
+        if "name or service not known" in error_str or "getaddrinfo" in error_str:
+            logger.warning(
+                "WinRM: test_connection user=%s host=%s failed dns",
+                username,
+                target,
+            )
+            return {
+                "success": False,
+                "latency_ms": elapsed_ms,
+                "message": (
+                    f"WinRM connection to {target}:{port} failed: "
+                    "DNS resolution failed"
+                ),
+            }
+
+        if "unreachable" in error_str:
+            logger.warning(
+                "WinRM: test_connection user=%s host=%s "
+                "failed unreachable",
+                username,
+                target,
+            )
+            return {
+                "success": False,
+                "latency_ms": elapsed_ms,
+                "message": (
+                    f"WinRM connection to {target}:{port} failed: "
+                    "host unreachable"
+                ),
+            }
+
+        if "ssl" in error_str or "certificate" in error_str:
+            logger.warning(
+                "WinRM: test_connection user=%s host=%s "
+                "failed ssl",
+                username,
+                target,
+            )
+            return {
+                "success": False,
+                "latency_ms": elapsed_ms,
+                "message": (
+                    f"WinRM connection to {target}:{port} failed: "
+                    "SSL/TLS handshake failed"
+                ),
+            }
+
+        logger.warning(
+            "WinRM: test_connection user=%s host=%s failed %s",
+            username,
+            target,
+            type(error).__name__,
+        )
+        return {
+            "success": False,
+            "latency_ms": elapsed_ms,
+            "message": (
+                f"WinRM connection to {target}:{port} failed: "
+                f"{type(error).__name__}"
+            ),
+        }
 
     async def test_connection(
         self,
@@ -33,19 +403,72 @@ class WinRMProvider(RemoteBaseProvider):
         ssh_key: str | None,
         ip_address: str | None,
     ) -> dict:
-        """Simulate WinRM connection test."""
-        logger.info("WinRM: Testing connection to %s:%d", hostname, port)
-
-        latency_ms = random.randint(80, 500)
-        await asyncio.sleep(latency_ms / 1000)
-
+        """Test WinRM connectivity by running a probe command."""
         target = ip_address if ip_address else hostname
 
-        return {
-            "success": True,
-            "latency_ms": latency_ms,
-            "message": f"WinRM connection to {target}:{port} successful ({latency_ms}ms)",
-        }
+        logger.info(
+            "WinRM: test_connection user=%s host=%s port=%d",
+            username,
+            target,
+            port,
+        )
+
+        start_time = time.monotonic()
+
+        try:
+            session = self._build_session(
+                hostname=hostname,
+                port=port,
+                username=username,
+                password=password,
+            )
+
+            result = session.run_cmd("echo MissionControl")
+
+            elapsed_ms = int((time.monotonic() - start_time) * 1000)
+
+            stdout = (
+                result.std_out.decode("utf-8", errors="replace")
+                if isinstance(result.std_out, bytes)
+                else result.std_out
+            )
+
+            if result.status_code == 0 and "MissionControl" in stdout:
+                logger.info(
+                    "WinRM: test_connection user=%s host=%s "
+                    "success latency=%dms",
+                    username,
+                    target,
+                    elapsed_ms,
+                )
+                return {
+                    "success": True,
+                    "latency_ms": elapsed_ms,
+                    "message": (
+                        f"WinRM connection to {target}:{port} "
+                        f"successful ({elapsed_ms}ms)"
+                    ),
+                }
+
+            logger.warning(
+                "WinRM: test_connection user=%s host=%s "
+                "failed unexpected_response",
+                username,
+                target,
+            )
+            return {
+                "success": False,
+                "latency_ms": elapsed_ms,
+                "message": (
+                    f"WinRM connection to {target}:{port} failed: "
+                    "unexpected response"
+                ),
+            }
+
+        except Exception as e:
+            return self._handle_test_error(
+                username, target, port, e, start_time
+            )
 
     async def execute_command(
         self,
@@ -58,29 +481,65 @@ class WinRMProvider(RemoteBaseProvider):
         shell: str,
         ip_address: str | None,
     ) -> dict:
-        """Simulate WinRM command execution."""
-        logger.info("WinRM: Executing '%s' on %s", command, hostname)
+        """Execute a command on a remote host via WinRM."""
+        retries = _get_retry_count()
 
-        latency_ms = random.randint(200, 1500)
-        await asyncio.sleep(latency_ms / 1000)
+        logger.info(
+            "WinRM: execute_command user=%s host=%s",
+            username,
+            hostname,
+        )
 
-        mock_outputs = {
-            "hostname": hostname,
-            "Get-Date": "Saturday, July 12, 2026 2:23:45 PM",
-            "Get-Process | Measure-Object | Select-Object -ExpandProperty Count": "187",
-            "Get-CimInstance Win32_OperatingSystem | Select-Object Caption": "\nCaption\n-------\nMicrosoft Windows Server 2022 Standard",
-            "Get-Service | Where-Object {$_.Status -eq 'Running'} | Measure-Object | Select-Object -ExpandProperty Count": "94",
-            "whoami": username,
-            "Get-PSDrive | Select-Object Name,Used,Free": (
-                "\nName   Used   Free\n----   ----   ----\nC    120GB  380GB\nD      0B    500GB"
-            ),
-        }
+        start_time = time.monotonic()
+        started_at = datetime.now(UTC).isoformat()
 
-        stdout = mock_outputs.get(command, f"[mock output for: {command}]")
+        try:
+            session = self._build_session(
+                hostname=hostname,
+                port=port,
+                username=username,
+                password=password,
+            )
 
-        return {
-            "stdout": stdout,
-            "stderr": "",
-            "exit_code": 0,
-            "duration_ms": latency_ms,
-        }
+            result = self._execute_with_retry(session, command, retries)
+
+            duration_ms = int((time.monotonic() - start_time) * 1000)
+            completed_at = datetime.now(UTC).isoformat()
+
+            stdout_text = result.std_out or ""
+            stderr_text = result.std_err or ""
+
+            if isinstance(stdout_text, bytes):
+                stdout_text = stdout_text.decode(
+                    "utf-8", errors="replace"
+                )
+            if isinstance(stderr_text, bytes):
+                stderr_text = stderr_text.decode(
+                    "utf-8", errors="replace"
+                )
+
+            exit_code = result.status_code
+
+            logger.info(
+                "WinRM: execute_command user=%s host=%s "
+                "exit_code=%d duration=%dms",
+                username,
+                hostname,
+                exit_code,
+                duration_ms,
+            )
+
+            return {
+                "success": exit_code == 0,
+                "stdout": stdout_text,
+                "stderr": stderr_text,
+                "exit_code": exit_code,
+                "duration_ms": duration_ms,
+                "started_at": started_at,
+                "completed_at": completed_at,
+            }
+
+        except Exception as e:
+            return self._handle_execute_error(
+                username, hostname, command, e, start_time
+            )
