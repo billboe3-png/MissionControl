@@ -17,6 +17,7 @@ from app.routers import (
     status,
     tasks,
     version,
+    zabbix,
 )
 
 try:
@@ -71,6 +72,7 @@ app.include_router(resume.router, prefix="/api/v1")
 app.include_router(parking_lot.router, prefix="/api/v1")
 app.include_router(remote.router, prefix="/api/v1")
 app.include_router(identity.router, prefix="/api/v1")
+app.include_router(zabbix.router, prefix="/api/v1")
 
 
 @app.get("/api/v1")

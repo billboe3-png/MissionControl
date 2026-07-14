@@ -13,6 +13,10 @@ RUN pip install --no-cache-dir --upgrade pip && \
 
 COPY . .
 
+RUN chmod +x entrypoint.sh
+
 EXPOSE 8000
+
+USER app
 
 ENTRYPOINT ["sh", "entrypoint.sh"]

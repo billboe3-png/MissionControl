@@ -5,6 +5,7 @@ Orchestrator that delegates to individual providers.
 Contains NO business logic — only aggregation.
 
 Sprint 2.0 - Refactored to orchestrator pattern.
+Sprint 2.3.0 - Added Zabbix integration.
 """
 
 import logging
@@ -51,6 +52,7 @@ class DashboardService:
         resume = resume_provider.get_resume_data(db)
         parking_lot = parking_lot_provider.get_parking_lot_data(db)
         remote = await self._remote_provider.get_remote_data(db)
+        zabbix = await self._get_zabbix_data()
 
         return {
             "application": {
@@ -70,6 +72,9 @@ class DashboardService:
                 "containers_running": docker["running"],
                 "containers_total": docker["container_count"],
                 "docker_engine": docker["engine"],
+                "zabbix_hosts": zabbix.get("host_count", 0),
+                "zabbix_problems": zabbix.get("problem_count", 0),
+                "zabbix_critical": zabbix.get("critical_count", 0),
             },
             "health": health,
             "system": system,
@@ -81,15 +86,16 @@ class DashboardService:
             "resume": resume,
             "parking_lot": parking_lot,
             "remote": remote,
+            "zabbix": zabbix,
             "integrations": {
                 "docker": docker,
                 "ssh": {
-                    "enabled": False,
-                    "status": "not_configured",
+                    "enabled": True,
+                    "status": "configured",
                 },
                 "zabbix": {
-                    "enabled": False,
-                    "status": "not_configured",
+                    "enabled": zabbix.get("connected", False),
+                    "status": "connected" if zabbix.get("connected") else "not_configured",
                 },
                 "github": {
                     "enabled": False,
@@ -97,6 +103,24 @@ class DashboardService:
                 },
             },
         }
+
+    async def _get_zabbix_data(self) -> dict:
+        """Get Zabbix data for the dashboard, never raise."""
+        try:
+            from app.providers.zabbix.provider_factory import get_zabbix_provider
+
+            provider = get_zabbix_provider()
+            return await provider.get_summary()
+        except Exception as e:
+            logger.warning("Dashboard: Zabbix data failed: %s", e)
+            return {
+                "connected": False,
+                "host_count": 0,
+                "problem_count": 0,
+                "critical_count": 0,
+                "warning_count": 0,
+                "ok_count": 0,
+            }
 
 
 dashboard_service = DashboardService()

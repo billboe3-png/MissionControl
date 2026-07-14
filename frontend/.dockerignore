@@ -1,0 +1,45 @@
+# Mission Control - Frontend Docker Ignore
+# Exclude everything that shouldn't be in the build context
+
+# Version control
+.git
+.gitignore
+
+# Dependencies (will be installed in container)
+node_modules
+
+# Build output (will be built in container)
+dist
+build
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+*~
+
+# Environment files
+.env
+.env.*
+!.env.example
+
+# Docker
+docker-compose*.yml
+Dockerfile*
+
+# Documentation
+*.md
+LICENSE
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Testing
+coverage
+.nyc_output
+
+# Misc
+*.log
+npm-debug.log*

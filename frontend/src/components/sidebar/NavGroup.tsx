@@ -15,7 +15,11 @@ export default function NavGroup({
         return (
             <div className="sidebar-nav-group collapsed">
                 {group.items.map((item) => (
-                    <NavItem key={item.path} item={item} />
+                    <NavItem
+                        key={item.path}
+                        item={item}
+                        collapsed={collapsed}
+                    />
                 ))}
             </div>
         );
@@ -29,7 +33,9 @@ export default function NavGroup({
             >
                 <span className="sidebar-group-icon">{group.icon}</span>
                 <span className="sidebar-group-label">{group.label}</span>
-                <span className={`sidebar-group-chevron${open ? " open`" : ""}`}>
+                <span
+                    className={`sidebar-group-chevron${open ? " open" : ""}`}
+                >
                     ▾
                 </span>
             </button>

@@ -19,6 +19,17 @@ import Microsoft365Page from "./pages/identity/Microsoft365Page";
 import GeneralPage from "./pages/settings/GeneralPage";
 import AppearancePage from "./pages/settings/AppearancePage";
 import AboutPage from "./pages/settings/AboutPage";
+import ZabbixOverviewPage from "./pages/zabbix/OverviewPage";
+import ZabbixHostsPage from "./pages/zabbix/HostsPage";
+import ZabbixProblemsPage from "./pages/zabbix/ProblemsPage";
+import ZabbixTriggersPage from "./pages/zabbix/TriggersPage";
+import ZabbixEventsPage from "./pages/zabbix/EventsPage";
+import ZabbixHostGroupsPage from "./pages/zabbix/HostGroupsPage";
+import ZabbixTemplatesPage from "./pages/zabbix/TemplatesPage";
+import ZabbixItemsPage from "./pages/zabbix/ItemsPage";
+import ZabbixMapsPage from "./pages/zabbix/MapsPage";
+import ZabbixDashboardsPage from "./pages/zabbix/DashboardsPage";
+import ZabbixHealthPage from "./pages/zabbix/HealthPage";
 import PlaceholderPage from "./pages/PlaceholderPage";
 
 export default function App() {
@@ -42,7 +53,17 @@ export default function App() {
                             <Route path="/remote/history" element={<HistoryPage />} />
                             <Route path="/remote/files" element={<FileBrowserPage />} />
 
-                            <Route path="/monitoring" element={<PlaceholderPage title="Monitoring" />} />
+                            <Route path="/monitoring" element={<ZabbixOverviewPage />} />
+                            <Route path="/monitoring/hosts" element={<ZabbixHostsPage />} />
+                            <Route path="/monitoring/problems" element={<ZabbixProblemsPage />} />
+                            <Route path="/monitoring/triggers" element={<ZabbixTriggersPage />} />
+                            <Route path="/monitoring/events" element={<ZabbixEventsPage />} />
+                            <Route path="/monitoring/host-groups" element={<ZabbixHostGroupsPage />} />
+                            <Route path="/monitoring/templates" element={<ZabbixTemplatesPage />} />
+                            <Route path="/monitoring/items" element={<ZabbixItemsPage />} />
+                            <Route path="/monitoring/maps" element={<ZabbixMapsPage />} />
+                            <Route path="/monitoring/dashboards" element={<ZabbixDashboardsPage />} />
+                            <Route path="/monitoring/health" element={<ZabbixHealthPage />} />
 
                             <Route path="/identity" element={<IdentityOverviewPage />} />
                             <Route path="/identity/active-directory" element={<ActiveDirectoryPage />} />

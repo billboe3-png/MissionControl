@@ -1,0 +1,41 @@
+# Mission Control - Root Docker Ignore
+# For docker-compose build context
+
+# Version control
+.git
+.gitignore
+
+# Python
+__pycache__
+*.pyc
+*.pyo
+.pytest_cache
+
+# Node
+node_modules
+dist
+build
+
+# IDE
+.vscode
+.idea
+
+# Environment files (secrets)
+.env
+.env.*
+!.env.example
+
+# Documentation
+*.md
+LICENSE
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Scripts (not needed in containers)
+scripts/
+
+# Tests
+tests/
+backend/tests/

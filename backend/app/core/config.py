@@ -217,6 +217,40 @@ class Settings(BaseSettings):
     )
 
     # ------------------------------------------------------------------
+    # Zabbix
+    # ------------------------------------------------------------------
+
+    zabbix_url: str = Field(
+        default="",
+        alias="ZABBIX_URL",
+    )
+
+    zabbix_username: str = Field(
+        default="",
+        alias="ZABBIX_USERNAME",
+    )
+
+    zabbix_password: str = Field(
+        default="",
+        alias="ZABBIX_PASSWORD",
+    )
+
+    zabbix_verify_ssl: bool = Field(
+        default=True,
+        alias="ZABBIX_VERIFY_SSL",
+    )
+
+    zabbix_timeout: int = Field(
+        default=30,
+        alias="ZABBIX_TIMEOUT",
+    )
+
+    zabbix_retries: int = Field(
+        default=3,
+        alias="ZABBIX_RETRIES",
+    )
+
+    # ------------------------------------------------------------------
     # API
     # ------------------------------------------------------------------
 

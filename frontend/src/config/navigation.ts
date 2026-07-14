@@ -39,6 +39,23 @@ export const navigation: NavGroup[] = [
         ],
     },
     {
+        label: "Monitoring",
+        icon: "📡",
+        items: [
+            { label: "Overview", path: "/monitoring", icon: "📊" },
+            { label: "Hosts", path: "/monitoring/hosts", icon: "🖥️" },
+            { label: "Problems", path: "/monitoring/problems", icon: "🚨" },
+            { label: "Triggers", path: "/monitoring/triggers", icon: "⚡" },
+            { label: "Events", path: "/monitoring/events", icon: "📋" },
+            { label: "Host Groups", path: "/monitoring/host-groups", icon: "📁" },
+            { label: "Templates", path: "/monitoring/templates", icon: "📐" },
+            { label: "Items", path: "/monitoring/items", icon: "📦" },
+            { label: "Maps", path: "/monitoring/maps", icon: "🗺️" },
+            { label: "Dashboards", path: "/monitoring/dashboards", icon: "📈" },
+            { label: "Health", path: "/monitoring/health", icon: "❤️" },
+        ],
+    },
+    {
         label: "Settings",
         icon: "⚙️",
         items: [
