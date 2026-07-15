@@ -11,6 +11,7 @@ const routeLabels: Record<string, string> = {
     hosts: "Hosts",
     credentials: "Credentials",
     execute: "Execute",
+    "quick-commands": "Quick Commands",
     history: "History",
     files: "File Browser",
     settings: "Settings",

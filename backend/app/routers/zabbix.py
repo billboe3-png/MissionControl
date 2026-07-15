@@ -4,12 +4,15 @@ Mission Control Zabbix Router
 API endpoints for Zabbix monitoring operations.
 
 Sprint 2.3.0 - Enterprise Zabbix Integration.
+Sprint 2.3.2 - DB-driven provider resolution.
 """
 
 import logging
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
+from sqlalchemy.orm import Session
 
+from app.db.database import get_db
 from app.schemas.zabbix import (
     ZabbixConnectionTestResponse,
     ZabbixDashboardsResponse,
@@ -36,9 +39,11 @@ router = APIRouter(prefix="/zabbix", tags=["zabbix"])
     response_model=ZabbixSummaryResponse,
     tags=["zabbix"],
 )
-async def get_zabbix_overview() -> ZabbixSummaryResponse:
+async def get_zabbix_overview(
+    db: Session = Depends(get_db),
+) -> ZabbixSummaryResponse:
     """Get Zabbix monitoring overview."""
-    data = await zabbix_service.get_summary()
+    data = await zabbix_service.get_summary(db)
     return ZabbixSummaryResponse(**data)
 
 
@@ -47,9 +52,11 @@ async def get_zabbix_overview() -> ZabbixSummaryResponse:
     response_model=ZabbixHostsResponse,
     tags=["zabbix"],
 )
-async def get_zabbix_hosts() -> ZabbixHostsResponse:
+async def get_zabbix_hosts(
+    db: Session = Depends(get_db),
+) -> ZabbixHostsResponse:
     """List monitored hosts."""
-    data = await zabbix_service.get_hosts()
+    data = await zabbix_service.get_hosts(db)
     return ZabbixHostsResponse(**data)
 
 
@@ -58,9 +65,11 @@ async def get_zabbix_hosts() -> ZabbixHostsResponse:
     response_model=ZabbixHostGroupsResponse,
     tags=["zabbix"],
 )
-async def get_zabbix_groups() -> ZabbixHostGroupsResponse:
+async def get_zabbix_groups(
+    db: Session = Depends(get_db),
+) -> ZabbixHostGroupsResponse:
     """List host groups."""
-    data = await zabbix_service.get_host_groups()
+    data = await zabbix_service.get_host_groups(db)
     return ZabbixHostGroupsResponse(**data)
 
 
@@ -69,9 +78,11 @@ async def get_zabbix_groups() -> ZabbixHostGroupsResponse:
     response_model=ZabbixTemplatesResponse,
     tags=["zabbix"],
 )
-async def get_zabbix_templates() -> ZabbixTemplatesResponse:
+async def get_zabbix_templates(
+    db: Session = Depends(get_db),
+) -> ZabbixTemplatesResponse:
     """List templates."""
-    data = await zabbix_service.get_templates()
+    data = await zabbix_service.get_templates(db)
     return ZabbixTemplatesResponse(**data)
 
 
@@ -80,9 +91,11 @@ async def get_zabbix_templates() -> ZabbixTemplatesResponse:
     response_model=ZabbixItemsResponse,
     tags=["zabbix"],
 )
-async def get_zabbix_items() -> ZabbixItemsResponse:
+async def get_zabbix_items(
+    db: Session = Depends(get_db),
+) -> ZabbixItemsResponse:
     """List items."""
-    data = await zabbix_service.get_items()
+    data = await zabbix_service.get_items(db)
     return ZabbixItemsResponse(**data)
 
 
@@ -91,9 +104,11 @@ async def get_zabbix_items() -> ZabbixItemsResponse:
     response_model=ZabbixTriggersResponse,
     tags=["zabbix"],
 )
-async def get_zabbix_triggers() -> ZabbixTriggersResponse:
+async def get_zabbix_triggers(
+    db: Session = Depends(get_db),
+) -> ZabbixTriggersResponse:
     """List triggers."""
-    data = await zabbix_service.get_triggers()
+    data = await zabbix_service.get_triggers(db)
     return ZabbixTriggersResponse(**data)
 
 
@@ -102,9 +117,11 @@ async def get_zabbix_triggers() -> ZabbixTriggersResponse:
     response_model=ZabbixProblemsResponse,
     tags=["zabbix"],
 )
-async def get_zabbix_problems() -> ZabbixProblemsResponse:
+async def get_zabbix_problems(
+    db: Session = Depends(get_db),
+) -> ZabbixProblemsResponse:
     """List current problems."""
-    data = await zabbix_service.get_problems()
+    data = await zabbix_service.get_problems(db)
     return ZabbixProblemsResponse(**data)
 
 
@@ -113,9 +130,11 @@ async def get_zabbix_problems() -> ZabbixProblemsResponse:
     response_model=ZabbixEventsResponse,
     tags=["zabbix"],
 )
-async def get_zabbix_events() -> ZabbixEventsResponse:
+async def get_zabbix_events(
+    db: Session = Depends(get_db),
+) -> ZabbixEventsResponse:
     """List recent events."""
-    data = await zabbix_service.get_events()
+    data = await zabbix_service.get_events(db)
     return ZabbixEventsResponse(**data)
 
 
@@ -124,9 +143,11 @@ async def get_zabbix_events() -> ZabbixEventsResponse:
     response_model=ZabbixMapsResponse,
     tags=["zabbix"],
 )
-async def get_zabbix_maps() -> ZabbixMapsResponse:
+async def get_zabbix_maps(
+    db: Session = Depends(get_db),
+) -> ZabbixMapsResponse:
     """List maps."""
-    data = await zabbix_service.get_maps()
+    data = await zabbix_service.get_maps(db)
     return ZabbixMapsResponse(**data)
 
 
@@ -135,9 +156,11 @@ async def get_zabbix_maps() -> ZabbixMapsResponse:
     response_model=ZabbixDashboardsResponse,
     tags=["zabbix"],
 )
-async def get_zabbix_dashboards() -> ZabbixDashboardsResponse:
+async def get_zabbix_dashboards(
+    db: Session = Depends(get_db),
+) -> ZabbixDashboardsResponse:
     """List dashboards."""
-    data = await zabbix_service.get_dashboards()
+    data = await zabbix_service.get_dashboards(db)
     return ZabbixDashboardsResponse(**data)
 
 
@@ -146,9 +169,11 @@ async def get_zabbix_dashboards() -> ZabbixDashboardsResponse:
     response_model=ZabbixHealthResponse,
     tags=["zabbix"],
 )
-async def get_zabbix_health() -> ZabbixHealthResponse:
+async def get_zabbix_health(
+    db: Session = Depends(get_db),
+) -> ZabbixHealthResponse:
     """Get Zabbix health."""
-    data = await zabbix_service.get_health()
+    data = await zabbix_service.get_health(db)
     return ZabbixHealthResponse(**data)
 
 
@@ -157,7 +182,9 @@ async def get_zabbix_health() -> ZabbixHealthResponse:
     response_model=ZabbixConnectionTestResponse,
     tags=["zabbix"],
 )
-async def test_zabbix_connection() -> ZabbixConnectionTestResponse:
+async def test_zabbix_connection(
+    db: Session = Depends(get_db),
+) -> ZabbixConnectionTestResponse:
     """Test connectivity to Zabbix."""
-    data = await zabbix_service.test_connection()
+    data = await zabbix_service.test_connection(db)
     return ZabbixConnectionTestResponse(**data)

@@ -163,7 +163,7 @@ class SSHProvider(RemoteBaseProvider):
 
     def _parse_exit_code(self, channel: paramiko.Channel) -> int:
         """Extract the exit code from an SSH channel."""
-        if channel.recv_exit_status_ready():
+        if channel.exit_status_ready():
             return channel.recv_exit_status()
         return -1
 
@@ -619,7 +619,7 @@ class SSHProvider(RemoteBaseProvider):
 
         try:
             client = self._build_client(
-                hostname=hostname,
+                hostname=target,
                 port=port,
                 username=username,
                 password=password,
@@ -696,6 +696,7 @@ class SSHProvider(RemoteBaseProvider):
         ip_address: str | None,
     ) -> dict:
         """Execute a command on a remote host via SSH."""
+        target = ip_address if ip_address else hostname
         timeouts = _get_timeouts()
         command_timeout = min(
             timeouts["command"],
@@ -705,7 +706,7 @@ class SSHProvider(RemoteBaseProvider):
         logger.info(
             "SSH: execute_command user=%s host=%s",
             username,
-            hostname,
+            target,
         )
 
         start_time = time.monotonic()
@@ -713,7 +714,7 @@ class SSHProvider(RemoteBaseProvider):
 
         try:
             result = self._execute_with_retry(
-                hostname=hostname,
+                hostname=target,
                 port=port,
                 username=username,
                 password=password,
@@ -729,7 +730,7 @@ class SSHProvider(RemoteBaseProvider):
                 "SSH: execute_command user=%s host=%s "
                 "exit_code=%d duration=%dms",
                 username,
-                hostname,
+                target,
                 result["exit_code"],
                 duration_ms,
             )
@@ -746,7 +747,7 @@ class SSHProvider(RemoteBaseProvider):
 
         except Exception as e:
             return self._handle_execute_error(
-                username, hostname, command, e, start_time
+                username, target, command, e, start_time
             )
 
     # ------------------------------------------------------------------ #
@@ -765,20 +766,21 @@ class SSHProvider(RemoteBaseProvider):
         ip_address: str | None,
     ) -> dict:
         """Upload a file to the remote host via SFTP."""
+        target = ip_address if ip_address else hostname
         logger.info(
             "SSH: upload_file user=%s host=%s path=%s",
-            username, hostname, remote_path,
+            username, target, remote_path,
         )
         client = None
         try:
             client = self._build_client(
-                hostname, port, username, password, ssh_key
+                target, port, username, password, ssh_key
             )
             return _ssh_upload_file(client, remote_path, content)
         except Exception as e:
             logger.warning(
                 "SSH: upload_file user=%s host=%s error=%s",
-                username, hostname, type(e).__name__,
+                username, target, type(e).__name__,
             )
             return {
                 "success": False,
@@ -800,20 +802,21 @@ class SSHProvider(RemoteBaseProvider):
         ip_address: str | None,
     ) -> dict:
         """Download a file from the remote host via SFTP."""
+        target = ip_address if ip_address else hostname
         logger.info(
             "SSH: download_file user=%s host=%s path=%s",
-            username, hostname, remote_path,
+            username, target, remote_path,
         )
         client = None
         try:
             client = self._build_client(
-                hostname, port, username, password, ssh_key
+                target, port, username, password, ssh_key
             )
             return _ssh_download_file(client, remote_path)
         except Exception as e:
             logger.warning(
                 "SSH: download_file user=%s host=%s error=%s",
-                username, hostname, type(e).__name__,
+                username, target, type(e).__name__,
             )
             return {
                 "success": False,
@@ -835,20 +838,21 @@ class SSHProvider(RemoteBaseProvider):
         ip_address: str | None,
     ) -> dict:
         """List contents of a remote directory via SFTP."""
+        target = ip_address if ip_address else hostname
         logger.info(
             "SSH: list_directory user=%s host=%s path=%s",
-            username, hostname, remote_path,
+            username, target, remote_path,
         )
         client = None
         try:
             client = self._build_client(
-                hostname, port, username, password, ssh_key
+                target, port, username, password, ssh_key
             )
             return _ssh_list_directory(client, remote_path)
         except Exception as e:
             logger.warning(
                 "SSH: list_directory user=%s host=%s error=%s",
-                username, hostname, type(e).__name__,
+                username, target, type(e).__name__,
             )
             return {
                 "success": False,
@@ -871,20 +875,21 @@ class SSHProvider(RemoteBaseProvider):
         ip_address: str | None,
     ) -> dict:
         """Create a directory on the remote host via SFTP."""
+        target = ip_address if ip_address else hostname
         logger.info(
             "SSH: create_directory user=%s host=%s path=%s",
-            username, hostname, remote_path,
+            username, target, remote_path,
         )
         client = None
         try:
             client = self._build_client(
-                hostname, port, username, password, ssh_key
+                target, port, username, password, ssh_key
             )
             return _ssh_create_directory(client, remote_path)
         except Exception as e:
             logger.warning(
                 "SSH: create_directory user=%s host=%s error=%s",
-                username, hostname, type(e).__name__,
+                username, target, type(e).__name__,
             )
             return {
                 "success": False,
@@ -906,20 +911,21 @@ class SSHProvider(RemoteBaseProvider):
         ip_address: str | None,
     ) -> dict:
         """Delete a file on the remote host via SFTP."""
+        target = ip_address if ip_address else hostname
         logger.info(
             "SSH: delete_file user=%s host=%s path=%s",
-            username, hostname, remote_path,
+            username, target, remote_path,
         )
         client = None
         try:
             client = self._build_client(
-                hostname, port, username, password, ssh_key
+                target, port, username, password, ssh_key
             )
             return _ssh_delete_file(client, remote_path)
         except Exception as e:
             logger.warning(
                 "SSH: delete_file user=%s host=%s error=%s",
-                username, hostname, type(e).__name__,
+                username, target, type(e).__name__,
             )
             return {
                 "success": False,

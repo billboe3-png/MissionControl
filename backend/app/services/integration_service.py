@@ -18,6 +18,7 @@ from app.models.db.integration_profile import IntegrationProfile
 from app.repositories.integration_profile_repository import (
     IntegrationProfileRepository,
 )
+from app.providers.hyperv.provider_factory import reset_hyperv_provider
 from app.schemas.integration import (
     IntegrationProfileCreate,
     IntegrationProfileListResponse,
@@ -114,6 +115,10 @@ class IntegrationService:
         profile = IntegrationProfileRepository.create(
             db, data.name, data.integration_type, **kwargs
         )
+        if data.integration_type == "zabbix":
+            self._reset_zabbix_singleton()
+        if data.integration_type == "hyperv":
+            reset_hyperv_provider(profile.id)
         return self._to_response(profile)
 
     async def update_profile(
@@ -161,18 +166,27 @@ class IntegrationService:
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Integration profile not found",
             )
+        if profile.integration_type == "zabbix":
+            self._reset_zabbix_singleton()
+        if profile.integration_type == "hyperv":
+            reset_hyperv_provider(profile.id)
         return self._to_response(profile)
 
     async def delete_profile(
         self, db: Session, profile_id: int
     ) -> None:
         """Delete an integration profile."""
+        existing = IntegrationProfileRepository.get_by_id(db, profile_id)
         deleted = IntegrationProfileRepository.delete(db, profile_id)
         if not deleted:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Integration profile not found",
             )
+        if existing and existing.integration_type == "zabbix":
+            self._reset_zabbix_singleton()
+        if existing and existing.integration_type == "hyperv":
+            reset_hyperv_provider(profile_id)
 
     # ------------------------------------------------------------------ #
     # Actions                                                             #
@@ -190,6 +204,10 @@ class IntegrationService:
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Integration profile not found",
             )
+        if profile.integration_type == "zabbix":
+            self._reset_zabbix_singleton()
+        if profile.integration_type == "hyperv":
+            reset_hyperv_provider(profile.id)
         return self._to_response(profile)
 
     async def disable_profile(
@@ -204,6 +222,10 @@ class IntegrationService:
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Integration profile not found",
             )
+        if profile.integration_type == "zabbix":
+            self._reset_zabbix_singleton()
+        if profile.integration_type == "hyperv":
+            reset_hyperv_provider(profile.id)
         return self._to_response(profile)
 
     async def test_connection(
@@ -282,10 +304,30 @@ class IntegrationService:
     async def _test_zabbix(
         self, profile: IntegrationProfile
     ) -> dict:
-        """Test Zabbix connection using profile config."""
-        from app.providers.zabbix.mock_provider import MockZabbixProvider
+        """Test Zabbix connection using profile credentials."""
+        if not profile.base_url:
+            return {
+                "connected": False,
+                "error": "Zabbix URL (base_url) is required",
+            }
+        if not profile.username:
+            return {
+                "connected": False,
+                "error": "Zabbix username is required",
+            }
 
-        provider = MockZabbixProvider()
+        from app.providers.zabbix.zabbix_provider import (
+            ApiZabbixProvider,
+        )
+
+        password = _decrypt(profile.encrypted_secret)
+        provider = ApiZabbixProvider(
+            url=profile.base_url,
+            username=profile.username,
+            password=password,
+            verify_ssl=profile.verify_ssl,
+            timeout=profile.timeout,
+        )
         return await provider.test_connection()
 
     async def _test_ad(
@@ -314,13 +356,14 @@ class IntegrationService:
         self, profile: IntegrationProfile
     ) -> dict:
         """Test Hyper-V connection using profile config."""
-        from app.providers.hyperv.mock_provider import MockHyperVProvider
+        from app.providers.hyperv.hyperv_provider import HyperVPowerShellProvider
 
-        provider = MockHyperVProvider(
+        password = _decrypt(profile.encrypted_secret) or ""
+        provider = HyperVPowerShellProvider(
             host=profile.base_url or "localhost",
-            port=443,
+            port=22,
             username=profile.username or "",
-            password=_decrypt(profile.encrypted_secret) or "",
+            password=password,
             timeout=profile.timeout or 30,
         )
         return await provider.test_connection()
@@ -337,6 +380,16 @@ class IntegrationService:
     # ------------------------------------------------------------------ #
     # Helpers                                                             #
     # ------------------------------------------------------------------ #
+
+    @staticmethod
+    def _reset_zabbix_singleton() -> None:
+        """Reset the cached Zabbix provider so profile changes take effect."""
+        from app.providers.zabbix.provider_factory import (
+            reset_zabbix_provider,
+        )
+
+        reset_zabbix_provider()
+        logger.info("Zabbix provider singleton reset after profile change")
 
     def _to_response(
         self, profile: IntegrationProfile

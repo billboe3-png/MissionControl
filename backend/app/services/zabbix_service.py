@@ -2,9 +2,10 @@
 Mission Control Zabbix Service
 
 Business logic for Zabbix monitoring operations.
-Orchestrates provider calls and formats responses.
+Resolves provider per-call using DB session for profile lookup.
 
 Sprint 2.3.0 - Enterprise Zabbix Integration.
+Sprint 2.3.2 - DB-driven provider resolution.
 """
 
 import logging
@@ -18,71 +19,73 @@ class ZabbixService:
     """
     Service layer for Zabbix operations.
 
-    Delegates to the Zabbix provider and formats responses.
+    Resolves the provider on each call so that DB-stored
+    integration profiles are respected without requiring
+    a manual singleton reset.
     """
 
-    def __init__(self) -> None:
-        self._provider = get_zabbix_provider()
+    def _get_provider(self, db=None):
+        return get_zabbix_provider(db)
 
-    async def test_connection(self) -> dict:
+    async def test_connection(self, db=None) -> dict:
         """Test Zabbix connectivity."""
-        return await self._provider.test_connection()
+        return await self._get_provider(db).test_connection()
 
-    async def login(self) -> dict:
+    async def login(self, db=None) -> dict:
         """Authenticate with Zabbix."""
-        return await self._provider.login()
+        return await self._get_provider(db).login()
 
-    async def logout(self) -> dict:
+    async def logout(self, db=None) -> dict:
         """End Zabbix session."""
-        return await self._provider.logout()
+        return await self._get_provider(db).logout()
 
-    async def get_summary(self) -> dict:
+    async def get_summary(self, db=None) -> dict:
         """Get monitoring overview."""
-        return await self._provider.get_summary()
+        return await self._get_provider(db).get_summary()
 
-    async def get_hosts(self) -> dict:
+    async def get_hosts(self, db=None) -> dict:
         """List monitored hosts."""
-        return await self._provider.get_hosts()
+        return await self._get_provider(db).get_hosts()
 
-    async def get_host_groups(self) -> dict:
+    async def get_host_groups(self, db=None) -> dict:
         """List host groups."""
-        return await self._provider.get_host_groups()
+        return await self._get_provider(db).get_host_groups()
 
-    async def get_triggers(self) -> dict:
+    async def get_triggers(self, db=None) -> dict:
         """List triggers."""
-        return await self._provider.get_triggers()
+        return await self._get_provider(db).get_triggers()
 
-    async def get_problems(self) -> dict:
+    async def get_problems(self, db=None) -> dict:
         """List current problems."""
-        return await self._provider.get_problems()
+        return await self._get_provider(db).get_problems()
 
-    async def get_events(self) -> dict:
+    async def get_events(self, db=None) -> dict:
         """List recent events."""
-        return await self._provider.get_events()
+        return await self._get_provider(db).get_events()
 
-    async def get_items(self) -> dict:
+    async def get_items(self, db=None) -> dict:
         """List items."""
-        return await self._provider.get_items()
+        return await self._get_provider(db).get_items()
 
-    async def get_history(self) -> dict:
+    async def get_history(self, db=None) -> dict:
         """Get historical data."""
-        return await self._provider.get_history()
+        return await self._get_provider(db).get_history()
 
-    async def get_templates(self) -> dict:
+    async def get_templates(self, db=None) -> dict:
         """List templates."""
-        return await self._provider.get_templates()
+        return await self._get_provider(db).get_templates()
 
-    async def get_dashboards(self) -> dict:
+    async def get_dashboards(self, db=None) -> dict:
         """List dashboards."""
-        return await self._provider.get_dashboards()
+        return await self._get_provider(db).get_dashboards()
 
-    async def get_maps(self) -> dict:
+    async def get_maps(self, db=None) -> dict:
         """List maps."""
-        return await self._provider.get_maps()
+        return await self._get_provider(db).get_maps()
 
-    async def get_health(self) -> dict:
+    async def get_health(self, db=None) -> dict:
         """Get Zabbix health."""
-        return await self._provider.get_health()
+        return await self._get_provider(db).get_health()
 
 
 zabbix_service = ZabbixService()

@@ -1,14 +1,46 @@
 import { useEffect, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import PageHeader from "../../components/common/PageHeader";
 import StatusBadge from "../../components/common/StatusBadge";
 import DataTable, { Column } from "../../components/common/DataTable";
 import TriggerStatusCard from "../../components/zabbix/TriggerStatusCard";
 import { zabbixApi, ZabbixTrigger, ZabbixTriggersResponse } from "../../services/zabbix";
 
+const SEVERITIES = [
+    { key: "not_classified", label: "Not classified", color: "#6c757d" },
+    { key: "information", label: "Information", color: "#0dcaf0" },
+    { key: "warning", label: "Warning", color: "#ffc107" },
+    { key: "average", label: "Average", color: "#fd7e14" },
+    { key: "high", label: "High", color: "#dc3545" },
+    { key: "disaster", label: "Disaster", color: "#842029" },
+];
+
+const SEVERITY_STATUS: Record<string, "error" | "warning" | "info"> = {
+    not_classified: "info",
+    information: "info",
+    warning: "warning",
+    average: "warning",
+    high: "error",
+    disaster: "error",
+};
+
 export default function TriggersPage() {
+    const [searchParams] = useSearchParams();
     const [data, setData] = useState<ZabbixTriggersResponse | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [loading, setLoading] = useState(true);
+
+    const urlSeverities = searchParams.getAll("severity");
+    const [activeSeverities, setActiveSeverities] = useState<Set<string>>(
+        () => new Set(urlSeverities.length > 0 ? urlSeverities : SEVERITIES.map((s) => s.key))
+    );
+
+    useEffect(() => {
+        const sevs = searchParams.getAll("severity");
+        if (sevs.length > 0) {
+            setActiveSeverities(new Set(sevs));
+        }
+    }, [searchParams]);
 
     useEffect(() => {
         zabbixApi.getTriggers()
@@ -17,8 +49,24 @@ export default function TriggersPage() {
             .finally(() => setLoading(false));
     }, []);
 
+    const toggleSeverity = (key: string) => {
+        setActiveSeverities((prev) => {
+            const next = new Set(prev);
+            if (next.has(key)) {
+                next.delete(key);
+            } else {
+                next.add(key);
+            }
+            return next;
+        });
+    };
+
     if (error) return <div className="error-banner">{error}</div>;
     if (loading) return <div className="loading">Loading…</div>;
+
+    const filtered = (data?.triggers ?? []).filter((t) =>
+        activeSeverities.has(t.priority)
+    );
 
     const columns: Column<ZabbixTrigger>[] = [
         { key: "description", header: "Description" },
@@ -26,10 +74,12 @@ export default function TriggersPage() {
         {
             key: "priority",
             header: "Priority",
-            render: (row) => {
-                const st = row.priority === "disaster" || row.priority === "high" ? "error" : row.priority === "warning" ? "warning" : "info";
-                return <StatusBadge status={st} label={row.priority} />;
-            },
+            render: (row) => (
+                <StatusBadge
+                    status={SEVERITY_STATUS[row.priority] ?? "info"}
+                    label={row.priority}
+                />
+            ),
         },
         {
             key: "value",
@@ -40,11 +90,34 @@ export default function TriggersPage() {
 
     return (
         <>
-            <PageHeader title="Triggers" subtitle={`Trigger rules (${data?.total_count ?? 0})`} />
+            <PageHeader title="Triggers" subtitle={`Trigger rules (${filtered.length})`} />
             <div className="identity-overview-section">
                 <TriggerStatusCard problemCount={data?.problem_count ?? 0} okCount={data?.ok_count ?? 0} enabledCount={data?.enabled_count ?? 0} disabledCount={data?.disabled_count ?? 0} />
             </div>
-            <DataTable columns={columns} data={data?.triggers ?? []} emptyMessage="No triggers found" />
+            <div className="identity-overview-section">
+                <h3>Severity Filter</h3>
+                <div className="severity-filters">
+                    {SEVERITIES.map((s) => {
+                        const count = (data?.triggers ?? []).filter((t) => t.priority === s.key).length;
+                        return (
+                            <label key={s.key} className="severity-filter-item">
+                                <input
+                                    type="checkbox"
+                                    checked={activeSeverities.has(s.key)}
+                                    onChange={() => toggleSeverity(s.key)}
+                                />
+                                <span
+                                    className="severity-dot"
+                                    style={{ backgroundColor: s.color }}
+                                />
+                                <span>{s.label}</span>
+                                <span className="severity-count">({count})</span>
+                            </label>
+                        );
+                    })}
+                </div>
+            </div>
+            <DataTable columns={columns} data={filtered} emptyMessage="No triggers match filter" />
         </>
     );
 }

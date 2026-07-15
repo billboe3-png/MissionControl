@@ -13,6 +13,7 @@ import CredentialsPage from "./pages/remote/CredentialsPage";
 import ExecutePage from "./pages/remote/ExecutePage";
 import HistoryPage from "./pages/remote/HistoryPage";
 import FileBrowserPage from "./pages/remote/FileBrowserPage";
+import QuickCommandsPage from "./pages/remote/QuickCommandsPage";
 import IdentityOverviewPage from "./pages/identity/IdentityOverviewPage";
 import ActiveDirectoryPage from "./pages/identity/ActiveDirectoryPage";
 import Microsoft365Page from "./pages/identity/Microsoft365Page";
@@ -74,6 +75,7 @@ export default function App() {
                             <Route path="/remote/hosts" element={<HostsPage />} />
                             <Route path="/remote/credentials" element={<CredentialsPage />} />
                             <Route path="/remote/execute" element={<ExecutePage />} />
+                            <Route path="/remote/quick-commands" element={<QuickCommandsPage />} />
                             <Route path="/remote/history" element={<HistoryPage />} />
                             <Route path="/remote/files" element={<FileBrowserPage />} />
 

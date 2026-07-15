@@ -1,15 +1,15 @@
 """add sites table and site_id foreign keys
 
-Revision ID: x1y2z3a4b5c6
-Revises: w1x2y3z4a5b6
+Revision ID: y2z3a4b5c6d7
+Revises: x1y2z3a4b5c6
 Create Date: 2026-07-14
 """
 
 from alembic import op
 import sqlalchemy as sa
 
-revision = "x1y2z3a4b5c6"
-down_revision = "w1x2y3z4a5b6"
+revision = "y2z3a4b5c6d7"
+down_revision = "x1y2z3a4b5c6"
 branch_labels = None
 depends_on = None
 

@@ -16,20 +16,26 @@ logger = logging.getLogger(__name__)
 
 async def _run_powershell(host: str, port: int, username: str, password: str, script: str, timeout: int = 30) -> dict:
     """Execute a PowerShell script on a remote host via SSH."""
-    escaped_script = script.replace("'", "'\\''")
+    import base64
+    encoded = base64.b64encode(script.encode("utf-16-le")).decode("ascii")
+    ps_exe = r"C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe"
+    remote_cmd = f"{ps_exe} -NoProfile -NonInteractive -EncodedCommand {encoded}"
     cmd = [
+        "sshpass", "-p", password,
         "ssh",
         "-o", "StrictHostKeyChecking=no",
+        "-o", "UserKnownHostsFile=/dev/null",
         "-o", f"ConnectTimeout={timeout}",
         "-p", str(port),
         f"{username}@{host}",
-        f"powershell -NoProfile -NonInteractive -Command '{escaped_script}'",
+        remote_cmd,
     ]
     try:
         proc = await asyncio.create_subprocess_exec(
             *cmd,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
+            env={"HOME": "/tmp", "PATH": "/usr/local/bin:/usr/bin:/bin"},
         )
         stdout, stderr = await asyncio.wait_for(
             proc.communicate(), timeout=timeout
@@ -147,9 +153,14 @@ class HyperVPowerShellProvider(HyperVProvider):
 
     async def get_vms(self) -> dict:
         script = (
-            "Get-VM | Select-Object Id,Name,State,ProcessorCount,MemoryAssigned,"
-            "MemoryStartup,MemoryDemand,Uptime,ComputerName,Generations,"
-            "CreationTime,Notes | ConvertTo-Json -Compress"
+            "Get-VM | ForEach-Object { "
+            "[PSCustomObject]@{"
+            "Id=$_.Id; Name=$_.Name; State=$_.State.ToString(); "
+            "ProcessorCount=$_.ProcessorCount; MemoryAssigned=$_.MemoryAssigned; "
+            "MemoryStartup=$_.MemoryStartup; MemoryDemand=$_.MemoryDemand; "
+            "Uptime=$_.Uptime; ComputerName=$_.ComputerName; "
+            "Generation=$_.Generation; CreationTime=$_.CreationTime; "
+            "Notes=$_.Notes} } | ConvertTo-Json -Compress"
         )
         result = await self._exec(script)
         if not result["success"]:
@@ -227,8 +238,11 @@ class HyperVPowerShellProvider(HyperVProvider):
 
     async def get_networks(self) -> dict:
         script = (
-            "Get-VMSwitch | Select-Object Id,Name,SwitchType,AllowManagementOS,"
-            "Notes | ConvertTo-Json -Compress"
+            "Get-VMSwitch | ForEach-Object { "
+            "[PSCustomObject]@{"
+            "Id=$_.Id; Name=$_.Name; SwitchType=$_.SwitchType.ToString(); "
+            "AllowManagementOS=$_.AllowManagementOS; "
+            "Notes=$_.Notes} } | ConvertTo-Json -Compress"
         )
         result = await self._exec(script)
         if not result["success"]:
@@ -252,8 +266,11 @@ class HyperVPowerShellProvider(HyperVProvider):
 
     async def get_storage(self) -> dict:
         script = (
-            "Get-VHD | Select-Object VhdType,Path,FileSize,Size,"
-            "ComputerName | ConvertTo-Json -Compress"
+            "Get-VHD | ForEach-Object { "
+            "[PSCustomObject]@{"
+            "VhdType=$_.VhdType.ToString(); Path=$_.Path; "
+            "FileSize=$_.FileSize; Size=$_.Size; "
+            "ComputerName=$_.ComputerName} } | ConvertTo-Json -Compress"
         )
         result = await self._exec(script)
         if not result["success"]:
@@ -283,8 +300,11 @@ class HyperVPowerShellProvider(HyperVProvider):
     async def get_checkpoints(self, vm_id: str | None = None) -> dict:
         vm_flag = f"-VMId '{vm_id}'" if vm_id else ""
         script = (
-            f"Get-VMCheckpoint {vm_flag} | Select-Object Id,Name,CheckpointType,"
-            f"CreationTime,ParentCheckpointId,Notes | ConvertTo-Json -Compress"
+            f"Get-VMCheckpoint {vm_flag} | ForEach-Object {{ "
+            f"[PSCustomObject]@{{"
+            f"Id=$_.Id; Name=$_.Name; CheckpointType=$_.CheckpointType.ToString(); "
+            f"CreationTime=$_.CreationTime; ParentCheckpointId=$_.ParentCheckpointId; "
+            f"Notes=$_.Notes}} }} | ConvertTo-Json -Compress"
         )
         result = await self._exec(script)
         if not result["success"]:
@@ -321,18 +341,32 @@ class HyperVPowerShellProvider(HyperVProvider):
 
     async def get_health(self) -> dict:
         script = (
-            "$hosts = Get-ClusterNode -ErrorAction SilentlyContinue | "
+            "$nodes = Get-ClusterNode -ErrorAction SilentlyContinue | "
             "Select-Object Name,State; "
-            "if ($hosts) { $hosts | ConvertTo-Json -Compress } "
-            "else { Get-ComputerInfo | Select-Object CsName | ConvertTo-Json -Compress }"
+            "if ($nodes) { $nodes | ConvertTo-Json -Compress } "
+            "else { $info = Get-ComputerInfo | Select-Object CsName; "
+            "@{Name=$info.CsName;State='Up'} | ConvertTo-Json -Compress }"
         )
         result = await self._exec(script)
         if not result["success"]:
             return {"connected": False, "error": result["stderr"], "status": "unavailable"}
         data = _parse_json_output(result["stdout"])
+        hosts = data if isinstance(data, list) else [data] if data else []
+        mapped = [
+            {
+                "name": h.get("Name", h.get("CsName", "unknown")),
+                "status": "healthy" if h.get("State", "").lower() in ("up", "online") else "warning",
+                "cpu_percent": 0.0,
+                "memory_percent": 0.0,
+                "uptime_seconds": 0,
+                "vm_count": 0,
+                "version": None,
+            }
+            for h in hosts
+        ]
         return {
             "connected": True,
             "status": "healthy",
-            "hosts": data if isinstance(data, list) else [data] if data else [],
-            "cluster_summary": "Single host mode",
+            "hosts": mapped,
+            "cluster_summary": "Single host mode" if len(mapped) <= 1 else f"Cluster with {len(mapped)} nodes",
         }

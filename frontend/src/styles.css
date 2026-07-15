@@ -2636,6 +2636,30 @@ select.form-input {
    Hyper-V — Sprint 2.4
    ========================================================================== */
 
+.hyperv-host-selector {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.hyperv-host-selector-label {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    font-weight: 500;
+}
+.hyperv-host-selector-select {
+    padding: 4px 8px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    font-size: 0.85rem;
+}
+.hyperv-checkpoint-actions {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
 .hyperv-overview-stats {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
@@ -3297,4 +3321,108 @@ select.form-input {
 .form-row textarea:focus {
     outline: none;
     border-color: var(--primary);
+}
+
+/* ================================================================== */
+/* Zabbix Severity Filters                                             */
+/* ================================================================== */
+
+.severity-filters {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 16px;
+}
+
+.severity-filter-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+    font-size: 0.88rem;
+    color: var(--text);
+    user-select: none;
+}
+
+.severity-filter-item input[type="checkbox"] {
+    accent-color: var(--primary);
+}
+
+.severity-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+
+.severity-count {
+    font-size: 0.78rem;
+    color: var(--text-muted);
+}
+
+.stat-card-clickable {
+    cursor: pointer;
+    transition: transform 0.1s, box-shadow 0.1s;
+}
+
+.stat-card-clickable:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+/* --------------------------------------------------------------------------
+   Quick Commands
+   -------------------------------------------------------------------------- */
+
+.quick-commands-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    gap: 12px;
+}
+
+.quick-command-card {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+    padding: 14px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    cursor: pointer;
+    text-align: left;
+    transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.quick-command-card:hover {
+    border-color: var(--primary);
+    box-shadow: 0 2px 8px rgba(59, 130, 246, 0.1);
+}
+
+.quick-command-icon {
+    font-size: 1.2rem;
+}
+
+.quick-command-label {
+    font-weight: 600;
+    font-size: 0.88rem;
+    color: var(--text);
+}
+
+.quick-command-desc {
+    font-size: 0.78rem;
+    color: var(--text-muted);
+    line-height: 1.3;
+}
+
+.quick-command-code {
+    margin-top: 4px;
+    padding: 3px 6px;
+    background: var(--background);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    font-family: "Cascadia Code", "Fira Code", monospace;
+    font-size: 0.72rem;
+    color: var(--text-muted);
+    word-break: break-all;
+    width: 100%;
 }

@@ -55,6 +55,17 @@ class IntegrationProfileRepository:
         return db.scalar(stmt)
 
     @staticmethod
+    def get_all_enabled_by_type(
+        db: Session, integration_type: str
+    ) -> list[IntegrationProfile]:
+        """Return all enabled integration profiles of a given type."""
+        stmt = select(IntegrationProfile).where(
+            IntegrationProfile.integration_type == integration_type,
+            IntegrationProfile.enabled.is_(True),
+        ).order_by(IntegrationProfile.name.asc())
+        return list(db.scalars(stmt).all())
+
+    @staticmethod
     def count_by_type(db: Session) -> dict[str, int]:
         """Return counts of profiles grouped by integration type."""
         stmt = (

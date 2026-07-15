@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import PageHeader from "../../components/common/PageHeader";
 import { useToast } from "../../contexts/ToastContext";
 import {
@@ -10,16 +11,25 @@ import {
 
 export default function ExecutePage() {
     const { showToast } = useToast();
+    const [searchParams] = useSearchParams();
     const [hosts, setHosts] = useState<HostData[]>([]);
     const [selectedHostId, setSelectedHostId] = useState<number | "">("");
-    const [command, setCommand] = useState("");
-    const [shell, setShell] = useState("");
+    const [command, setCommand] = useState(() => searchParams.get("command") ?? "");
+    const [shell, setShell] = useState(() => searchParams.get("shell") ?? "");
     const [loading, setLoading] = useState(false);
     const [result, setResult] = useState<ExecuteCommandResponse | null>(null);
 
     useEffect(() => {
         hostsApi.list().then((data) => setHosts(data.items)).catch(() => {});
     }, []);
+
+    useEffect(() => {
+        if (!selectedHostId) return;
+        const host = hosts.find((h) => h.id === selectedHostId);
+        if (!host) return;
+        const os = (host.operating_system ?? "").toLowerCase();
+        setShell(os.includes("windows") ? "powershell" : "bash");
+    }, [selectedHostId, hosts]);
 
     const handleExecute = useCallback(async () => {
         if (!selectedHostId || !command.trim()) return;
@@ -77,14 +87,17 @@ export default function ExecutePage() {
                     />
                 </div>
                 <div className="form-row">
-                    <label className="form-label">Shell (optional)</label>
-                    <input
-                        className="form-input"
-                        type="text"
-                        placeholder="e.g. /bin/bash"
+                    <label className="form-label">Shell</label>
+                    <select
+                        className="form-select"
                         value={shell}
                         onChange={(e) => setShell(e.target.value)}
-                    />
+                    >
+                        <option value="">Default</option>
+                        <option value="bash">Bash</option>
+                        <option value="powershell">PowerShell</option>
+                        <option value="cmd">CMD</option>
+                    </select>
                 </div>
                 <button
                     className="btn btn-primary"

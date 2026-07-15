@@ -47,14 +47,41 @@ class ApiZabbixProvider(ZabbixProvider):
     Authenticates via user.login and performs read-only
     operations against the Zabbix monitoring server.
     All methods return standardized dicts and never raise exceptions.
+
+    Accepts optional explicit credentials; when omitted,
+    falls back to global settings (env vars).
     """
 
-    def __init__(self) -> None:
+    def __init__(
+        self,
+        url: str | None = None,
+        username: str | None = None,
+        password: str | None = None,
+        verify_ssl: bool | None = None,
+        timeout: int | None = None,
+        retries: int | None = None,
+    ) -> None:
         self._auth_token: str | None = None
         self._request_id = 0
+        self._explicit_config: dict | None = None
+        if url is not None or username is not None:
+            self._explicit_config = {
+                "url": url or "",
+                "username": username or "",
+                "password": password or "",
+                "verify_ssl": verify_ssl if verify_ssl is not None else True,
+                "timeout": timeout if timeout is not None else 30,
+                "retries": retries if retries is not None else 3,
+            }
+
+    def _get_config(self) -> dict:
+        """Return explicit credentials if provided, else settings."""
+        if self._explicit_config is not None:
+            return self._explicit_config
+        return _get_zabbix_config()
 
     def _is_configured(self) -> bool:
-        config = _get_zabbix_config()
+        config = self._get_config()
         return bool(config["url"] and config["username"])
 
     def _next_id(self) -> int:
@@ -68,7 +95,7 @@ class ApiZabbixProvider(ZabbixProvider):
         auth: bool = True,
     ) -> dict | None:
         """Execute a JSON-RPC request against Zabbix API."""
-        config = _get_zabbix_config()
+        config = self._get_config()
 
         if not config["url"]:
             return None
@@ -83,10 +110,10 @@ class ApiZabbixProvider(ZabbixProvider):
                 "params": params or {},
                 "id": self._next_id(),
             }
-            if auth and self._auth_token:
-                payload["auth"] = self._auth_token
 
             headers = {"Content-Type": "application/json-rpc"}
+            if auth and self._auth_token:
+                headers["Authorization"] = f"Bearer {self._auth_token}"
 
             for attempt in range(config["retries"]):
                 try:
@@ -141,7 +168,7 @@ class ApiZabbixProvider(ZabbixProvider):
 
     async def test_connection(self) -> dict:
         """Test connectivity to Zabbix."""
-        config = _get_zabbix_config()
+        config = self._get_config()
         if not config["url"]:
             return {"connected": False, "error": "ZABBIX_URL not configured"}
 
@@ -166,7 +193,7 @@ class ApiZabbixProvider(ZabbixProvider):
 
     async def login(self) -> dict:
         """Authenticate with Zabbix."""
-        config = _get_zabbix_config()
+        config = self._get_config()
         if not config["url"] or not config["username"]:
             return {"connected": False, "error": "Zabbix not configured"}
 
@@ -324,9 +351,9 @@ class ApiZabbixProvider(ZabbixProvider):
                 "description": t.get("description", ""),
                 "status": "enabled" if t.get("status") == "0" else "disabled",
                 "priority": {
-                    0: "info", 1: "info", 2: "warning",
-                    3: "high", 4: "disaster",
-                }.get(int(t.get("priority", 0)), "unknown"),
+                    0: "not_classified", 1: "information", 2: "warning",
+                    3: "average", 4: "high", 5: "disaster",
+                }.get(int(t.get("priority", 0)), "not_classified"),
                 "value": "PROBLEM" if t.get("value") == "1" else "OK",
                 "hosts": [h.get("host", "") for h in t.get("hosts", [])],
             })
@@ -345,18 +372,19 @@ class ApiZabbixProvider(ZabbixProvider):
         }
 
     async def get_problems(self) -> dict:
-        """List current problems."""
+        """List current problems (via event.get with value=1)."""
         if not self._is_configured():
             return {"connected": False, "error": "Zabbix not configured"}
         if not await self._ensure_session():
             return {"connected": False, "error": "Session failed"}
 
-        result = self._jsonrpc("problem.get", {
+        result = self._jsonrpc("event.get", {
             "output": ["eventid", "name", "severity", "acknowledged", "clock"],
             "selectHosts": ["host"],
-            "sortfield": "clock",
+            "sortfield": "eventid",
             "sortorder": "DESC",
             "limit": 100,
+            "value": 1,
         })
 
         if not isinstance(result, list):
@@ -367,9 +395,9 @@ class ApiZabbixProvider(ZabbixProvider):
                 "eventid": p.get("eventid", ""),
                 "name": p.get("name", ""),
                 "severity": {
-                    0: "info", 1: "info", 2: "warning",
-                    3: "high", 4: "disaster",
-                }.get(int(p.get("severity", 0)), "unknown"),
+                    0: "not_classified", 1: "information", 2: "warning",
+                    3: "average", 4: "high", 5: "disaster",
+                }.get(int(p.get("severity", 0)), "not_classified"),
                 "status": "PROBLEM",
                 "acknowledged": p.get("acknowledged") == "1",
                 "host": (
@@ -407,7 +435,7 @@ class ApiZabbixProvider(ZabbixProvider):
         result = self._jsonrpc("event.get", {
             "output": ["eventid", "name", "severity", "value", "clock"],
             "selectHosts": ["host"],
-            "sortfield": "clock",
+            "sortfield": "eventid",
             "sortorder": "DESC",
             "limit": 50,
         })
@@ -420,9 +448,9 @@ class ApiZabbixProvider(ZabbixProvider):
                 "eventid": e.get("eventid", ""),
                 "name": e.get("name", ""),
                 "severity": {
-                    0: "info", 1: "info", 2: "warning",
-                    3: "high", 4: "disaster",
-                }.get(int(e.get("severity", 0)), "unknown"),
+                    0: "not_classified", 1: "information", 2: "warning",
+                    3: "average", 4: "high", 5: "disaster",
+                }.get(int(e.get("severity", 0)), "not_classified"),
                 "status": "PROBLEM" if e.get("value") == "1" else "OK",
                 "host": (
                     e.get("hosts", [{}])[0].get("host", "")
@@ -602,7 +630,7 @@ class ApiZabbixProvider(ZabbixProvider):
             "connected": True,
             "status": "healthy",
             "version": version,
-            "server": _get_zabbix_config()["url"],
+            "server": self._get_config()["url"],
             "uptime_hours": 0,
             "api_latency_ms": 0,
             "database": {"status": "unknown", "type": "unknown", "size_mb": 0},

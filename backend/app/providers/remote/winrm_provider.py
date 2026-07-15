@@ -417,7 +417,7 @@ class WinRMProvider(RemoteBaseProvider):
 
         try:
             session = self._build_session(
-                hostname=hostname,
+                hostname=target,
                 port=port,
                 username=username,
                 password=password,
@@ -482,12 +482,13 @@ class WinRMProvider(RemoteBaseProvider):
         ip_address: str | None,
     ) -> dict:
         """Execute a command on a remote host via WinRM."""
+        target = ip_address if ip_address else hostname
         retries = _get_retry_count()
 
         logger.info(
             "WinRM: execute_command user=%s host=%s",
             username,
-            hostname,
+            target,
         )
 
         start_time = time.monotonic()
@@ -495,7 +496,7 @@ class WinRMProvider(RemoteBaseProvider):
 
         try:
             session = self._build_session(
-                hostname=hostname,
+                hostname=target,
                 port=port,
                 username=username,
                 password=password,
@@ -524,7 +525,7 @@ class WinRMProvider(RemoteBaseProvider):
                 "WinRM: execute_command user=%s host=%s "
                 "exit_code=%d duration=%dms",
                 username,
-                hostname,
+                target,
                 exit_code,
                 duration_ms,
             )
@@ -541,7 +542,7 @@ class WinRMProvider(RemoteBaseProvider):
 
         except Exception as e:
             return self._handle_execute_error(
-                username, hostname, command, e, start_time
+                username, target, command, e, start_time
             )
 
     # ------------------------------------------------------------------ #
@@ -560,13 +561,14 @@ class WinRMProvider(RemoteBaseProvider):
         ip_address: str | None,
     ) -> dict:
         """Upload a file to a Windows host via WinRM shell."""
+        target = ip_address if ip_address else hostname
         logger.info(
             "WinRM: upload_file user=%s host=%s path=%s",
-            username, hostname, remote_path,
+            username, target, remote_path,
         )
         try:
             session = self._build_session(
-                hostname=hostname, port=port,
+                hostname=target, port=port,
                 username=username, password=password,
             )
             import base64 as b64
@@ -594,7 +596,7 @@ class WinRMProvider(RemoteBaseProvider):
         except Exception as e:
             logger.warning(
                 "WinRM: upload_file user=%s host=%s error=%s",
-                username, hostname, type(e).__name__,
+                username, target, type(e).__name__,
             )
             return {
                 "success": False,
@@ -613,13 +615,14 @@ class WinRMProvider(RemoteBaseProvider):
         ip_address: str | None,
     ) -> dict:
         """Download a file from a Windows host via WinRM shell."""
+        target = ip_address if ip_address else hostname
         logger.info(
             "WinRM: download_file user=%s host=%s path=%s",
-            username, hostname, remote_path,
+            username, target, remote_path,
         )
         try:
             session = self._build_session(
-                hostname=hostname, port=port,
+                hostname=target, port=port,
                 username=username, password=password,
             )
             ps_cmd = (
@@ -651,7 +654,7 @@ class WinRMProvider(RemoteBaseProvider):
         except Exception as e:
             logger.warning(
                 "WinRM: download_file user=%s host=%s error=%s",
-                username, hostname, type(e).__name__,
+                username, target, type(e).__name__,
             )
             return {
                 "success": False,
@@ -670,13 +673,14 @@ class WinRMProvider(RemoteBaseProvider):
         ip_address: str | None,
     ) -> dict:
         """List contents of a remote directory via WinRM."""
+        target = ip_address if ip_address else hostname
         logger.info(
             "WinRM: list_directory user=%s host=%s path=%s",
-            username, hostname, remote_path,
+            username, target, remote_path,
         )
         try:
             session = self._build_session(
-                hostname=hostname, port=port,
+                hostname=target, port=port,
                 username=username, password=password,
             )
             ps_cmd = (
@@ -717,7 +721,7 @@ class WinRMProvider(RemoteBaseProvider):
         except Exception as e:
             logger.warning(
                 "WinRM: list_directory user=%s host=%s error=%s",
-                username, hostname, type(e).__name__,
+                username, target, type(e).__name__,
             )
             return {
                 "success": False,
@@ -737,13 +741,14 @@ class WinRMProvider(RemoteBaseProvider):
         ip_address: str | None,
     ) -> dict:
         """Create a directory on a Windows host via WinRM."""
+        target = ip_address if ip_address else hostname
         logger.info(
             "WinRM: create_directory user=%s host=%s path=%s",
-            username, hostname, remote_path,
+            username, target, remote_path,
         )
         try:
             session = self._build_session(
-                hostname=hostname, port=port,
+                hostname=target, port=port,
                 username=username, password=password,
             )
             result = session.run_cmd(
@@ -766,7 +771,7 @@ class WinRMProvider(RemoteBaseProvider):
         except Exception as e:
             logger.warning(
                 "WinRM: create_directory user=%s host=%s error=%s",
-                username, hostname, type(e).__name__,
+                username, target, type(e).__name__,
             )
             return {
                 "success": False,
@@ -785,13 +790,14 @@ class WinRMProvider(RemoteBaseProvider):
         ip_address: str | None,
     ) -> dict:
         """Delete a file on a Windows host via WinRM."""
+        target = ip_address if ip_address else hostname
         logger.info(
             "WinRM: delete_file user=%s host=%s path=%s",
-            username, hostname, remote_path,
+            username, target, remote_path,
         )
         try:
             session = self._build_session(
-                hostname=hostname, port=port,
+                hostname=target, port=port,
                 username=username, password=password,
             )
             result = session.run_cmd(
@@ -814,7 +820,7 @@ class WinRMProvider(RemoteBaseProvider):
         except Exception as e:
             logger.warning(
                 "WinRM: delete_file user=%s host=%s error=%s",
-                username, hostname, type(e).__name__,
+                username, target, type(e).__name__,
             )
             return {
                 "success": False,

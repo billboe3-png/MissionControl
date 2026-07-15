@@ -52,7 +52,7 @@ class DashboardService:
         resume = resume_provider.get_resume_data(db)
         parking_lot = parking_lot_provider.get_parking_lot_data(db)
         remote = await self._remote_provider.get_remote_data(db)
-        zabbix = await self._get_zabbix_data()
+        zabbix = await self._get_zabbix_data(db)
         hyperv = await self._get_hyperv_data(db)
         proxmox = await self._get_proxmox_data(db)
         integrations = await self._get_integrations_data(db)
@@ -95,12 +95,12 @@ class DashboardService:
             "integrations": integrations,
         }
 
-    async def _get_zabbix_data(self) -> dict:
+    async def _get_zabbix_data(self, db: Session) -> dict:
         """Get Zabbix data for the dashboard, never raise."""
         try:
             from app.providers.zabbix.provider_factory import get_zabbix_provider
 
-            provider = get_zabbix_provider()
+            provider = get_zabbix_provider(db)
             return await provider.get_summary()
         except Exception as e:
             logger.warning("Dashboard: Zabbix data failed: %s", e)

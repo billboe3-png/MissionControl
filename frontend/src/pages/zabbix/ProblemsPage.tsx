@@ -1,14 +1,46 @@
 import { useEffect, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import PageHeader from "../../components/common/PageHeader";
 import StatusBadge from "../../components/common/StatusBadge";
 import DataTable, { Column } from "../../components/common/DataTable";
 import ProblemSeverityCard from "../../components/zabbix/ProblemSeverityCard";
 import { zabbixApi, ZabbixProblem, ZabbixProblemsResponse } from "../../services/zabbix";
 
+const SEVERITIES = [
+    { key: "not_classified", label: "Not classified", color: "#6c757d" },
+    { key: "information", label: "Information", color: "#0dcaf0" },
+    { key: "warning", label: "Warning", color: "#ffc107" },
+    { key: "average", label: "Average", color: "#fd7e14" },
+    { key: "high", label: "High", color: "#dc3545" },
+    { key: "disaster", label: "Disaster", color: "#842029" },
+];
+
+const SEVERITY_STATUS: Record<string, "error" | "warning" | "info"> = {
+    not_classified: "info",
+    information: "info",
+    warning: "warning",
+    average: "warning",
+    high: "error",
+    disaster: "error",
+};
+
 export default function ProblemsPage() {
+    const [searchParams] = useSearchParams();
     const [data, setData] = useState<ZabbixProblemsResponse | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [loading, setLoading] = useState(true);
+
+    const urlSeverities = searchParams.getAll("severity");
+    const [activeSeverities, setActiveSeverities] = useState<Set<string>>(
+        () => new Set(urlSeverities.length > 0 ? urlSeverities : SEVERITIES.map((s) => s.key))
+    );
+
+    useEffect(() => {
+        const sevs = searchParams.getAll("severity");
+        if (sevs.length > 0) {
+            setActiveSeverities(new Set(sevs));
+        }
+    }, [searchParams]);
 
     useEffect(() => {
         zabbixApi.getProblems()
@@ -17,8 +49,24 @@ export default function ProblemsPage() {
             .finally(() => setLoading(false));
     }, []);
 
+    const toggleSeverity = (key: string) => {
+        setActiveSeverities((prev) => {
+            const next = new Set(prev);
+            if (next.has(key)) {
+                next.delete(key);
+            } else {
+                next.add(key);
+            }
+            return next;
+        });
+    };
+
     if (error) return <div className="error-banner">{error}</div>;
     if (loading) return <div className="loading">Loading…</div>;
+
+    const filtered = (data?.problems ?? []).filter((p) =>
+        activeSeverities.has(p.severity)
+    );
 
     const columns: Column<ZabbixProblem>[] = [
         { key: "name", header: "Problem" },
@@ -26,31 +74,65 @@ export default function ProblemsPage() {
         {
             key: "severity",
             header: "Severity",
-            render: (row) => {
-                const st = row.severity === "disaster" || row.severity === "high" ? "error" : row.severity === "warning" ? "warning" : "info";
-                return <StatusBadge status={st} label={row.severity} />;
-            },
+            render: (row) => (
+                <StatusBadge
+                    status={SEVERITY_STATUS[row.severity] ?? "info"}
+                    label={row.severity}
+                />
+            ),
         },
         {
             key: "acknowledged",
             header: "Acknowledged",
             render: (row) => <StatusBadge status={row.acknowledged ? "healthy" : "warning"} label={row.acknowledged ? "Yes" : "No"} />,
         },
-        { key: "timestamp", header: "Time" },
+        {
+            key: "timestamp",
+            header: "Time",
+            render: (row) => {
+                const ts = typeof row.timestamp === "number" ? row.timestamp : Number(row.timestamp);
+                if (!ts || isNaN(ts)) return row.timestamp ?? "—";
+                const d = new Date(ts * 1000);
+                return d.toLocaleString();
+            },
+        },
     ];
 
     return (
         <>
-            <PageHeader title="Problems" subtitle={`Active problems (${data?.total_count ?? 0})`} />
+            <PageHeader title="Problems" subtitle={`Active problems (${filtered.length})`} />
             <div className="infra-overview-grid">
                 {Object.entries(data?.severity_counts ?? {}).map(([sev, count]) => (
-                    <ProblemSeverityCard key={sev} severity={sev} count={count} />
+                    <ProblemSeverityCard key={sev} severity={sev} count={count} to={`/monitoring/problems?severity=${sev}`} />
                 ))}
             </div>
             <div className="identity-overview-section">
                 <p><strong>Acknowledged:</strong> {data?.acknowledged_count ?? 0} | <strong>Unacknowledged:</strong> {data?.unacknowledged_count ?? 0}</p>
             </div>
-            <DataTable columns={columns} data={data?.problems ?? []} emptyMessage="No active problems" />
+            <div className="identity-overview-section">
+                <h3>Severity Filter</h3>
+                <div className="severity-filters">
+                    {SEVERITIES.map((s) => {
+                        const count = (data?.problems ?? []).filter((p) => p.severity === s.key).length;
+                        return (
+                            <label key={s.key} className="severity-filter-item">
+                                <input
+                                    type="checkbox"
+                                    checked={activeSeverities.has(s.key)}
+                                    onChange={() => toggleSeverity(s.key)}
+                                />
+                                <span
+                                    className="severity-dot"
+                                    style={{ backgroundColor: s.color }}
+                                />
+                                <span>{s.label}</span>
+                                <span className="severity-count">({count})</span>
+                            </label>
+                        );
+                    })}
+                </div>
+            </div>
+            <DataTable columns={columns} data={filtered} emptyMessage="No problems match filter" />
         </>
     );
 }

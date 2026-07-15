@@ -3,6 +3,7 @@ import PageHeader from "../../components/common/PageHeader";
 import LoadingButton from "../../components/common/LoadingButton";
 import StatusBadge from "../../components/common/StatusBadge";
 import EmptyState from "../../components/common/EmptyState";
+import HyperVHostSelector, { useSelectedHost } from "../../components/hyperv/HyperVHostSelector";
 import { hypervApi, HyperVVm } from "../../services/hyperv";
 
 function formatUptime(seconds: number): string {
@@ -26,18 +27,23 @@ const stateColors: Record<string, "healthy" | "warning" | "error" | "neutral"> =
 };
 
 export default function VirtualMachinesPage() {
+    const { selectedHostId, hosts, loading: hostsLoading } = useSelectedHost();
     const [vms, setVms] = useState<HyperVVm[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [actionId, setActionId] = useState<string | null>(null);
 
     const load = async () => {
-        try { setVms(await hypervApi.listVms()); }
+        try { setVms(await hypervApi.listVms(selectedHostId)); }
         catch (e) { setError(e instanceof Error ? e.message : "Failed to load"); }
         finally { setLoading(false); }
     };
 
-    useEffect(() => { load(); }, []);
+    useEffect(() => {
+        if (hostsLoading) return;
+        setLoading(true);
+        load();
+    }, [selectedHostId, hostsLoading]);
 
     const doAction = async (vmId: string, action: () => Promise<unknown>) => {
         setActionId(vmId);
@@ -46,18 +52,24 @@ export default function VirtualMachinesPage() {
         finally { setActionId(null); }
     };
 
-    if (loading) return <div className="loading">Loading…</div>;
+    if (hostsLoading) return <div className="loading">Loading…</div>;
 
     return (
         <>
-            <PageHeader title="Virtual Machines" subtitle="Manage Hyper-V virtual machines" />
+            <PageHeader
+                title="Virtual Machines"
+                subtitle="Manage Hyper-V virtual machines"
+                actions={<HyperVHostSelector hosts={hosts} selectedHostId={selectedHostId} onChange={() => {}} />}
+            />
             {error && (
                 <div className="error-banner">
                     {error}
                     <button className="btn btn-link" onClick={() => setError(null)}>Dismiss</button>
                 </div>
             )}
-            {vms.length === 0 ? (
+            {loading ? (
+                <div className="loading">Loading…</div>
+            ) : vms.length === 0 ? (
                 <EmptyState icon="🖥️" title="No virtual machines" description="No VMs found on the connected Hyper-V host." />
             ) : (
                 <div className="hyperv-vm-grid">
@@ -82,7 +94,7 @@ export default function VirtualMachinesPage() {
                                     <LoadingButton
                                         loading={actionId === vm.id}
                                         className="btn btn-primary btn-sm"
-                                        onClick={() => doAction(vm.id, () => hypervApi.startVm(vm.id))}
+                                        onClick={() => doAction(vm.id, () => hypervApi.startVm(vm.id, selectedHostId))}
                                     >
                                         Start
                                     </LoadingButton>
@@ -92,21 +104,21 @@ export default function VirtualMachinesPage() {
                                         <LoadingButton
                                             loading={actionId === vm.id}
                                             className="btn btn-danger btn-sm"
-                                            onClick={() => doAction(vm.id, () => hypervApi.stopVm(vm.id))}
+                                            onClick={() => doAction(vm.id, () => hypervApi.stopVm(vm.id, false, selectedHostId))}
                                         >
                                             Stop
                                         </LoadingButton>
                                         <LoadingButton
                                             loading={actionId === vm.id}
                                             className="btn btn-secondary btn-sm"
-                                            onClick={() => doAction(vm.id, () => hypervApi.restartVm(vm.id))}
+                                            onClick={() => doAction(vm.id, () => hypervApi.restartVm(vm.id, selectedHostId))}
                                         >
                                             Restart
                                         </LoadingButton>
                                         <LoadingButton
                                             loading={actionId === vm.id}
                                             className="btn btn-secondary btn-sm"
-                                            onClick={() => doAction(vm.id, () => hypervApi.pauseVm(vm.id))}
+                                            onClick={() => doAction(vm.id, () => hypervApi.pauseVm(vm.id, selectedHostId))}
                                         >
                                             Pause
                                         </LoadingButton>
@@ -116,7 +128,7 @@ export default function VirtualMachinesPage() {
                                     <LoadingButton
                                         loading={actionId === vm.id}
                                         className="btn btn-primary btn-sm"
-                                        onClick={() => doAction(vm.id, () => hypervApi.resumeVm(vm.id))}
+                                        onClick={() => doAction(vm.id, () => hypervApi.resumeVm(vm.id, selectedHostId))}
                                     >
                                         Resume
                                     </LoadingButton>

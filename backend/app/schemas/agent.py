@@ -100,7 +100,7 @@ class AgentHeartbeatRequest(BaseModel):
 class AgentHeartbeatResponse(BaseModel):
     """Response to heartbeat including pending commands."""
 
-    commands: list[AgentPendingCommand] | None = None
+    commands: list["AgentPendingCommand"] | None = None
     update_available: bool = False
     latest_version: str | None = None
     heartbeat_interval: int = 30

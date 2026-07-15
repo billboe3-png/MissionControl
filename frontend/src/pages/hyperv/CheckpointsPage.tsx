@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import PageHeader from "../../components/common/PageHeader";
 import LoadingButton from "../../components/common/LoadingButton";
 import EmptyState from "../../components/common/EmptyState";
+import HyperVHostSelector, { useSelectedHost } from "../../components/hyperv/HyperVHostSelector";
 import { hypervApi, HyperVCheckpoint, HyperVVm } from "../../services/hyperv";
 
 function formatBytes(bytes: number): string {
@@ -11,6 +12,7 @@ function formatBytes(bytes: number): string {
 }
 
 export default function CheckpointsPage() {
+    const { selectedHostId, hosts, loading: hostsLoading } = useSelectedHost();
     const [checkpoints, setCheckpoints] = useState<HyperVCheckpoint[]>([]);
     const [vms, setVms] = useState<HyperVVm[]>([]);
     const [filterVm, setFilterVm] = useState<string>("");
@@ -21,8 +23,8 @@ export default function CheckpointsPage() {
     const load = async () => {
         try {
             const [cps, vmList] = await Promise.all([
-                hypervApi.listCheckpoints(filterVm || undefined),
-                hypervApi.listVms(),
+                hypervApi.listCheckpoints(filterVm || undefined, selectedHostId),
+                hypervApi.listVms(selectedHostId),
             ]);
             setCheckpoints(cps);
             setVms(vmList);
@@ -33,19 +35,23 @@ export default function CheckpointsPage() {
         }
     };
 
-    useEffect(() => { load(); }, [filterVm]);
+    useEffect(() => {
+        if (hostsLoading) return;
+        setLoading(true);
+        load();
+    }, [filterVm, selectedHostId, hostsLoading]);
 
     const handleDelete = async (cp: HyperVCheckpoint) => {
         if (!window.confirm(`Delete checkpoint "${cp.name}"?`)) return;
         try {
-            await hypervApi.deleteCheckpoint(cp.vm_id ?? "", cp.id);
+            await hypervApi.deleteCheckpoint(cp.vm_id ?? "", cp.id, selectedHostId);
             await load();
         } catch (e) {
             setError(e instanceof Error ? e.message : "Delete failed");
         }
     };
 
-    if (loading) return <div className="loading">Loading…</div>;
+    if (hostsLoading) return <div className="loading">Loading…</div>;
 
     return (
         <>
@@ -53,20 +59,25 @@ export default function CheckpointsPage() {
                 title="Checkpoints"
                 subtitle="Hyper-V VM snapshots"
                 actions={
-                    <select
-                        className="form-input"
-                        value={filterVm}
-                        onChange={(e) => { setFilterVm(e.target.value); setLoading(true); }}
-                    >
-                        <option value="">All VMs</option>
-                        {vms.map((vm) => (
-                            <option key={vm.id} value={vm.id}>{vm.name}</option>
-                        ))}
-                    </select>
+                    <div className="hyperv-checkpoint-actions">
+                        <HyperVHostSelector hosts={hosts} selectedHostId={selectedHostId} onChange={() => {}} />
+                        <select
+                            className="form-input"
+                            value={filterVm}
+                            onChange={(e) => { setFilterVm(e.target.value); setLoading(true); }}
+                        >
+                            <option value="">All VMs</option>
+                            {vms.map((vm) => (
+                                <option key={vm.id} value={vm.id}>{vm.name}</option>
+                            ))}
+                        </select>
+                    </div>
                 }
             />
             {error && <div className="error-banner">{error}</div>}
-            {checkpoints.length === 0 ? (
+            {loading ? (
+                <div className="loading">Loading…</div>
+            ) : checkpoints.length === 0 ? (
                 <EmptyState icon="📸" title="No checkpoints" description="No checkpoints found for the selected VM." />
             ) : (
                 <div className="hyperv-checkpoint-table">

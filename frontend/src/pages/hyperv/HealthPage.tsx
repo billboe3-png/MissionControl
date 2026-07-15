@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import PageHeader from "../../components/common/PageHeader";
 import StatusBadge from "../../components/common/StatusBadge";
+import HyperVHostSelector, { useSelectedHost } from "../../components/hyperv/HyperVHostSelector";
 import { hypervApi, HyperVHealth } from "../../services/hyperv";
 
 function formatUptime(seconds: number): string {
@@ -12,24 +13,32 @@ function formatUptime(seconds: number): string {
 }
 
 export default function HyperVHealthPage() {
+    const { selectedHostId, hosts, loading: hostsLoading } = useSelectedHost();
     const [health, setHealth] = useState<HyperVHealth | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
 
     useEffect(() => {
-        hypervApi.getHealth()
+        if (hostsLoading) return;
+        setLoading(true);
+        hypervApi.getHealth(selectedHostId)
             .then(setHealth)
             .catch((e) => setError(e.message))
             .finally(() => setLoading(false));
-    }, []);
+    }, [selectedHostId, hostsLoading]);
 
+    if (hostsLoading) return <div className="loading">Loading…</div>;
     if (loading) return <div className="loading">Loading…</div>;
     if (error) return <div className="error-banner">{error}</div>;
     if (!health) return null;
 
     return (
         <>
-            <PageHeader title="Hyper-V Health" subtitle="Host cluster health status" />
+            <PageHeader
+                title="Hyper-V Health"
+                subtitle="Host cluster health status"
+                actions={<HyperVHostSelector hosts={hosts} selectedHostId={selectedHostId} onChange={() => {}} />}
+            />
             {health.cluster_summary && (
                 <p className="settings-hint">{health.cluster_summary}</p>
             )}

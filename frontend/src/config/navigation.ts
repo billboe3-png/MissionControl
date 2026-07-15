@@ -24,7 +24,8 @@ export const navigation: NavGroup[] = [
         items: [
             { label: "Hosts", path: "/remote/hosts", icon: "🖥️" },
             { label: "Credentials", path: "/remote/credentials", icon: "🔑" },
-            { label: "Execute", path: "/remote/execute", icon: "⚡" },
+            { label: "Quick Commands", path: "/remote/quick-commands", icon: "⚡" },
+            { label: "Execute", path: "/remote/execute", icon: "▶️" },
             { label: "History", path: "/remote/history", icon: "📜" },
             { label: "File Browser", path: "/remote/files", icon: "📂" },
         ],

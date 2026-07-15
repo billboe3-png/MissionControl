@@ -395,17 +395,36 @@ class TestIntegrationService:
 
     @pytest.mark.asyncio
     async def test_test_connection_zabbix(self, db_session):
+        from unittest.mock import AsyncMock, patch
+
         from app.services.integration_service import (
             IntegrationService,
         )
 
         service = IntegrationService()
         profile = IntegrationProfileRepository.create(
-            db_session, name="ZTest", integration_type="zabbix"
+            db_session,
+            name="ZTest",
+            integration_type="zabbix",
+            base_url="https://zabbix.example.com",
+            username="Admin",
         )
-        result = await service.test_connection(db_session, profile.id)
-        assert result.success is True
-        assert result.message is not None
+
+        with patch(
+            "app.providers.zabbix.zabbix_provider.ApiZabbixProvider"
+        ) as MockProvider:
+            mock_instance = MockProvider.return_value
+            mock_instance.test_connection = AsyncMock(
+                return_value={
+                    "connected": True,
+                    "message": "Mocked Zabbix connection successful",
+                }
+            )
+            result = await service.test_connection(
+                db_session, profile.id
+            )
+            assert result.success is True
+            assert result.message is not None
 
     @pytest.mark.asyncio
     async def test_test_connection_ad(self, db_session):
@@ -623,3 +642,308 @@ class TestIntegrationAPI:
         data = resp.json()
         assert data["domain"] == "corp.local"
         assert "ad-password" not in str(data)
+
+
+# ------------------------------------------------------------------ #
+# Zabbix Provider Selection Tests                                     #
+# ------------------------------------------------------------------ #
+
+
+class TestZabbixProviderSelection:
+    """Verify the factory selects the right provider based on DB state."""
+
+    def setup_method(self):
+        from app.providers.zabbix.provider_factory import (
+            reset_zabbix_provider,
+        )
+
+        reset_zabbix_provider()
+
+    def teardown_method(self):
+        from app.providers.zabbix.provider_factory import (
+            reset_zabbix_provider,
+        )
+
+        reset_zabbix_provider()
+
+    def test_active_profile_returns_production_provider(
+        self, db_session
+    ):
+        """Active profile with URL + username → ApiZabbixProvider."""
+        from app.providers.zabbix.provider_factory import (
+            get_zabbix_provider,
+        )
+        from app.providers.zabbix.zabbix_provider import (
+            ApiZabbixProvider,
+        )
+
+        IntegrationProfileRepository.create(
+            db_session,
+            name="Prod Zabbix",
+            integration_type="zabbix",
+            enabled=True,
+            base_url="https://zabbix.corp.local",
+            username="Admin",
+        )
+        provider = get_zabbix_provider(db_session)
+        assert isinstance(provider, ApiZabbixProvider)
+
+    def test_no_profile_falls_back_to_mock(self, db_session):
+        """No active profile → MockZabbixProvider."""
+        from app.providers.zabbix.mock_provider import (
+            MockZabbixProvider,
+        )
+        from app.providers.zabbix.provider_factory import (
+            get_zabbix_provider,
+        )
+
+        provider = get_zabbix_provider(db_session)
+        assert isinstance(provider, MockZabbixProvider)
+
+    def test_disabled_profile_falls_back_to_mock(self, db_session):
+        """Disabled profile is ignored → MockZabbixProvider."""
+        from app.providers.zabbix.mock_provider import (
+            MockZabbixProvider,
+        )
+        from app.providers.zabbix.provider_factory import (
+            get_zabbix_provider,
+        )
+
+        IntegrationProfileRepository.create(
+            db_session,
+            name="Disabled Zabbix",
+            integration_type="zabbix",
+            enabled=False,
+            base_url="https://zabbix.corp.local",
+            username="Admin",
+        )
+        provider = get_zabbix_provider(db_session)
+        assert isinstance(provider, MockZabbixProvider)
+
+    def test_profile_without_url_falls_back_to_mock(self, db_session):
+        """Profile missing base_url → MockZabbixProvider."""
+        from app.providers.zabbix.mock_provider import (
+            MockZabbixProvider,
+        )
+        from app.providers.zabbix.provider_factory import (
+            get_zabbix_provider,
+        )
+
+        IntegrationProfileRepository.create(
+            db_session,
+            name="No URL Zabbix",
+            integration_type="zabbix",
+            enabled=True,
+            username="Admin",
+        )
+        provider = get_zabbix_provider(db_session)
+        assert isinstance(provider, MockZabbixProvider)
+
+    def test_profile_without_username_falls_back_to_mock(
+        self, db_session
+    ):
+        """Profile missing username → MockZabbixProvider."""
+        from app.providers.zabbix.mock_provider import (
+            MockZabbixProvider,
+        )
+        from app.providers.zabbix.provider_factory import (
+            get_zabbix_provider,
+        )
+
+        IntegrationProfileRepository.create(
+            db_session,
+            name="No User Zabbix",
+            integration_type="zabbix",
+            enabled=True,
+            base_url="https://zabbix.corp.local",
+        )
+        provider = get_zabbix_provider(db_session)
+        assert isinstance(provider, MockZabbixProvider)
+
+    @pytest.mark.asyncio
+    async def test_profile_without_url_test_connection_fails(
+        self, db_session
+    ):
+        """Test connection with missing URL returns error."""
+        from app.services.integration_service import (
+            IntegrationService,
+        )
+
+        service = IntegrationService()
+        profile = IntegrationProfileRepository.create(
+            db_session,
+            name="No URL",
+            integration_type="zabbix",
+            enabled=True,
+            username="Admin",
+        )
+        result = await service.test_connection(db_session, profile.id)
+        assert result.success is False
+        assert "URL" in result.error
+
+    @pytest.mark.asyncio
+    async def test_profile_without_username_test_connection_fails(
+        self, db_session
+    ):
+        """Test connection with missing username returns error."""
+        from app.services.integration_service import (
+            IntegrationService,
+        )
+
+        service = IntegrationService()
+        profile = IntegrationProfileRepository.create(
+            db_session,
+            name="No User",
+            integration_type="zabbix",
+            enabled=True,
+            base_url="https://zabbix.corp.local",
+        )
+        result = await service.test_connection(db_session, profile.id)
+        assert result.success is False
+        assert "username" in result.error
+
+    @pytest.mark.asyncio
+    async def test_test_connection_uses_production_provider(
+        self, db_session
+    ):
+        """Test connection dispatches to ApiZabbixProvider, not mock."""
+        from unittest.mock import AsyncMock, patch
+
+        from app.services.integration_service import (
+            IntegrationService,
+        )
+
+        service = IntegrationService()
+        profile = IntegrationProfileRepository.create(
+            db_session,
+            name="Real Zabbix",
+            integration_type="zabbix",
+            enabled=True,
+            base_url="https://zabbix.corp.local",
+            username="Admin",
+        )
+
+        mock_result = {
+            "connected": True,
+            "message": "Zabbix 7.0.0 reachable",
+            "version": "7.0.0",
+        }
+        with patch(
+            "app.providers.zabbix.zabbix_provider.ApiZabbixProvider"
+        ) as MockProvider:
+            mock_instance = MockProvider.return_value
+            mock_instance.test_connection = AsyncMock(
+                return_value=mock_result
+            )
+            result = await service.test_connection(
+                db_session, profile.id
+            )
+
+            MockProvider.assert_called_once_with(
+                url="https://zabbix.corp.local",
+                username="Admin",
+                password=None,
+                verify_ssl=True,
+                timeout=30,
+            )
+            assert result.success is True
+            assert result.message == "Zabbix 7.0.0 reachable"
+
+    @pytest.mark.asyncio
+    async def test_test_connection_auth_error(self, db_session):
+        """Invalid credentials → authentication failure."""
+        from app.services.integration_service import (
+            IntegrationService,
+        )
+
+        service = IntegrationService()
+        profile = IntegrationProfileRepository.create(
+            db_session,
+            name="Bad Creds",
+            integration_type="zabbix",
+            enabled=True,
+            base_url="https://zabbix.corp.local",
+            username="Admin",
+        )
+        result = await service.test_connection(db_session, profile.id)
+        assert result.success is False
+        assert result.error is not None
+
+    @pytest.mark.asyncio
+    async def test_live_connection_reaches_real_api(self, db_session):
+        """When profile has valid URL, ApiZabbixProvider is instantiated
+        with explicit credentials (not from env vars)."""
+        from unittest.mock import AsyncMock, patch
+
+        from app.services.integration_service import (
+            IntegrationService,
+        )
+
+        service = IntegrationService()
+        profile = IntegrationProfileRepository.create(
+            db_session,
+            name="Live Test",
+            integration_type="zabbix",
+            enabled=True,
+            base_url="https://zabbix.live.com",
+            username="zabbix_admin",
+        )
+
+        with patch(
+            "app.providers.zabbix.zabbix_provider.ApiZabbixProvider"
+        ) as MockProvider:
+            mock_instance = MockProvider.return_value
+            mock_instance.test_connection = AsyncMock(
+                return_value={
+                    "connected": True,
+                    "message": "Zabbix 7.0.0 reachable",
+                    "version": "7.0.0",
+                }
+            )
+            result = await service.test_connection(
+                db_session, profile.id
+            )
+            assert result.success is True
+            assert result.version == "7.0.0"
+
+    def test_factory_resolves_from_db_not_env(self, db_session):
+        """Factory uses DB profile when db session provided."""
+        from app.providers.zabbix.provider_factory import (
+            get_zabbix_provider,
+        )
+        from app.providers.zabbix.zabbix_provider import (
+            ApiZabbixProvider,
+        )
+
+        IntegrationProfileRepository.create(
+            db_session,
+            name="Factory Test",
+            integration_type="zabbix",
+            enabled=True,
+            base_url="https://factory.test.com",
+            username="factory_user",
+        )
+        provider = get_zabbix_provider(db_session)
+        assert isinstance(provider, ApiZabbixProvider)
+        assert provider._get_config()["url"] == "https://factory.test.com"
+        assert provider._get_config()["username"] == "factory_user"
+
+    def test_factory_without_db_uses_env_or_mock(self, db_session):
+        """Factory without db session falls back to env/mock."""
+        from app.providers.zabbix.mock_provider import (
+            MockZabbixProvider,
+        )
+        from app.providers.zabbix.provider_factory import (
+            get_zabbix_provider,
+        )
+
+        IntegrationProfileRepository.create(
+            db_session,
+            name="Should Be Ignored",
+            integration_type="zabbix",
+            enabled=True,
+            base_url="https://should-not-use.com",
+            username="nope",
+        )
+        provider = get_zabbix_provider(None)
+        assert isinstance(provider, MockZabbixProvider)

@@ -129,6 +129,21 @@ class HyperVCheckpointActionResponse(BaseModel):
 
 
 # ------------------------------------------------------------------ #
+# Hosts                                                               #
+# ------------------------------------------------------------------ #
+
+
+class HyperVHostInfo(BaseModel):
+    id: int
+    name: str
+    host: str
+
+
+class HyperVHostListResponse(BaseModel):
+    hosts: list[HyperVHostInfo]
+
+
+# ------------------------------------------------------------------ #
 # Summary & Health                                                    #
 # ------------------------------------------------------------------ #
 

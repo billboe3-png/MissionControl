@@ -140,15 +140,41 @@ export default function HostModal({
 
                     <div className="form-group">
                         <label htmlFor="host-os">Operating System</label>
-                        <input
+                        <select
                             id="host-os"
-                            type="text"
                             className="form-input"
                             value={os}
                             onChange={(e) => setOs(e.target.value)}
-                            placeholder="e.g. Ubuntu 22.04, Windows Server 2022"
-                            maxLength={100}
-                        />
+                        >
+                            <option value="">Select OS…</option>
+                            <optgroup label="Windows">
+                                <option value="Windows Server 2016">Windows Server 2016</option>
+                                <option value="Windows Server 2019">Windows Server 2019</option>
+                                <option value="Windows Server 2022">Windows Server 2022</option>
+                                <option value="Windows Server 2025">Windows Server 2025</option>
+                                <option value="Windows 10">Windows 10</option>
+                                <option value="Windows 11">Windows 11</option>
+                            </optgroup>
+                            <optgroup label="Linux">
+                                <option value="Ubuntu 20.04">Ubuntu 20.04</option>
+                                <option value="Ubuntu 22.04">Ubuntu 22.04</option>
+                                <option value="Ubuntu 24.04">Ubuntu 24.04</option>
+                                <option value="Debian 11">Debian 11</option>
+                                <option value="Debian 12">Debian 12</option>
+                                <option value="RHEL 8">RHEL 8</option>
+                                <option value="RHEL 9">RHEL 9</option>
+                                <option value="Rocky Linux 8">Rocky Linux 8</option>
+                                <option value="Rocky Linux 9">Rocky Linux 9</option>
+                                <option value="CentOS 7">CentOS 7</option>
+                                <option value="AlmaLinux 8">AlmaLinux 8</option>
+                                <option value="AlmaLinux 9">AlmaLinux 9</option>
+                                <option value="SUSE 15">SUSE 15</option>
+                                <option value="Amazon Linux 2">Amazon Linux 2</option>
+                            </optgroup>
+                            <optgroup label="Other">
+                                <option value="Other">Other</option>
+                            </optgroup>
+                        </select>
                     </div>
 
                     <div className="form-group">

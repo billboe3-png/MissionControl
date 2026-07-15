@@ -81,8 +81,8 @@ export default function IntegrationsPage() {
         load();
     }, []);
 
-    const getProfile = (type: string) =>
-        profiles.find((p) => p.integration_type === type) ?? null;
+    const getProfiles = (type: string) =>
+        profiles.filter((p) => p.integration_type === type);
 
     const handleToggle = async (profile: IntegrationProfile) => {
         try {
@@ -118,8 +118,8 @@ export default function IntegrationsPage() {
         }
     };
 
-    const handleConfigure = (type: ConfigModalType) => {
-        setEditingProfile(type ? getProfile(type) : null);
+    const handleConfigure = (type: ConfigModalType, profile: IntegrationProfile | null = null) => {
+        setEditingProfile(profile);
         setModalType(type);
     };
 
@@ -167,69 +167,64 @@ export default function IntegrationsPage() {
 
             <div className="integrations-grid">
                 {INTEGRATION_DEFS.map((def) => {
-                    const profile = def.type ? getProfile(def.type) : null;
-                    const connected =
-                        profile?.enabled &&
-                        profile.last_success !== null &&
-                        profile.last_error === null;
+                    const typeProfiles = def.type ? getProfiles(def.type) : [];
+                    return typeProfiles.length > 0 ? (
+                        typeProfiles.map((profile) => {
+                            const connected =
+                                profile.enabled &&
+                                profile.last_success !== null &&
+                                profile.last_error === null;
+                            return (
+                                <div
+                                    key={profile.id}
+                                    className={`integration-card ${profile.enabled ? "enabled" : ""}`}
+                                >
+                                    <div className="integration-card-header">
+                                        <span className="integration-card-icon">{def.icon}</span>
+                                        <div className="integration-card-title">
+                                            <h3>{def.label} — {profile.name}</h3>
+                                            <p>{def.description}</p>
+                                        </div>
+                                    </div>
 
-                    return (
-                        <div
-                            key={def.type}
-                            className={`integration-card ${profile?.enabled ? "enabled" : ""}`}
-                        >
-                            <div className="integration-card-header">
-                                <span className="integration-card-icon">{def.icon}</span>
-                                <div className="integration-card-title">
-                                    <h3>{def.label}</h3>
-                                    <p>{def.description}</p>
-                                </div>
-                            </div>
+                                    <div className="integration-card-status">
+                                        {!profile.enabled ? (
+                                            <StatusBadge status="neutral" label="Disabled" />
+                                        ) : connected ? (
+                                            <StatusBadge status="healthy" label="Connected" />
+                                        ) : profile.last_error ? (
+                                            <StatusBadge status="error" label="Error" />
+                                        ) : (
+                                            <StatusBadge status="warning" label="Enabled (untested)" />
+                                        )}
 
-                            <div className="integration-card-status">
-                                {!profile ? (
-                                    <StatusBadge status="neutral" label="Not configured" />
-                                ) : !profile.enabled ? (
-                                    <StatusBadge status="neutral" label="Disabled" />
-                                ) : connected ? (
-                                    <StatusBadge status="healthy" label="Connected" />
-                                ) : profile.last_error ? (
-                                    <StatusBadge status="error" label="Error" />
-                                ) : (
-                                    <StatusBadge status="warning" label="Enabled (untested)" />
-                                )}
+                                        {testResult && testResult.id === profile.id && (
+                                            <span
+                                                className={`integration-test-result ${testResult.success ? "success" : "error"}`}
+                                            >
+                                                {testResult.message}
+                                            </span>
+                                        )}
+                                    </div>
 
-                                {testResult && testResult.id === profile?.id && (
-                                    <span
-                                        className={`integration-test-result ${testResult.success ? "success" : "error"}`}
-                                    >
-                                        {testResult.message}
-                                    </span>
-                                )}
-                            </div>
+                                    <div className="integration-card-meta">
+                                        {profile.username && (
+                                            <span>{profile.username}</span>
+                                        )}
+                                        {profile.base_url && (
+                                            <span className="integration-meta-url">
+                                                {profile.base_url}
+                                            </span>
+                                        )}
+                                        {profile.last_test && (
+                                            <span>
+                                                Last tested:{" "}
+                                                {new Date(profile.last_test).toLocaleString()}
+                                            </span>
+                                        )}
+                                    </div>
 
-                            {profile && (
-                                <div className="integration-card-meta">
-                                    {profile.username && (
-                                        <span>{profile.username}</span>
-                                    )}
-                                    {profile.base_url && (
-                                        <span className="integration-meta-url">
-                                            {profile.base_url}
-                                        </span>
-                                    )}
-                                    {profile.last_test && (
-                                        <span>
-                                            Last tested:{" "}
-                                            {new Date(profile.last_test).toLocaleString()}
-                                        </span>
-                                    )}
-                                </div>
-                            )}
-
-                            <div className="integration-card-actions">
-                                {profile ? (
-                                    <>
+                                    <div className="integration-card-actions">
                                         <LoadingButton
                                             loading={testingId === profile.id}
                                             className="btn btn-secondary btn-sm"
@@ -245,7 +240,7 @@ export default function IntegrationsPage() {
                                         </button>
                                         <button
                                             className="btn btn-secondary btn-sm"
-                                            onClick={() => handleConfigure(def.type)}
+                                            onClick={() => handleConfigure(def.type, profile)}
                                         >
                                             Configure
                                         </button>
@@ -255,20 +250,53 @@ export default function IntegrationsPage() {
                                         >
                                             Remove
                                         </button>
-                                    </>
-                                ) : (
-                                    <button
-                                        className="btn btn-primary btn-sm"
-                                        onClick={() => handleConfigure(def.type)}
-                                    >
-                                        Configure
-                                    </button>
-                                )}
+                                    </div>
+                                </div>
+                            );
+                        })
+                    ) : (
+                        <div key={def.type} className="integration-card">
+                            <div className="integration-card-header">
+                                <span className="integration-card-icon">{def.icon}</span>
+                                <div className="integration-card-title">
+                                    <h3>{def.label}</h3>
+                                    <p>{def.description}</p>
+                                </div>
+                            </div>
+                            <div className="integration-card-status">
+                                <StatusBadge status="neutral" label="Not configured" />
+                            </div>
+                            <div className="integration-card-actions">
+                                <button
+                                    className="btn btn-primary btn-sm"
+                                    onClick={() => handleConfigure(def.type)}
+                                >
+                                    Configure
+                                </button>
                             </div>
                         </div>
                     );
                 })}
             </div>
+
+            {INTEGRATION_DEFS.map((def) => {
+                if (!def.type) return null;
+                const typeProfiles = getProfiles(def.type);
+                if (typeProfiles.length === 0) return null;
+                return (
+                    <div key={`add-${def.type}`} style={{ textAlign: "center", marginTop: "-1rem", marginBottom: "1rem" }}>
+                        <button
+                            className="btn btn-secondary btn-sm"
+                            onClick={() => {
+                                setEditingProfile(null);
+                                setModalType(def.type);
+                            }}
+                        >
+                            + Add another {def.label}
+                        </button>
+                    </div>
+                );
+            })}
 
             {modalType === "zabbix" && (
                 <ZabbixConfigModal
