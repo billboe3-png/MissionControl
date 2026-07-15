@@ -1,27 +1,68 @@
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import PageHeader from "../../components/common/PageHeader";
 import StatusBadge from "../../components/common/StatusBadge";
 import HyperVHostSelector, { useSelectedHost } from "../../components/hyperv/HyperVHostSelector";
-import { hypervApi, HyperVSummary, HyperVHealth } from "../../services/hyperv";
+import { hypervApi, HyperVSummary, HyperVHealthHost } from "../../services/hyperv";
+
+function formatUptime(seconds: number): string {
+    if (seconds === 0) return "\u2014";
+    const d = Math.floor(seconds / 86400);
+    const h = Math.floor((seconds % 86400) / 3600);
+    if (d > 0) return `${d}d ${h}h`;
+    return `${h}h`;
+}
+
+function UsageBar({ percent, label }: { percent: number; label: string }) {
+    const cls = percent >= 90 ? "danger" : percent >= 70 ? "warning" : "";
+    return (
+        <div className="hyperv-resource-item">
+            <span className="hyperv-resource-label">{label}: {percent}%</span>
+            <div className="hyperv-progress-bar">
+                <div className={`hyperv-progress-fill ${cls}`} style={{ width: `${percent}%` }} />
+            </div>
+        </div>
+    );
+}
 
 export default function HyperVOverviewPage() {
-    const { selectedHostId, hosts, loading: hostsLoading } = useSelectedHost();
+    const { selectedHostId, hosts, loading: hostsLoading, setSelectedHostId } = useSelectedHost();
     const [summary, setSummary] = useState<HyperVSummary | null>(null);
-    const [health, setHealth] = useState<HyperVHealth | null>(null);
+    const [allHostsHealth, setAllHostsHealth] = useState<HyperVHealthHost[]>([]);
     const [error, setError] = useState<string | null>(null);
     const [loading, setLoading] = useState(true);
+    const navigate = useNavigate();
 
     useEffect(() => {
-        if (hostsLoading || selectedHostId === null && hosts.length > 0) return;
+        if (hostsLoading) return;
         setLoading(true);
         setError(null);
-        Promise.all([hypervApi.getSummary(selectedHostId), hypervApi.getHealth(selectedHostId)])
-            .then(([s, h]) => { setSummary(s); setHealth(h); })
+
+        const loadAll = async () => {
+            const s = await hypervApi.getSummary(selectedHostId);
+            setSummary(s);
+
+            const hostsHealth: HyperVHealthHost[] = [];
+            for (const h of hosts) {
+                try {
+                    const health = await hypervApi.getHealth(h.id);
+                    if (health.hosts?.length) hostsHealth.push(...health.hosts);
+                } catch { /* skip failed host */ }
+            }
+            setAllHostsHealth(hostsHealth);
+        };
+
+        loadAll()
             .catch((e) => setError(e.message))
             .finally(() => setLoading(false));
-    }, [selectedHostId, hostsLoading]);
+    }, [selectedHostId, hostsLoading, hosts]);
 
-    if (hostsLoading) return <div className="loading">Loading…</div>;
+    const handleHostClick = (hostId: number) => {
+        setSelectedHostId(hostId);
+        navigate("/hyperv/vms");
+    };
+
+    if (hostsLoading) return <div className="loading">Loading\u2026</div>;
 
     const memPercent = summary && summary.total_memory_gb > 0
         ? Math.round((summary.used_memory_gb / summary.total_memory_gb) * 100)
@@ -35,7 +76,7 @@ export default function HyperVOverviewPage() {
                 actions={<HyperVHostSelector hosts={hosts} selectedHostId={selectedHostId} onChange={() => {}} />}
             />
             {loading ? (
-                <div className="loading">Loading…</div>
+                <div className="loading">Loading\u2026</div>
             ) : error ? (
                 <div className="error-banner">{error}</div>
             ) : summary ? (
@@ -77,6 +118,51 @@ export default function HyperVOverviewPage() {
                         </div>
                     </div>
 
+                    {allHostsHealth.length > 0 && (
+                        <div className="dashboard-section">
+                            <h3>Cluster Hosts</h3>
+                            <div className="hyperv-host-cards">
+                                {allHostsHealth.map((host) => (
+                                    <div
+                                        key={host.name}
+                                        className={`hyperv-host-card ${host.status === "healthy" ? "healthy" : "warning"}`}
+                                        onClick={() => {
+                                            const match = hosts.find((h) => h.name === host.name);
+                                            if (match) handleHostClick(match.id);
+                                        }}
+                                        role="button"
+                                        tabIndex={0}
+                                        onKeyDown={(e) => {
+                                            if (e.key === "Enter") {
+                                                const match = hosts.find((h) => h.name === host.name);
+                                                if (match) handleHostClick(match.id);
+                                            }
+                                        }}
+                                    >
+                                        <div className="hyperv-host-card-header">
+                                            <StatusBadge
+                                                status={host.status === "healthy" ? "healthy" : "warning"}
+                                                label={host.name}
+                                            />
+                                            {host.version && (
+                                                <span className="hyperv-host-version">v{host.version}</span>
+                                            )}
+                                        </div>
+                                        <div className="hyperv-host-card-body">
+                                            <UsageBar percent={host.cpu_percent} label="CPU" />
+                                            <UsageBar percent={host.memory_percent} label="Memory" />
+                                        </div>
+                                        <div className="hyperv-host-card-footer">
+                                            <span>VMs: {host.vm_count}</span>
+                                            <span>Uptime: {formatUptime(host.uptime_seconds)}</span>
+                                            <span className="hyperv-host-card-action">View VMs →</span>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+
                     <div className="dashboard-row">
                         <div className="dashboard-section">
                             <h3>Resources</h3>
@@ -86,49 +172,13 @@ export default function HyperVOverviewPage() {
                                         CPU Cores: {summary.total_cpu}
                                     </span>
                                 </div>
-                                <div className="hyperv-resource-item">
-                                    <span className="hyperv-resource-label">
-                                        Memory: {summary.used_memory_gb} / {summary.total_memory_gb} GB ({memPercent}%)
-                                    </span>
-                                    <div className="hyperv-progress-bar">
-                                        <div
-                                            className="hyperv-progress-fill"
-                                            style={{ width: `${memPercent}%` }}
-                                        />
-                                    </div>
-                                </div>
+                                <UsageBar percent={memPercent} label={`Memory: ${summary.used_memory_gb} / ${summary.total_memory_gb} GB`} />
                                 <div className="hyperv-resource-item">
                                     <span className="hyperv-resource-label">
                                         Storage: {summary.used_storage_gb} / {summary.total_storage_gb} GB
                                     </span>
                                 </div>
                             </div>
-                        </div>
-
-                        <div className="dashboard-section">
-                            <h3>Host Cluster</h3>
-                            {summary.host_servers.length > 0 ? (
-                                <div className="hyperv-host-list">
-                                    {summary.host_servers.map((host) => {
-                                        const hostHealth = health?.hosts.find((h) => h.name === host);
-                                        return (
-                                            <div key={host} className="hyperv-host-item">
-                                                <StatusBadge
-                                                    status={hostHealth?.status === "healthy" ? "healthy" : "warning"}
-                                                    label={host}
-                                                />
-                                                {hostHealth && (
-                                                    <span className="hyperv-host-meta">
-                                                        CPU {hostHealth.cpu_percent}% · RAM {hostHealth.memory_percent}%
-                                                    </span>
-                                                )}
-                                            </div>
-                                        );
-                                    })}
-                                </div>
-                            ) : (
-                                <p className="settings-hint">No host servers detected.</p>
-                            )}
                         </div>
                     </div>
                 </>

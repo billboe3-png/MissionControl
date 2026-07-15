@@ -1,22 +1,76 @@
 """
 Mission Control Hyper-V Production Provider
 
-Connects to Hyper-V hosts via PowerShell Remoting (SSH-based).
+Connects to Hyper-V hosts via PowerShell Remoting over WinRM or SSH.
 Configuration is injected from IntegrationProfile — never reads config.py.
 """
 
 import asyncio
+import base64
 import json
 import logging
+
+import winrm
 
 from .base_provider import HyperVProvider
 
 logger = logging.getLogger(__name__)
 
 
-async def _run_powershell(host: str, port: int, username: str, password: str, script: str, timeout: int = 30) -> dict:
+async def _run_powershell_winrm(
+    host: str,
+    port: int,
+    username: str,
+    password: str,
+    script: str,
+    timeout: int = 30,
+) -> dict:
+    """Execute a PowerShell script on a remote host via WinRM."""
+    endpoint = f"http://{host}:{port}/wsman"
+
+    def _exec_sync():
+        session = winrm.Session(
+            endpoint,
+            auth=(username, password),
+            transport="ntlm",
+            server_cert_validation="ignore",
+            read_timeout_sec=timeout + 10,
+            operation_timeout_sec=timeout,
+        )
+        return session.run_ps(script)
+
+    try:
+        result = await asyncio.wait_for(
+            asyncio.to_thread(_exec_sync),
+            timeout=timeout + 10,
+        )
+        stdout = result.std_out or ""
+        stderr = result.std_err or ""
+        if isinstance(stdout, bytes):
+            stdout = stdout.decode("utf-8", errors="replace")
+        if isinstance(stderr, bytes):
+            stderr = stderr.decode("utf-8", errors="replace")
+        return {
+            "success": result.status_code == 0,
+            "stdout": stdout,
+            "stderr": stderr,
+            "exit_code": result.status_code,
+        }
+    except asyncio.TimeoutError:
+        return {"success": False, "stdout": "", "stderr": "Command timed out", "exit_code": -1}
+    except Exception as e:
+        return {"success": False, "stdout": "", "stderr": str(e), "exit_code": -1}
+
+
+async def _run_powershell_ssh(
+    host: str,
+    port: int,
+    username: str,
+    password: str,
+    script: str,
+    timeout: int = 30,
+) -> dict:
     """Execute a PowerShell script on a remote host via SSH."""
-    import base64
     encoded = base64.b64encode(script.encode("utf-16-le")).decode("ascii")
     ps_exe = r"C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe"
     remote_cmd = f"{ps_exe} -NoProfile -NonInteractive -EncodedCommand {encoded}"
@@ -69,37 +123,42 @@ def _parse_json_output(stdout: str) -> dict | list | None:
 
 
 class HyperVPowerShellProvider(HyperVProvider):
-    """Production Hyper-V provider using PowerShell remoting over SSH.
+    """Production Hyper-V provider using PowerShell remoting over WinRM or SSH.
 
     Configuration is injected from IntegrationProfile fields:
       - base_url: Hyper-V host address
-      - username: SSH username
-      - encrypted_secret: SSH password (decrypted before injection)
+      - username: WinRM/SSH username
+      - encrypted_secret: password (decrypted before injection)
       - timeout: operation timeout
+      - domain: transport type ("winrm" or "ssh")
     """
 
     def __init__(
         self,
         host: str,
-        port: int = 22,
+        port: int = 5985,
         username: str = "",
         password: str = "",
         timeout: int = 30,
+        transport: str = "winrm",
     ) -> None:
         self._host = host
         self._port = port
         self._username = username
         self._password = password
         self._timeout = timeout
+        self._transport = transport
 
     async def _exec(self, script: str, timeout: int | None = None) -> dict:
-        return await _run_powershell(
-            self._host,
-            self._port,
-            self._username,
-            self._password,
-            script,
-            timeout or self._timeout,
+        t = timeout or self._timeout
+        if self._transport == "ssh":
+            return await _run_powershell_ssh(
+                self._host, self._port, self._username,
+                self._password, script, t,
+            )
+        return await _run_powershell_winrm(
+            self._host, self._port, self._username,
+            self._password, script, t,
         )
 
     async def test_connection(self) -> dict:

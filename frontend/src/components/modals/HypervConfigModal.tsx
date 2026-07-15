@@ -22,6 +22,7 @@ export default function HypervConfigModal({
     const [baseUrl, setBaseUrl] = useState(profile?.base_url ?? "");
     const [username, setUsername] = useState(profile?.username ?? "");
     const [password, setPassword] = useState("");
+    const [transport, setTransport] = useState(profile?.domain ?? "winrm");
     const [timeout, setTimeout_] = useState(String(profile?.timeout ?? 30));
     const [verifySsl, setVerifySsl] = useState(profile?.verify_ssl ?? true);
     const [loading, setLoading] = useState(false);
@@ -39,6 +40,7 @@ export default function HypervConfigModal({
                     base_url: baseUrl,
                     username,
                     password: password || undefined,
+                    domain: transport,
                     timeout: parseInt(timeout, 10) || 30,
                     verify_ssl: verifySsl,
                 });
@@ -49,6 +51,7 @@ export default function HypervConfigModal({
                     base_url: baseUrl,
                     username,
                     password,
+                    domain: transport,
                     timeout: parseInt(timeout, 10) || 30,
                     verify_ssl: verifySsl,
                 });
@@ -124,6 +127,18 @@ export default function HypervConfigModal({
                     </div>
 
                     <div className="form-row">
+                        <div className="form-group">
+                            <label htmlFor="hv-transport">Transport</label>
+                            <select
+                                id="hv-transport"
+                                className="form-input"
+                                value={transport}
+                                onChange={(e) => setTransport(e.target.value)}
+                            >
+                                <option value="winrm">WinRM (HTTP 5985)</option>
+                                <option value="ssh">SSH (port 22)</option>
+                            </select>
+                        </div>
                         <div className="form-group">
                             <label htmlFor="hv-timeout">Timeout (sec)</label>
                             <input

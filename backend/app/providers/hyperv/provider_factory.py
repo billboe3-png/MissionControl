@@ -28,18 +28,22 @@ def _build_provider(profile) -> HyperVProvider:
     host = profile.base_url or ""
     username = profile.username or ""
     timeout = profile.timeout or 30
+    transport = profile.domain or "winrm"
 
     if not host or not username:
         raise ValueError("Profile missing base_url or username")
+
+    port = 22 if transport == "ssh" else 5985
 
     from .hyperv_provider import HyperVPowerShellProvider
 
     return HyperVPowerShellProvider(
         host=host,
-        port=22,
+        port=port,
         username=username,
         password=password,
         timeout=timeout,
+        transport=transport,
     )
 
 

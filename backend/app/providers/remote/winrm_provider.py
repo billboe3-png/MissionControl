@@ -94,16 +94,16 @@ class WinRMProvider(RemoteBaseProvider):
         scheme = "https" if https else "http"
         endpoint = f"{scheme}://{hostname}:{port}/wsman"
 
-        session_kwargs: dict = {
-            "endpoint": endpoint,
-            "auth": (username, password) if password else (username, None),
-            "transport": transport,
-            "server_cert_validation": "validate" if cert_validation else "ignore",
-            "read_timeout": _get_timeouts()["operation"],
-            "operation_timeout_sec": _get_timeouts()["operation"],
-        }
-
-        return winrm.Session(**session_kwargs)
+        op_timeout = _get_timeouts()["operation"]
+        session = winrm.Session(
+            endpoint,
+            auth=(username, password) if password else (username, None),
+            transport=transport,
+            server_cert_validation="validate" if cert_validation else "ignore",
+            read_timeout_sec=op_timeout + 10,
+            operation_timeout_sec=op_timeout,
+        )
+        return session
 
     def _execute_with_retry(
         self,

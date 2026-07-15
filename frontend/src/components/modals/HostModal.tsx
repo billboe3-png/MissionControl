@@ -118,7 +118,10 @@ export default function HostModal({
                                 id="host-connection"
                                 className="form-input"
                                 value={connectionType}
-                                onChange={(e) => setConnectionType(e.target.value)}
+                                onChange={(e) => {
+                                    setConnectionType(e.target.value);
+                                    setPort(e.target.value === "winrm" ? "5985" : "22");
+                                }}
                             >
                                 <option value="ssh">SSH</option>
                                 <option value="winrm">WinRM</option>
