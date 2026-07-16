@@ -438,6 +438,68 @@ class RemoteService:
             timestamp=datetime.now(UTC).isoformat(),
         )
 
+    async def execute_command_stream(
+        self,
+        db: Session,
+        request: RemoteExecuteRequest,
+        execution_source: str = "manual",
+        username_override: str | None = None,
+    ):
+        """Stream command output as SSE events."""
+        import json
+        host = RemoteHostRepository.get_by_id(db, request.host_id)
+        if host is None:
+            yield {"type": "error", "message": "Remote host not found"}
+            return
+        if not host.enabled:
+            yield {"type": "error", "message": "Remote host is disabled"}
+            return
+        valid_shells = ("bash", "powershell", "cmd")
+        if request.shell not in valid_shells:
+            yield {"type": "error", "message": f"shell must be one of: {', '.join(valid_shells)}"}
+            return
+
+        username, password, ssh_key = await self._resolve_credentials(db, host)
+        provider = get_remote_provider(host.connection_type)
+
+        if not hasattr(provider, "execute_command_stream"):
+            yield {"type": "error", "message": f"Streaming not supported for {host.connection_type}"}
+            return
+
+        import time
+        start_time = time.monotonic()
+        async for chunk in provider.execute_command_stream(
+            hostname=host.hostname,
+            port=host.port,
+            username=username or "unknown",
+            password=password,
+            ssh_key=ssh_key,
+            command=request.command,
+            shell=request.shell,
+            ip_address=host.ip_address,
+        ):
+            yield chunk
+
+        duration_ms = int((time.monotonic() - start_time) * 1000)
+        exit_code = chunk.get("exit_code", -1) if chunk.get("type") == "exit" else -1
+        success = exit_code == 0
+
+        CommandHistoryRepository.create(
+            db=db,
+            host_id=host.id,
+            command=request.command,
+            shell=request.shell,
+            stdout="",
+            stderr="",
+            exit_code=exit_code,
+            success=success,
+            duration_ms=duration_ms,
+            executed_by=username_override or username,
+            credential_id=host.credential_profile_id,
+            username=username,
+            execution_source=execution_source,
+        )
+
     # ------------------------------------------------------------------ #
     # Bulk Command Execution                                              #
     # ------------------------------------------------------------------ #

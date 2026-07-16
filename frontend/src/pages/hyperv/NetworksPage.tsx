@@ -12,7 +12,7 @@ const typeColors: Record<string, "healthy" | "info" | "neutral"> = {
 };
 
 export default function NetworksPage() {
-    const { selectedHostId, hosts, loading: hostsLoading } = useSelectedHost();
+    const { selectedHostId, hosts, loading: hostsLoading, setSelectedHostId } = useSelectedHost();
     const [networks, setNetworks] = useState<HyperVNetwork[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -26,17 +26,17 @@ export default function NetworksPage() {
             .finally(() => setLoading(false));
     }, [selectedHostId, hostsLoading]);
 
-    if (hostsLoading) return <div className="loading">Loading…</div>;
+    if (hostsLoading) return <div className="loading-bar" />;
 
     return (
         <>
             <PageHeader
                 title="Virtual Networks"
                 subtitle="Hyper-V virtual switches"
-                actions={<HyperVHostSelector hosts={hosts} selectedHostId={selectedHostId} onChange={() => {}} />}
+                actions={<HyperVHostSelector hosts={hosts} selectedHostId={selectedHostId} onChange={setSelectedHostId} />}
             />
             {loading ? (
-                <div className="loading">Loading…</div>
+                <div className="loading-bar" />
             ) : (
                 <>
                     {error && <div className="error-banner">{error}</div>}

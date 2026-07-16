@@ -241,7 +241,7 @@ export default function FileBrowserPage() {
                     description="Choose a remote host to browse its filesystem."
                 />
             ) : loading ? (
-                <div className="loading">Loading…</div>
+                <div className="loading-bar" />
             ) : items.length === 0 ? (
                 <EmptyState
                     icon="📂"

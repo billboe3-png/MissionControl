@@ -45,6 +45,7 @@ class DockerSdkProvider(DockerProvider):
                         "name": container.name,
                         "image": container.image.tags[0] if container.image.tags else "<none>",
                         "status": container.status,
+                        "state": container.attrs.get("State", {}).get("Status", "unknown"),
                     }
                 )
 

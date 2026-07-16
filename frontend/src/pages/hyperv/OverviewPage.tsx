@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import PageHeader from "../../components/common/PageHeader";
 import StatusBadge from "../../components/common/StatusBadge";
@@ -32,37 +32,45 @@ export default function HyperVOverviewPage() {
     const [error, setError] = useState<string | null>(null);
     const [loading, setLoading] = useState(true);
     const navigate = useNavigate();
+    const abortRef = useRef(0);
 
-    useEffect(() => {
-        if (hostsLoading) return;
+    const loadData = useCallback(async (hostId: number | null, hostList: typeof hosts) => {
+        const gen = ++abortRef.current;
         setLoading(true);
         setError(null);
-
-        const loadAll = async () => {
-            const s = await hypervApi.getSummary(selectedHostId);
+        try {
+            const s = await hypervApi.getSummary(hostId);
+            if (gen !== abortRef.current) return;
             setSummary(s);
 
             const hostsHealth: HyperVHealthHost[] = [];
-            for (const h of hosts) {
+            for (const h of hostList) {
                 try {
                     const health = await hypervApi.getHealth(h.id);
+                    if (gen !== abortRef.current) return;
                     if (health.hosts?.length) hostsHealth.push(...health.hosts);
                 } catch { /* skip failed host */ }
             }
+            if (gen !== abortRef.current) return;
             setAllHostsHealth(hostsHealth);
-        };
+        } catch (e: unknown) {
+            if (gen !== abortRef.current) return;
+            setError(e instanceof Error ? e.message : "Failed to load");
+        } finally {
+            if (gen === abortRef.current) setLoading(false);
+        }
+    }, []);
 
-        loadAll()
-            .catch((e) => setError(e.message))
-            .finally(() => setLoading(false));
-    }, [selectedHostId, hostsLoading, hosts]);
+    useEffect(() => {
+        if (hostsLoading) return;
+        loadData(selectedHostId, hosts);
+    }, [selectedHostId, hostsLoading, hosts, loadData]);
 
     const handleHostClick = (hostId: number) => {
         setSelectedHostId(hostId);
-        navigate("/hyperv/vms");
     };
 
-    if (hostsLoading) return <div className="loading">Loading\u2026</div>;
+    if (hostsLoading) return <div className="loading-bar" />;
 
     const memPercent = summary && summary.total_memory_gb > 0
         ? Math.round((summary.used_memory_gb / summary.total_memory_gb) * 100)
@@ -73,10 +81,10 @@ export default function HyperVOverviewPage() {
             <PageHeader
                 title="Hyper-V Overview"
                 subtitle="Virtualization infrastructure at a glance"
-                actions={<HyperVHostSelector hosts={hosts} selectedHostId={selectedHostId} onChange={() => {}} />}
+                actions={<HyperVHostSelector hosts={hosts} selectedHostId={selectedHostId} onChange={setSelectedHostId} />}
             />
             {loading ? (
-                <div className="loading">Loading\u2026</div>
+                <div className="loading-bar" />
             ) : error ? (
                 <div className="error-banner">{error}</div>
             ) : summary ? (
@@ -126,17 +134,11 @@ export default function HyperVOverviewPage() {
                                     <div
                                         key={host.name}
                                         className={`hyperv-host-card ${host.status === "healthy" ? "healthy" : "warning"}`}
-                                        onClick={() => {
-                                            const match = hosts.find((h) => h.name === host.name);
-                                            if (match) handleHostClick(match.id);
-                                        }}
+                                        onClick={() => handleHostClick(hosts.find((h) => h.name === host.name)?.id ?? 0)}
                                         role="button"
                                         tabIndex={0}
                                         onKeyDown={(e) => {
-                                            if (e.key === "Enter") {
-                                                const match = hosts.find((h) => h.name === host.name);
-                                                if (match) handleHostClick(match.id);
-                                            }
+                                            if (e.key === "Enter") handleHostClick(hosts.find((h) => h.name === host.name)?.id ?? 0);
                                         }}
                                     >
                                         <div className="hyperv-host-card-header">
@@ -150,7 +152,7 @@ export default function HyperVOverviewPage() {
                                         </div>
                                         <div className="hyperv-host-card-body">
                                             <UsageBar percent={host.cpu_percent} label="CPU" />
-                                            <UsageBar percent={host.memory_percent} label="Memory" />
+                                            <UsageBar percent={host.memory_percent} label={`Memory: ${host.memory_used_gb} / ${host.memory_total_gb} GB`} />
                                         </div>
                                         <div className="hyperv-host-card-footer">
                                             <span>VMs: {host.vm_count}</span>

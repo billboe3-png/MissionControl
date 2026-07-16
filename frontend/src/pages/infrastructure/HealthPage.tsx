@@ -16,7 +16,7 @@ export default function HealthPage() {
     }, []);
 
     if (error) return <div className="error-banner">{error}</div>;
-    if (!data) return <div className="loading">Loading…</div>;
+    if (!data) return <div className="loading-bar" />;
 
     const checks = [
         {

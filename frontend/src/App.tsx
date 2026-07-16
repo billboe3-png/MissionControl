@@ -11,6 +11,7 @@ import HealthPage from "./pages/infrastructure/HealthPage";
 import HostsPage from "./pages/remote/HostsPage";
 import CredentialsPage from "./pages/remote/CredentialsPage";
 import ExecutePage from "./pages/remote/ExecutePage";
+import ConsolePage from "./pages/remote/ConsolePage";
 import HistoryPage from "./pages/remote/HistoryPage";
 import FileBrowserPage from "./pages/remote/FileBrowserPage";
 import QuickCommandsPage from "./pages/remote/QuickCommandsPage";
@@ -37,6 +38,7 @@ import VirtualMachinesPage from "./pages/hyperv/VirtualMachinesPage";
 import NetworksPage from "./pages/hyperv/NetworksPage";
 import StoragePage from "./pages/hyperv/StoragePage";
 import CheckpointsPage from "./pages/hyperv/CheckpointsPage";
+import HyperVReplicationPage from "./pages/hyperv/ReplicationPage";
 import HyperVHealthPage from "./pages/hyperv/HealthPage";
 import ProxmoxOverviewPage from "./pages/proxmox/OverviewPage";
 import ProxmoxNodesPage from "./pages/proxmox/NodesPage";
@@ -74,6 +76,7 @@ export default function App() {
 
                             <Route path="/remote/hosts" element={<HostsPage />} />
                             <Route path="/remote/credentials" element={<CredentialsPage />} />
+                            <Route path="/remote/console" element={<ConsolePage />} />
                             <Route path="/remote/execute" element={<ExecutePage />} />
                             <Route path="/remote/quick-commands" element={<QuickCommandsPage />} />
                             <Route path="/remote/history" element={<HistoryPage />} />
@@ -100,6 +103,7 @@ export default function App() {
                             <Route path="/hyperv/networks" element={<NetworksPage />} />
                             <Route path="/hyperv/storage" element={<StoragePage />} />
                             <Route path="/hyperv/checkpoints" element={<CheckpointsPage />} />
+                            <Route path="/hyperv/replication" element={<HyperVReplicationPage />} />
                             <Route path="/hyperv/health" element={<HyperVHealthPage />} />
 
                             <Route path="/proxmox" element={<ProxmoxOverviewPage />} />

@@ -137,6 +137,8 @@ class IntegrationProfileRepository:
         for field, value in kwargs.items():
             if value is not None:
                 setattr(entity, field, value)
+            elif hasattr(entity, field):
+                setattr(entity, field, None)
 
         entity.updated_at = datetime.now(UTC)
         db.commit()

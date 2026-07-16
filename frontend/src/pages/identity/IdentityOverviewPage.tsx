@@ -15,7 +15,7 @@ export default function IdentityOverviewPage() {
     }, []);
 
     if (error) return <div className="error-banner">{error}</div>;
-    if (!data) return <div className="loading">Loading…</div>;
+    if (!data) return <div className="loading-bar" />;
 
     const ad = data.overview.ad;
     const m365 = data.overview.m365;

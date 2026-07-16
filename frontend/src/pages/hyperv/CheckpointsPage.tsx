@@ -12,7 +12,7 @@ function formatBytes(bytes: number): string {
 }
 
 export default function CheckpointsPage() {
-    const { selectedHostId, hosts, loading: hostsLoading } = useSelectedHost();
+    const { selectedHostId, hosts, loading: hostsLoading, setSelectedHostId } = useSelectedHost();
     const [checkpoints, setCheckpoints] = useState<HyperVCheckpoint[]>([]);
     const [vms, setVms] = useState<HyperVVm[]>([]);
     const [filterVm, setFilterVm] = useState<string>("");
@@ -51,7 +51,7 @@ export default function CheckpointsPage() {
         }
     };
 
-    if (hostsLoading) return <div className="loading">Loading…</div>;
+    if (hostsLoading) return <div className="loading-bar" />;
 
     return (
         <>
@@ -60,7 +60,7 @@ export default function CheckpointsPage() {
                 subtitle="Hyper-V VM snapshots"
                 actions={
                     <div className="hyperv-checkpoint-actions">
-                        <HyperVHostSelector hosts={hosts} selectedHostId={selectedHostId} onChange={() => {}} />
+                        <HyperVHostSelector hosts={hosts} selectedHostId={selectedHostId} onChange={setSelectedHostId} />
                         <select
                             className="form-input"
                             value={filterVm}
@@ -76,7 +76,7 @@ export default function CheckpointsPage() {
             />
             {error && <div className="error-banner">{error}</div>}
             {loading ? (
-                <div className="loading">Loading…</div>
+                <div className="loading-bar" />
             ) : checkpoints.length === 0 ? (
                 <EmptyState icon="📸" title="No checkpoints" description="No checkpoints found for the selected VM." />
             ) : (

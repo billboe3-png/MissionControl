@@ -65,7 +65,7 @@ export default function ApprovalsPage() {
             />
             {error && <div className="error-banner">{error}</div>}
             {loading ? (
-                <div className="loading">Loading…</div>
+                <div className="loading-bar" />
             ) : items.length === 0 ? (
                 <EmptyState
                     icon="✅"

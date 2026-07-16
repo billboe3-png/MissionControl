@@ -18,7 +18,7 @@ export default function HostsPage() {
     }, []);
 
     if (error) return <div className="error-banner">{error}</div>;
-    if (loading) return <div className="loading">Loading…</div>;
+    if (loading) return <div className="loading-bar" />;
 
     const columns: Column<ZabbixHost>[] = [
         { key: "name", header: "Name" },

@@ -13,16 +13,18 @@ from datetime import datetime, timezone
 
 logger = logging.getLogger(__name__)
 
-_REPOSITORY_ROOT = os.path.join(os.path.dirname(__file__), "..", "..", "..")
+_REPOSITORY_ROOT = os.path.join(os.path.dirname(__file__), "..", "..")
 
 
 def _find_repo_path() -> str:
     """Walk up from this file to find the .git directory."""
-    path = os.path.abspath(_REPOSITORY_ROOT)
-    while path != os.path.dirname(path):
-        if os.path.isdir(os.path.join(path, ".git")):
-            return path
-        path = os.path.dirname(path)
+    candidates = ["/project", os.path.abspath(_REPOSITORY_ROOT)]
+    for root in candidates:
+        path = os.path.abspath(root)
+        while path != os.path.dirname(path):
+            if os.path.isdir(os.path.join(path, ".git")):
+                return path
+            path = os.path.dirname(path)
     return os.path.abspath(_REPOSITORY_ROOT)
 
 
@@ -38,21 +40,29 @@ class GitProvider:
             repo = git.Repo(repo_path, search_parent_directories=True)
 
             branch = None
-            if not repo.head.is_unborn:
+            try:
                 branch = repo.active_branch.name
+            except Exception:
+                pass
 
             latest_commit = None
             commit_author = None
             commit_date = None
-            if not repo.head.is_unborn:
+            try:
                 head_commit = repo.head.commit
                 latest_commit = head_commit.hexsha[:12]
                 commit_author = str(head_commit.author.name)
                 commit_date = datetime.fromtimestamp(
                     head_commit.committed_date, tz=timezone.utc
                 ).isoformat()
+            except Exception:
+                pass
 
-            working_tree_clean = not repo.is_dirty()
+            working_tree_clean = True
+            try:
+                working_tree_clean = not repo.is_dirty()
+            except Exception:
+                pass
 
             ahead_behind = {"ahead": 0, "behind": 0}
             try:

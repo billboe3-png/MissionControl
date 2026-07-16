@@ -66,5 +66,8 @@ class HyperVService:
     async def test_connection(self, db: Session | None = None, host_id: int | None = None) -> dict:
         return await self._get_provider(db, host_id).test_connection()
 
+    async def get_replication(self, db: Session | None = None, host_id: int | None = None) -> dict:
+        return await self._get_provider(db, host_id).get_replication()
+
 
 hyperv_service = HyperVService()

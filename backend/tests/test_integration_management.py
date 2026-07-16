@@ -439,7 +439,8 @@ class TestIntegrationService:
             integration_type="active_directory",
         )
         result = await service.test_connection(db_session, profile.id)
-        assert result.success is True
+        assert result.success is False
+        assert result.error is not None
 
     @pytest.mark.asyncio
     async def test_test_connection_m365(self, db_session):

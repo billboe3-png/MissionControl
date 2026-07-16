@@ -400,32 +400,120 @@ class HyperVPowerShellProvider(HyperVProvider):
 
     async def get_health(self) -> dict:
         script = (
-            "$nodes = Get-ClusterNode -ErrorAction SilentlyContinue | "
-            "Select-Object Name,State; "
-            "if ($nodes) { $nodes | ConvertTo-Json -Compress } "
-            "else { $info = Get-ComputerInfo | Select-Object CsName; "
-            "@{Name=$info.CsName;State='Up'} | ConvertTo-Json -Compress }"
+            "$cpu = (Get-CimInstance Win32_Processor | Measure-Object -Property LoadPercentage -Average).Average; "
+            "$os = Get-CimInstance Win32_OperatingSystem; "
+            "$memTotal = [math]::Round($os.TotalVisibleMemorySize / 1MB, 1); "
+            "$memFree = [math]::Round($os.FreePhysicalMemory / 1MB, 1); "
+            "$memUsed = [math]::Round($memTotal - $memFree, 1); "
+            "$memPct = if ($memTotal -gt 0) { [math]::Round(($memUsed / $memTotal) * 100) } else { 0 }; "
+            "$uptime = (Get-Date) - $os.LastBootUpTime; "
+            "$vmCount = (Get-VM).Count; "
+            "$cs = Get-ComputerInfo -ErrorAction SilentlyContinue; "
+            "@{"
+            "Name=$env:COMPUTERNAME; "
+            "State='Up'; "
+            "CpuPercent=[int]$cpu; "
+            "MemoryPercent=[int]$memPct; "
+            "MemoryUsedGB=$memUsed; "
+            "MemoryTotalGB=$memTotal; "
+            "UptimeSeconds=[int]$uptime.TotalSeconds; "
+            "VMCount=$vmCount; "
+            "Version=$cs.WindowsVersion; "
+            "} | ConvertTo-Json -Compress"
         )
         result = await self._exec(script)
         if not result["success"]:
             return {"connected": False, "error": result["stderr"], "status": "unavailable"}
         data = _parse_json_output(result["stdout"])
-        hosts = data if isinstance(data, list) else [data] if data else []
+        if data is None:
+            return {"connected": False, "error": "Invalid response", "status": "unavailable"}
+        if not isinstance(data, list):
+            data = [data]
         mapped = [
             {
-                "name": h.get("Name", h.get("CsName", "unknown")),
+                "name": h.get("Name", "unknown"),
                 "status": "healthy" if h.get("State", "").lower() in ("up", "online") else "warning",
-                "cpu_percent": 0.0,
-                "memory_percent": 0.0,
-                "uptime_seconds": 0,
-                "vm_count": 0,
-                "version": None,
+                "cpu_percent": float(h.get("CpuPercent", 0)),
+                "memory_percent": float(h.get("MemoryPercent", 0)),
+                "memory_used_gb": float(h.get("MemoryUsedGB", 0)),
+                "memory_total_gb": float(h.get("MemoryTotalGB", 0)),
+                "uptime_seconds": int(h.get("UptimeSeconds", 0)),
+                "vm_count": int(h.get("VMCount", 0)),
+                "version": h.get("Version"),
             }
-            for h in hosts
+            for h in data
         ]
         return {
             "connected": True,
             "status": "healthy",
             "hosts": mapped,
             "cluster_summary": "Single host mode" if len(mapped) <= 1 else f"Cluster with {len(mapped)} nodes",
+        }
+
+    async def get_replication(self) -> dict:
+        """Get Hyper-V VM replication status from all VMs."""
+        script = (
+            "$repl = Get-VMReplication -ErrorAction SilentlyContinue; "
+            "if (-not $repl) { "
+            "  Write-Output (@{connected=$true;replicating=0;total=0;items=@()} | ConvertTo-Json -Compress); "
+            "  return "
+            "} "
+            "$items = $repl | ForEach-Object { "
+            "  $health = 'Unknown'; "
+            "  try { $health = $_.ReplicationHealth.ToString() } catch {} "
+            "  $state = 'Unknown'; "
+            "  try { $state = $_.State.ToString() } catch {} "
+            "  $freq = 0; "
+            "  try { $freq = $_.ReplicationFrequencySec } catch {} "
+            "  $lastTime = ''; "
+            "  try { $lastTime = $_.LastReplicationTime.ToString('yyyy-MM-dd HH:mm:ss') } catch {} "
+            "  $resultCode = 0; "
+            "  try { $resultCode = $_.LastReplicationResultCode } catch {} "
+            "  $bytesSent = 0; "
+            "  try { $bytesSent = $_.ReplicationBytesSent } catch {} "
+            "  $bytesReceived = 0; "
+            "  try { $bytesReceived = $_.ReplicationBytesReceived } catch {} "
+            "  [PSCustomObject]@{ "
+            "    VMName=$_.VMName; "
+            "    ReplicaServer=$_.ReplicaServer; "
+            "    ReplicaServerPort=$_.ReplicaServerPort; "
+            "    State=$state; "
+            "    Health=$health; "
+            "    ReplicationFrequencySec=$freq; "
+            "    LastReplicationTime=$lastTime; "
+            "    LastReplicationResultCode=$resultCode; "
+            "    ReplicationBytesSent=$bytesSent; "
+            "    ReplicationBytesReceived=$bytesReceived; "
+            "  } "
+            "} "
+            "$replicating = ($repl | Where-Object { $_.State -eq 'Replicating' }).Count; "
+            "Write-Output (@{connected=$true;replicating=$replicating;total=$repl.Count;items=$items} | ConvertTo-Json -Compress)"
+        )
+        result = await self._exec(script)
+        if not result["success"]:
+            return {"connected": False, "error": result["stderr"], "replicating": 0, "total": 0, "items": []}
+        data = _parse_json_output(result["stdout"])
+        if data is None:
+            return {"connected": True, "replicating": 0, "total": 0, "items": []}
+        items = []
+        for r in data.get("items", []):
+            if isinstance(r, dict):
+                health = r.get("Health", "Unknown")
+                items.append({
+                    "vm_name": r.get("VMName", ""),
+                    "replica_server": r.get("ReplicaServer", ""),
+                    "replica_port": r.get("ReplicaServerPort", 443),
+                    "state": r.get("State", "Unknown"),
+                    "health": health,
+                    "frequency_seconds": r.get("ReplicationFrequencySec", 0),
+                    "last_replication_time": r.get("LastReplicationTime", ""),
+                    "last_result_code": r.get("LastReplicationResultCode", 0),
+                    "bytes_sent": r.get("ReplicationBytesSent", 0),
+                    "bytes_received": r.get("ReplicationBytesReceived", 0),
+                })
+        return {
+            "connected": True,
+            "replicating": data.get("replicating", 0),
+            "total": data.get("total", 0),
+            "items": items,
         }

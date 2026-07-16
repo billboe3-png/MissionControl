@@ -106,7 +106,7 @@ export default function AgentDetailPage() {
         }
     };
 
-    if (loading) return <div className="loading">Loading…</div>;
+    if (loading) return <div className="loading-bar" />;
     if (error && !agent) return <div className="error-banner">{error}</div>;
     if (!agent) return <div className="error-banner">Agent not found</div>;
 

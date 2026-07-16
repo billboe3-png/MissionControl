@@ -133,7 +133,7 @@ export default function HostsPage() {
             />
             {error && <div className="error-banner">{error}</div>}
             {loading ? (
-                <div className="loading">Loading\u2026</div>
+                <div className="loading-bar" />
             ) : hosts.length === 0 ? (
                 <EmptyState
                     icon="\uD83D\uDDA5\uFE0F"

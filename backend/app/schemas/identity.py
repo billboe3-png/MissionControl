@@ -37,6 +37,7 @@ class ADUser(BaseModel):
     department: str | None = None
     title: str | None = None
     enabled: bool
+    distinguished_name: str | None = None
 
 
 class ADUsersResponse(BaseModel):
@@ -224,6 +225,56 @@ class M365HealthResponse(BaseModel):
     status: str = "unknown"
     services: list[M365ServiceHealth] = []
     active_incidents: int = 0
+    error: str | None = None
+
+
+# ------------------------------------------------------------------ #
+# AD Write Operation Schemas                                          #
+# ------------------------------------------------------------------ #
+
+
+class ADPasswordResetRequest(BaseModel):
+    """Request to reset a user's password."""
+
+    sam_account_name: str
+    new_password: str
+
+
+class ADUnlockRequest(BaseModel):
+    """Request to unlock a user account."""
+
+    sam_account_name: str
+
+
+class ADRenameRequest(BaseModel):
+    """Request to rename a user."""
+
+    sam_account_name: str
+    display_name: str
+    first_name: str | None = None
+    last_name: str | None = None
+
+
+class ADGroupMembershipRequest(BaseModel):
+    """Request to add/remove a user from a group."""
+
+    sam_account_name: str
+    group_name: str
+
+
+class ADActionResponse(BaseModel):
+    """Generic response for AD write actions."""
+
+    success: bool
+    message: str | None = None
+    error: str | None = None
+
+
+class ADUserGroupsResponse(BaseModel):
+    """Response for user's group membership."""
+
+    connected: bool
+    groups: list[dict] = []
     error: str | None = None
 
 

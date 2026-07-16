@@ -13,7 +13,7 @@ function formatUptime(seconds: number): string {
 }
 
 export default function HyperVHealthPage() {
-    const { selectedHostId, hosts, loading: hostsLoading } = useSelectedHost();
+    const { selectedHostId, hosts, loading: hostsLoading, setSelectedHostId } = useSelectedHost();
     const [health, setHealth] = useState<HyperVHealth | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -27,8 +27,8 @@ export default function HyperVHealthPage() {
             .finally(() => setLoading(false));
     }, [selectedHostId, hostsLoading]);
 
-    if (hostsLoading) return <div className="loading">Loading…</div>;
-    if (loading) return <div className="loading">Loading…</div>;
+    if (hostsLoading) return <div className="loading-bar" />;
+    if (loading) return <div className="loading-bar" />;
     if (error) return <div className="error-banner">{error}</div>;
     if (!health) return null;
 
@@ -37,7 +37,7 @@ export default function HyperVHealthPage() {
             <PageHeader
                 title="Hyper-V Health"
                 subtitle="Host cluster health status"
-                actions={<HyperVHostSelector hosts={hosts} selectedHostId={selectedHostId} onChange={() => {}} />}
+                actions={<HyperVHostSelector hosts={hosts} selectedHostId={selectedHostId} onChange={setSelectedHostId} />}
             />
             {health.cluster_summary && (
                 <p className="settings-hint">{health.cluster_summary}</p>

@@ -12,7 +12,7 @@ function formatBytes(bytes: number): string {
 }
 
 export default function StoragePage() {
-    const { selectedHostId, hosts, loading: hostsLoading } = useSelectedHost();
+    const { selectedHostId, hosts, loading: hostsLoading, setSelectedHostId } = useSelectedHost();
     const [storage, setStorage] = useState<HyperVStorage[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -26,17 +26,17 @@ export default function StoragePage() {
             .finally(() => setLoading(false));
     }, [selectedHostId, hostsLoading]);
 
-    if (hostsLoading) return <div className="loading">Loading…</div>;
+    if (hostsLoading) return <div className="loading-bar" />;
 
     return (
         <>
             <PageHeader
                 title="Virtual Storage"
                 subtitle="Hyper-V virtual hard disks"
-                actions={<HyperVHostSelector hosts={hosts} selectedHostId={selectedHostId} onChange={() => {}} />}
+                actions={<HyperVHostSelector hosts={hosts} selectedHostId={selectedHostId} onChange={setSelectedHostId} />}
             />
             {loading ? (
-                <div className="loading">Loading…</div>
+                <div className="loading-bar" />
             ) : (
                 <>
                     {error && <div className="error-banner">{error}</div>}

@@ -30,7 +30,7 @@ export default function ZabbixOverviewPage() {
     }, []);
 
     if (error) return <div className="error-banner">{error}</div>;
-    if (loading) return <div className="loading">Loading…</div>;
+    if (loading) return <div className="loading-bar" />;
 
     const subtitle = summary?.connected
         ? (summary.version && summary.version !== "unknown" ? `Zabbix ${summary.version}` : summary.server_name || "Connected")

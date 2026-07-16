@@ -24,6 +24,7 @@ export const navigation: NavGroup[] = [
         items: [
             { label: "Hosts", path: "/remote/hosts", icon: "🖥️" },
             { label: "Credentials", path: "/remote/credentials", icon: "🔑" },
+            { label: "Console", path: "/remote/console", icon: "💻" },
             { label: "Quick Commands", path: "/remote/quick-commands", icon: "⚡" },
             { label: "Execute", path: "/remote/execute", icon: "▶️" },
             { label: "History", path: "/remote/history", icon: "📜" },
@@ -65,6 +66,7 @@ export const navigation: NavGroup[] = [
             { label: "Networks", path: "/hyperv/networks", icon: "🌐" },
             { label: "Storage", path: "/hyperv/storage", icon: "💾" },
             { label: "Checkpoints", path: "/hyperv/checkpoints", icon: "📸" },
+            { label: "Replication", path: "/hyperv/replication", icon: "🔄" },
             { label: "Health", path: "/hyperv/health", icon: "❤️" },
         ],
     },

@@ -22,7 +22,7 @@ export default function StoragePage() {
             .finally(() => setLoading(false));
     }, []);
 
-    if (loading) return <div className="loading">Loading…</div>;
+    if (loading) return <div className="loading-bar" />;
 
     return (
         <>

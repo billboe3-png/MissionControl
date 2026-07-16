@@ -27,7 +27,7 @@ const stateColors: Record<string, "healthy" | "warning" | "error" | "neutral"> =
 };
 
 export default function VirtualMachinesPage() {
-    const { selectedHostId, hosts, loading: hostsLoading } = useSelectedHost();
+    const { selectedHostId, hosts, loading: hostsLoading, setSelectedHostId } = useSelectedHost();
     const [vms, setVms] = useState<HyperVVm[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -52,14 +52,14 @@ export default function VirtualMachinesPage() {
         finally { setActionId(null); }
     };
 
-    if (hostsLoading) return <div className="loading">Loading…</div>;
+    if (hostsLoading) return <div className="loading-bar" />;
 
     return (
         <>
             <PageHeader
                 title="Virtual Machines"
                 subtitle="Manage Hyper-V virtual machines"
-                actions={<HyperVHostSelector hosts={hosts} selectedHostId={selectedHostId} onChange={() => {}} />}
+                actions={<HyperVHostSelector hosts={hosts} selectedHostId={selectedHostId} onChange={setSelectedHostId} />}
             />
             {error && (
                 <div className="error-banner">
@@ -68,7 +68,7 @@ export default function VirtualMachinesPage() {
                 </div>
             )}
             {loading ? (
-                <div className="loading">Loading…</div>
+                <div className="loading-bar" />
             ) : vms.length === 0 ? (
                 <EmptyState icon="🖥️" title="No virtual machines" description="No VMs found on the connected Hyper-V host." />
             ) : (

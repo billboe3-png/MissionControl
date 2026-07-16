@@ -10,6 +10,7 @@ const routeLabels: Record<string, string> = {
     remote: "Remote Operations",
     hosts: "Hosts",
     credentials: "Credentials",
+    console: "Console",
     execute: "Execute",
     "quick-commands": "Quick Commands",
     history: "History",

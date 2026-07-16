@@ -74,6 +74,7 @@ const COMMAND_CATEGORIES: { category: string; icon: string; commands: QuickComma
             { label: "Temp Files Size", description: "Show /tmp directory size", command: "du -sh /tmp 2>/dev/null", shell: "bash", icon: "🗑️" },
             { label: "Logrotate Status", description: "Check logrotate status", command: "logrotate -d /etc/logrotate.conf 2>&1 | head -10", shell: "bash", icon: "♻️" },
             { label: "Package Updates", description: "Check for available package updates", command: "apt list --upgradable 2>/dev/null || yum check-update 2>/dev/null || dnf check-update 2>/dev/null", shell: "bash", icon: "📦" },
+            { label: "Update System", description: "Check and install all available updates", command: "sudo apt update && sudo apt upgrade -y 2>/dev/null || sudo yum update -y 2>/dev/null || sudo dnf update -y 2>/dev/null", shell: "bash", icon: "⬆️" },
             { label: "Cron Jobs", description: "Show current user's cron jobs", command: "crontab -l 2>/dev/null || echo 'No crontab for current user'", shell: "bash", icon: "⏰" },
         ],
     },

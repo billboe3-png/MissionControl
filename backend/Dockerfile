@@ -5,10 +5,10 @@ ENV PYTHONUNBUFFERED=1
 
 WORKDIR /app
 
-RUN addgroup --system app && adduser --system --ingroup app app
+RUN addgroup --system app && adduser --system --ingroup app app && adduser app root
 
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends openssh-client sshpass && \
+    apt-get install -y --no-install-recommends openssh-client sshpass git && \
     rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt .

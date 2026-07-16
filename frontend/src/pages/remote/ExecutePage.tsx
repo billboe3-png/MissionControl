@@ -1,13 +1,22 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import PageHeader from "../../components/common/PageHeader";
 import { useToast } from "../../contexts/ToastContext";
-import {
-    remoteApi,
-    hostsApi,
-    HostData,
-    ExecuteCommandResponse,
-} from "../../services/remote";
+import { remoteApi, hostsApi, HostData } from "../../services/remote";
+
+function stripAnsi(str: string): string {
+    return str
+        // eslint-disable-next-line no-control-regex
+        .replace(/\x1b\[[0-9;]*[a-zA-Z]/g, "")
+        // eslint-disable-next-line no-control-regex
+        .replace(/\x1b\[\?[0-9]*[a-zA-Z]/g, "")
+        // eslint-disable-next-line no-control-regex
+        .replace(/\x1b\][^\x07]*\x07/g, "")
+        // eslint-disable-next-line no-control-regex
+        .replace(/\x1b[()][A-Z0-9]/g, "")
+        // eslint-disable-next-line no-control-regex
+        .replace(/\x1b[78]/g, "");
+}
 
 export default function ExecutePage() {
     const { showToast } = useToast();
@@ -16,8 +25,13 @@ export default function ExecutePage() {
     const [selectedHostId, setSelectedHostId] = useState<number | "">("");
     const [command, setCommand] = useState(() => searchParams.get("command") ?? "");
     const [shell, setShell] = useState(() => searchParams.get("shell") ?? "");
-    const [loading, setLoading] = useState(false);
-    const [result, setResult] = useState<ExecuteCommandResponse | null>(null);
+    const [running, setRunning] = useState(false);
+    const [exitCode, setExitCode] = useState<number | null>(null);
+    const [success, setSuccess] = useState<boolean | null>(null);
+    const [error, setError] = useState<string | null>(null);
+    const stdoutRef = useRef<HTMLPreElement>(null);
+    const stderrRef = useRef<HTMLPreElement>(null);
+    const abortRef = useRef<AbortController | null>(null);
 
     useEffect(() => {
         hostsApi.list().then((data) => setHosts(data.items)).catch(() => {});
@@ -33,26 +47,54 @@ export default function ExecutePage() {
 
     const handleExecute = useCallback(async () => {
         if (!selectedHostId || !command.trim()) return;
+        setRunning(true);
+        setExitCode(null);
+        setSuccess(null);
+        setError(null);
+        if (stdoutRef.current) stdoutRef.current.textContent = "";
+        if (stderrRef.current) stderrRef.current.textContent = "";
+
+        const abort = new AbortController();
+        abortRef.current = abort;
+
         try {
-            setLoading(true);
-            setResult(null);
-            const res = await remoteApi.executeCommand({
+            const stream = remoteApi.executeCommandStream({
                 host_id: selectedHostId,
                 command: command.trim(),
                 shell: shell || undefined,
             });
-            setResult(res);
-            if (res.success) {
-                showToast("Command executed successfully");
-            } else {
-                showToast("Command failed", "error");
+
+            for await (const chunk of stream) {
+                if (abort.signal.aborted) break;
+                if (chunk.type === "stdout" && chunk.data && stdoutRef.current) {
+                    stdoutRef.current.textContent += stripAnsi(chunk.data);
+                    stdoutRef.current.scrollTop = stdoutRef.current.scrollHeight;
+                } else if (chunk.type === "stderr" && chunk.data && stderrRef.current) {
+                    stderrRef.current.textContent += stripAnsi(chunk.data);
+                    stderrRef.current.scrollTop = stderrRef.current.scrollHeight;
+                } else if (chunk.type === "exit") {
+                    const code = chunk.exit_code ?? -1;
+                    setExitCode(code);
+                    setSuccess(code === 0);
+                    showToast(code === 0 ? "Command completed" : `Command failed (exit ${code})`, code === 0 ? undefined : "error");
+                } else if (chunk.type === "error") {
+                    setError(chunk.message ?? "Unknown error");
+                    showToast(chunk.message ?? "Unknown error", "error");
+                }
             }
         } catch (e: unknown) {
-            showToast(e instanceof Error ? e.message : "Execution failed", "error");
+            const msg = e instanceof Error ? e.message : "Execution failed";
+            setError(msg);
+            showToast(msg, "error");
         } finally {
-            setLoading(false);
+            setRunning(false);
+            abortRef.current = null;
         }
     }, [selectedHostId, command, shell, showToast]);
+
+    const handleStop = useCallback(() => {
+        abortRef.current?.abort();
+    }, []);
 
     return (
         <>
@@ -101,26 +143,34 @@ export default function ExecutePage() {
                 </div>
                 <button
                     className="btn btn-primary"
-                    onClick={handleExecute}
-                    disabled={loading || !selectedHostId || !command.trim()}
+                    onClick={running ? handleStop : handleExecute}
+                    disabled={!running && (!selectedHostId || !command.trim())}
                 >
-                    {loading ? "Executing…" : "Execute"}
+                    {running ? "Stop" : "Execute"}
                 </button>
             </div>
-            {result && (
+            {(running || exitCode !== null || error) && (
                 <div className="execute-result">
                     <h3>
-                        Result{" "}
-                        <span className={result.success ? "text-success" : "text-error"}>
-                            ({result.success ? "success" : "failed"}, exit {result.exit_code}, {result.duration_ms}ms)
-                        </span>
+                        Output{" "}
+                        {exitCode !== null && (
+                            <span className={success ? "text-success" : "text-error"}>
+                                ({success ? "success" : "failed"}, exit {exitCode})
+                            </span>
+                        )}
+                        {running && <span className="text-warning"> (running…)</span>}
                     </h3>
-                    {result.stdout && (
-                        <pre className="execute-stdout">{result.stdout}</pre>
-                    )}
-                    {result.stderr && (
-                        <pre className="execute-stderr">{result.stderr}</pre>
-                    )}
+                    {error && <pre className="execute-stderr">{error}</pre>}
+                    <pre
+                        ref={stdoutRef}
+                        className="execute-stdout"
+                        style={{ minHeight: 80, whiteSpace: "pre-wrap", wordBreak: "break-all" }}
+                    />
+                    <pre
+                        ref={stderrRef}
+                        className="execute-stderr"
+                        style={{ minHeight: 20, whiteSpace: "pre-wrap", wordBreak: "break-all" }}
+                    />
                 </div>
             )}
         </>

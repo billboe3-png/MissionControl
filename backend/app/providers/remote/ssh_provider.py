@@ -750,6 +750,89 @@ class SSHProvider(RemoteBaseProvider):
                 username, target, command, e, start_time
             )
 
+    async def execute_command_stream(
+        self,
+        hostname: str,
+        port: int,
+        username: str,
+        password: str | None,
+        ssh_key: str | None,
+        command: str,
+        shell: str,
+        ip_address: str | None,
+    ):
+        """Execute a command and yield output chunks in real-time."""
+        import asyncio
+        import queue
+        target = ip_address if ip_address else hostname
+        timeouts = _get_timeouts()
+        command_timeout = min(timeouts["command"], _get_max_command_timeout())
+
+        q: queue.Queue = queue.Queue()
+
+        def _reader():
+            import time
+            client = None
+            try:
+                client = self._build_client(target, port, username, password, ssh_key)
+                chan = client.invoke_shell(term="xterm", width=200, height=50)
+                time.sleep(0.5)
+
+                while chan.recv_ready():
+                    chan.recv(4096)
+
+                chan.send(command + "\n")
+
+                sudo_handled = False
+                while True:
+                    if chan.recv_ready():
+                        data = chan.recv(4096).decode("utf-8", errors="replace")
+
+                        if not sudo_handled and password:
+                            if "[sudo] password" in data.lower():
+                                sudo_handled = True
+                                chan.send(password + "\n")
+                                continue
+
+                        q.put(("stdout", data))
+
+                    if chan.recv_stderr_ready():
+                        data = chan.recv_stderr(4096).decode("utf-8", errors="replace")
+                        q.put(("stderr", data))
+
+                    if chan.exit_status_ready():
+                        while chan.recv_ready():
+                            q.put(("stdout", chan.recv(4096).decode("utf-8", errors="replace")))
+                        while chan.recv_stderr_ready():
+                            q.put(("stderr", chan.recv_stderr(4096).decode("utf-8", errors="replace")))
+                        break
+
+                    time.sleep(0.1)
+
+                exit_code = chan.recv_exit_status()
+                q.put(("exit", exit_code))
+            except Exception as e:
+                q.put(("error", str(e)))
+            finally:
+                if client is not None:
+                    self._close_client(client)
+                q.put(None)
+
+        loop = asyncio.get_event_loop()
+        loop.run_in_executor(None, _reader)
+
+        while True:
+            item = await asyncio.get_event_loop().run_in_executor(None, q.get)
+            if item is None:
+                break
+            kind, value = item
+            if kind == "exit":
+                yield {"type": "exit", "exit_code": value}
+            elif kind == "error":
+                yield {"type": "error", "message": value}
+            else:
+                yield {"type": kind, "data": value}
+
     # ------------------------------------------------------------------ #
     # File Transfer                                                       #
     # ------------------------------------------------------------------ #

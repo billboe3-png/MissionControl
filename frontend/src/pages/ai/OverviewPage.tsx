@@ -16,7 +16,7 @@ export default function AIOverviewPage() {
             .finally(() => setLoading(false));
     }, []);
 
-    if (loading) return <div className="loading">Loading...</div>;
+    if (loading) return <div className="loading-bar" />;
     if (error) return <div className="error-banner">{error}</div>;
     if (!data) return null;
 

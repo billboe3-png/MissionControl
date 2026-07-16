@@ -43,6 +43,7 @@ export interface ADUser {
     department: string | null;
     title: string | null;
     enabled: boolean;
+    distinguished_name: string | null;
 }
 
 export interface ADGroup {
@@ -96,6 +97,23 @@ export interface ADHealthResponse {
     connected: boolean;
     status: string;
     replication: ADReplication;
+    error: string | null;
+}
+
+export interface ADActionResponse {
+    success: boolean;
+    message: string | null;
+    error: string | null;
+}
+
+export interface ADUserGroup {
+    name: string;
+    dn: string;
+}
+
+export interface ADUserGroupsResponse {
+    connected: boolean;
+    groups: ADUserGroup[];
     error: string | null;
 }
 
@@ -191,6 +209,18 @@ async function get<T>(path: string): Promise<T> {
     return response.json();
 }
 
+async function post<T>(path: string, body: unknown): Promise<T> {
+    const response = await fetch(`${API_BASE}${path}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+    });
+    if (!response.ok) {
+        throw new Error(`Identity API error: ${response.status}`);
+    }
+    return response.json();
+}
+
 export const identityApi = {
     getOverview: () => get<IdentityOverview>("/overview"),
 
@@ -200,6 +230,23 @@ export const identityApi = {
     getADGroups: () => get<ADGroupsResponse>("/ad/groups"),
     getADDevices: () => get<ADDevicesResponse>("/ad/devices"),
     getADHealth: () => get<ADHealthResponse>("/ad/health"),
+
+    resetPassword: (sam_account_name: string, new_password: string) =>
+        post<ADActionResponse>("/ad/users/reset-password", { sam_account_name, new_password }),
+    unlockAccount: (sam_account_name: string) =>
+        post<ADActionResponse>("/ad/users/unlock", { sam_account_name }),
+    enableAccount: (sam_account_name: string) =>
+        post<ADActionResponse>("/ad/users/enable", { sam_account_name }),
+    disableAccount: (sam_account_name: string) =>
+        post<ADActionResponse>("/ad/users/disable", { sam_account_name }),
+    renameUser: (sam_account_name: string, display_name: string, first_name?: string, last_name?: string) =>
+        post<ADActionResponse>("/ad/users/rename", { sam_account_name, display_name, first_name, last_name }),
+    getUserGroups: (sam_account_name: string) =>
+        get<ADUserGroupsResponse>(`/ad/users/${encodeURIComponent(sam_account_name)}/groups`),
+    addToGroup: (sam_account_name: string, group_name: string) =>
+        post<ADActionResponse>("/ad/users/add-to-group", { sam_account_name, group_name }),
+    removeFromGroup: (sam_account_name: string, group_name: string) =>
+        post<ADActionResponse>("/ad/users/remove-from-group", { sam_account_name, group_name }),
 
     testM365: () => get<ConnectionTestResult>("/m365/test"),
     getM365Summary: () => get<M365Summary>("/m365/summary"),

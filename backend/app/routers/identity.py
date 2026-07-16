@@ -9,13 +9,21 @@ Sprint 2.2.0 - Microsoft 365 & Active Directory Integration.
 
 import logging
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
+from sqlalchemy.orm import Session
 
+from app.db import get_db
 from app.schemas.identity import (
+    ADActionResponse,
     ADDevicesResponse,
     ADGroupsResponse,
+    ADGroupMembershipRequest,
     ADHealthResponse,
+    ADPasswordResetRequest,
+    ADRenameRequest,
     ADSummaryResponse,
+    ADUnlockRequest,
+    ADUserGroupsResponse,
     ADUsersResponse,
     ConnectionTestResponse,
     IdentityOverviewResponse,
@@ -38,9 +46,9 @@ router = APIRouter(prefix="/identity", tags=["identity"])
 
 
 @router.get("/overview", response_model=IdentityOverviewResponse)
-async def get_identity_overview() -> IdentityOverviewResponse:
+async def get_identity_overview(db: Session = Depends(get_db)) -> IdentityOverviewResponse:
     """Get combined identity overview for the dashboard."""
-    data = await identity_service.get_overview()
+    data = await identity_service.get_overview(db)
     return IdentityOverviewResponse(**data)
 
 
@@ -54,9 +62,9 @@ async def get_identity_overview() -> IdentityOverviewResponse:
     response_model=ConnectionTestResponse,
     tags=["identity", "ad"],
 )
-async def ad_test_connection() -> ConnectionTestResponse:
+async def ad_test_connection(db: Session = Depends(get_db)) -> ConnectionTestResponse:
     """Test connectivity to Active Directory."""
-    data = await identity_service.ad_test_connection()
+    data = await identity_service.ad_test_connection(db)
     return ConnectionTestResponse(**data)
 
 
@@ -65,9 +73,9 @@ async def ad_test_connection() -> ConnectionTestResponse:
     response_model=ADSummaryResponse,
     tags=["identity", "ad"],
 )
-async def ad_get_summary() -> ADSummaryResponse:
+async def ad_get_summary(db: Session = Depends(get_db)) -> ADSummaryResponse:
     """Get AD domain and forest summary."""
-    data = await identity_service.ad_get_summary()
+    data = await identity_service.ad_get_summary(db)
     return ADSummaryResponse(**data)
 
 
@@ -76,9 +84,9 @@ async def ad_get_summary() -> ADSummaryResponse:
     response_model=ADUsersResponse,
     tags=["identity", "ad"],
 )
-async def ad_get_users() -> ADUsersResponse:
+async def ad_get_users(db: Session = Depends(get_db)) -> ADUsersResponse:
     """List Active Directory users."""
-    data = await identity_service.ad_get_users()
+    data = await identity_service.ad_get_users(db)
     return ADUsersResponse(**data)
 
 
@@ -87,9 +95,9 @@ async def ad_get_users() -> ADUsersResponse:
     response_model=ADGroupsResponse,
     tags=["identity", "ad"],
 )
-async def ad_get_groups() -> ADGroupsResponse:
+async def ad_get_groups(db: Session = Depends(get_db)) -> ADGroupsResponse:
     """List Active Directory groups."""
-    data = await identity_service.ad_get_groups()
+    data = await identity_service.ad_get_groups(db)
     return ADGroupsResponse(**data)
 
 
@@ -98,9 +106,9 @@ async def ad_get_groups() -> ADGroupsResponse:
     response_model=ADDevicesResponse,
     tags=["identity", "ad"],
 )
-async def ad_get_devices() -> ADDevicesResponse:
+async def ad_get_devices(db: Session = Depends(get_db)) -> ADDevicesResponse:
     """List Active Directory computers/devices."""
-    data = await identity_service.ad_get_devices()
+    data = await identity_service.ad_get_devices(db)
     return ADDevicesResponse(**data)
 
 
@@ -109,10 +117,130 @@ async def ad_get_devices() -> ADDevicesResponse:
     response_model=ADHealthResponse,
     tags=["identity", "ad"],
 )
-async def ad_get_health() -> ADHealthResponse:
+async def ad_get_health(db: Session = Depends(get_db)) -> ADHealthResponse:
     """Get AD health and replication status."""
-    data = await identity_service.ad_get_health()
+    data = await identity_service.ad_get_health(db)
     return ADHealthResponse(**data)
+
+
+@router.post(
+    "/ad/users/reset-password",
+    response_model=ADActionResponse,
+    tags=["identity", "ad"],
+)
+async def ad_reset_password(
+    req: ADPasswordResetRequest,
+    db: Session = Depends(get_db),
+) -> ADActionResponse:
+    """Reset a user's Active Directory password."""
+    data = await identity_service.ad_reset_password(
+        db, req.sam_account_name, req.new_password
+    )
+    return ADActionResponse(**data)
+
+
+@router.post(
+    "/ad/users/unlock",
+    response_model=ADActionResponse,
+    tags=["identity", "ad"],
+)
+async def ad_unlock_account(
+    req: ADUnlockRequest,
+    db: Session = Depends(get_db),
+) -> ADActionResponse:
+    """Unlock a locked Active Directory account."""
+    data = await identity_service.ad_unlock_account(db, req.sam_account_name)
+    return ADActionResponse(**data)
+
+
+@router.post(
+    "/ad/users/enable",
+    response_model=ADActionResponse,
+    tags=["identity", "ad"],
+)
+async def ad_enable_account(
+    req: ADUnlockRequest,
+    db: Session = Depends(get_db),
+) -> ADActionResponse:
+    """Enable a disabled Active Directory account."""
+    data = await identity_service.ad_enable_account(db, req.sam_account_name)
+    return ADActionResponse(**data)
+
+
+@router.post(
+    "/ad/users/disable",
+    response_model=ADActionResponse,
+    tags=["identity", "ad"],
+)
+async def ad_disable_account(
+    req: ADUnlockRequest,
+    db: Session = Depends(get_db),
+) -> ADActionResponse:
+    """Disable an Active Directory account."""
+    data = await identity_service.ad_disable_account(db, req.sam_account_name)
+    return ADActionResponse(**data)
+
+
+@router.post(
+    "/ad/users/rename",
+    response_model=ADActionResponse,
+    tags=["identity", "ad"],
+)
+async def ad_rename_user(
+    req: ADRenameRequest,
+    db: Session = Depends(get_db),
+) -> ADActionResponse:
+    """Rename an Active Directory user."""
+    data = await identity_service.ad_rename_user(
+        db, req.sam_account_name, req.display_name, req.first_name, req.last_name
+    )
+    return ADActionResponse(**data)
+
+
+@router.get(
+    "/ad/users/{sam_account_name}/groups",
+    response_model=ADUserGroupsResponse,
+    tags=["identity", "ad"],
+)
+async def ad_get_user_groups(
+    sam_account_name: str,
+    db: Session = Depends(get_db),
+) -> ADUserGroupsResponse:
+    """Get groups that a user belongs to."""
+    data = await identity_service.ad_get_user_groups(db, sam_account_name)
+    return ADUserGroupsResponse(**data)
+
+
+@router.post(
+    "/ad/users/add-to-group",
+    response_model=ADActionResponse,
+    tags=["identity", "ad"],
+)
+async def ad_add_to_group(
+    req: ADGroupMembershipRequest,
+    db: Session = Depends(get_db),
+) -> ADActionResponse:
+    """Add a user to an Active Directory group."""
+    data = await identity_service.ad_add_to_group(
+        db, req.sam_account_name, req.group_name
+    )
+    return ADActionResponse(**data)
+
+
+@router.post(
+    "/ad/users/remove-from-group",
+    response_model=ADActionResponse,
+    tags=["identity", "ad"],
+)
+async def ad_remove_from_group(
+    req: ADGroupMembershipRequest,
+    db: Session = Depends(get_db),
+) -> ADActionResponse:
+    """Remove a user from an Active Directory group."""
+    data = await identity_service.ad_remove_from_group(
+        db, req.sam_account_name, req.group_name
+    )
+    return ADActionResponse(**data)
 
 
 # ------------------------------------------------------------------ #

@@ -19,6 +19,7 @@ from app.schemas.hyperv import (
     HyperVHealthResponse,
     HyperVHostListResponse,
     HyperVNetworkListResponse,
+    HyperVReplicationResponse,
     HyperVStorageListResponse,
     HyperVSummaryResponse,
     HyperVVmActionResponse,
@@ -81,6 +82,16 @@ async def get_hyperv_health(
     """Get Hyper-V host health status."""
     data = await hyperv_service.get_health(db, host_id)
     return HyperVHealthResponse(**data)
+
+
+@router.get("/replication", response_model=HyperVReplicationResponse)
+async def get_hyperv_replication(
+    host_id: int | None = Query(None),
+    db: Session = Depends(get_db),
+) -> HyperVReplicationResponse:
+    """Get Hyper-V VM replication status."""
+    data = await hyperv_service.get_replication(db, host_id)
+    return HyperVReplicationResponse(**data)
 
 
 # ------------------------------------------------------------------ #

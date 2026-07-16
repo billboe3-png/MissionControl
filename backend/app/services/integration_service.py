@@ -334,11 +334,20 @@ class IntegrationService:
         self, profile: IntegrationProfile
     ) -> dict:
         """Test Active Directory connection using profile config."""
-        from app.providers.identity.ad_provider import (
-            MockActiveDirectoryProvider,
+        from app.providers.identity.ldap_ad_provider import (
+            LDAPActiveDirectoryProvider,
         )
 
-        provider = MockActiveDirectoryProvider()
+        password = _decrypt(profile.encrypted_secret) or ""
+        config = {
+            "server": profile.domain or "",
+            "port": 636 if profile.use_ssl else 389,
+            "use_ssl": profile.use_ssl,
+            "username": profile.username or "",
+            "password": password,
+            "base_dn": profile.base_dn or "",
+        }
+        provider = LDAPActiveDirectoryProvider(config=config)
         return await provider.test_connection()
 
     async def _test_m365(
@@ -359,12 +368,15 @@ class IntegrationService:
         from app.providers.hyperv.hyperv_provider import HyperVPowerShellProvider
 
         password = _decrypt(profile.encrypted_secret) or ""
+        transport = profile.domain or "winrm"
+        port = 22 if transport == "ssh" else 5985
         provider = HyperVPowerShellProvider(
             host=profile.base_url or "localhost",
-            port=22,
+            port=port,
             username=profile.username or "",
             password=password,
             timeout=profile.timeout or 30,
+            transport=transport,
         )
         return await provider.test_connection()
 

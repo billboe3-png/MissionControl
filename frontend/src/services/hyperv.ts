@@ -89,6 +89,8 @@ export interface HyperVHealthHost {
     status: string;
     cpu_percent: number;
     memory_percent: number;
+    memory_used_gb: number;
+    memory_total_gb: number;
     uptime_seconds: number;
     vm_count: number;
     version: string | null;
@@ -107,6 +109,27 @@ export interface HyperVActionResponse {
     message: string | null;
     error: string | null;
     vm_name: string | null;
+}
+
+export interface HyperVReplicationItem {
+    vm_name: string;
+    replica_server: string;
+    replica_port: number;
+    state: string;
+    health: string;
+    frequency_seconds: number;
+    last_replication_time: string | null;
+    last_result_code: number;
+    bytes_sent: number;
+    bytes_received: number;
+}
+
+export interface HyperVReplication {
+    connected: boolean;
+    replicating: number;
+    total: number;
+    items: HyperVReplicationItem[];
+    error: string | null;
 }
 
 function hostParam(hostId: number | null): string {
@@ -228,6 +251,12 @@ export const hypervApi = {
     async deleteCheckpoint(vmId: string, checkpointId: string, hostId: number | null = null): Promise<{ success: boolean; message: string | null; error: string | null }> {
         const response = await fetch(`${API}/vms/${vmId}/checkpoints/${checkpointId}${hostParam(hostId)}`, { method: "DELETE" });
         if (!response.ok) throw new Error("Failed to delete checkpoint");
+        return response.json();
+    },
+
+    async getReplication(hostId: number | null = null): Promise<HyperVReplication> {
+        const response = await fetch(`${API}/replication${hostParam(hostId)}`);
+        if (!response.ok) throw new Error("Failed to load replication status");
         return response.json();
     },
 };

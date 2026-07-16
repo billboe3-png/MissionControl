@@ -193,3 +193,29 @@ class HyperVConnectionTestResponse(BaseModel):
     version: str | None = None
     hostname: str | None = None
     error: str | None = None
+
+
+# ------------------------------------------------------------------ #
+# Replication                                                         #
+# ------------------------------------------------------------------ #
+
+
+class HyperVReplicationItem(BaseModel):
+    vm_name: str
+    replica_server: str
+    replica_port: int = 443
+    state: str
+    health: str
+    frequency_seconds: int = 0
+    last_replication_time: str | None = None
+    last_result_code: int = 0
+    bytes_sent: int = 0
+    bytes_received: int = 0
+
+
+class HyperVReplicationResponse(BaseModel):
+    connected: bool
+    replicating: int = 0
+    total: int = 0
+    items: list[HyperVReplicationItem] = []
+    error: str | None = None
