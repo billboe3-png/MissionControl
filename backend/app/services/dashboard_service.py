@@ -9,20 +9,20 @@ Sprint 2.3.0 - Added Zabbix integration.
 """
 
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from sqlalchemy.orm import Session
 
-from app.providers.health_provider import health_provider
-from app.providers.system_provider import system_provider
 from app.providers.docker_provider import docker_provider
 from app.providers.git_provider import git_provider
-from app.providers.project_provider import project_provider
-from app.providers.task_provider import task_provider
+from app.providers.health_provider import health_provider
 from app.providers.note_provider import note_provider
-from app.providers.resume_provider import resume_provider
 from app.providers.parking_lot_provider import parking_lot_provider
+from app.providers.project_provider import project_provider
 from app.providers.remote_provider import RemoteProvider
+from app.providers.resume_provider import resume_provider
+from app.providers.system_provider import system_provider
+from app.providers.task_provider import task_provider
 
 logger = logging.getLogger(__name__)
 
@@ -56,6 +56,9 @@ class DashboardService:
         hyperv = await self._get_hyperv_data(db)
         proxmox = await self._get_proxmox_data(db)
         integrations = await self._get_integrations_data(db)
+        agents = await self._get_agent_data(db)
+        ai = await self._get_ai_data(db)
+        automation = await self._get_automation_data(db)
 
         return {
             "application": {
@@ -63,7 +66,7 @@ class DashboardService:
                 "tagline": "The Daily Workspace for IT Operations",
                 "version": "2.0.0",
             },
-            "generated": datetime.now(timezone.utc).isoformat(),
+            "generated": datetime.now(UTC).isoformat(),
             "summary": {
                 "projects": projects["count"],
                 "active_projects": projects["statistics"]["active"],
@@ -78,6 +81,8 @@ class DashboardService:
                 "zabbix_hosts": zabbix.get("host_count", 0),
                 "zabbix_problems": zabbix.get("problem_count", 0),
                 "zabbix_critical": zabbix.get("critical_count", 0),
+                "agents_online": agents["online"],
+                "agents_total": agents["total"],
             },
             "health": health,
             "system": system,
@@ -93,6 +98,9 @@ class DashboardService:
             "hyperv": hyperv,
             "proxmox": proxmox,
             "integrations": integrations,
+            "agents": agents,
+            "automation": automation,
+            "ai": ai,
         }
 
     async def _get_zabbix_data(self, db: Session) -> dict:
@@ -183,6 +191,111 @@ class DashboardService:
                 "Dashboard: integrations data failed: %s", e
             )
             return {"count": 0, "items": []}
+
+    async def _get_agent_data(self, db: Session) -> dict:
+        """Get agent stats for the dashboard, never raise."""
+        try:
+            from sqlalchemy import func
+
+            from app.models.db.agent import Agent
+
+            total = db.query(func.count(Agent.id)).scalar() or 0
+            online = db.query(
+                func.count(Agent.id)
+            ).filter(Agent.status == "online").scalar() or 0
+            offline = total - online
+            avg_cpu = db.query(
+                func.avg(Agent.cpu_percent)
+            ).filter(
+                Agent.status == "online",
+                Agent.cpu_percent.isnot(None),
+            ).scalar()
+            avg_mem = db.query(
+                func.avg(Agent.memory_percent)
+            ).filter(
+                Agent.status == "online",
+                Agent.memory_percent.isnot(None),
+            ).scalar()
+
+            return {
+                "total": total,
+                "online": online,
+                "offline": offline,
+                "avg_cpu": round(float(avg_cpu), 1) if avg_cpu else 0,
+                "avg_memory": round(float(avg_mem), 1) if avg_mem else 0,
+            }
+        except Exception as e:
+            logger.warning("Dashboard: agent data failed: %s", e)
+            return {
+                "total": 0,
+                "online": 0,
+                "offline": 0,
+                "avg_cpu": 0,
+                "avg_memory": 0,
+            }
+
+    async def _get_ai_data(self, db: Session) -> dict:
+        """Get AI overview data for the dashboard, never raise."""
+        try:
+            from app.ai.ai_service import ai_service
+
+            return await ai_service.get_overview(db)
+        except Exception as e:
+            logger.warning("Dashboard: AI data failed: %s", e)
+            return {
+                "health_score": {"score": 0, "grade": "N/A"},
+                "critical_incidents": 0,
+                "recommendations": 0,
+                "correlated_alerts": 0,
+                "top_risks": [],
+            }
+
+    async def _get_automation_data(self, db: Session) -> dict:
+        """Get automation summary data for the dashboard, never raise."""
+        try:
+            from sqlalchemy import func
+
+            from app.models.db.approval_request import ApprovalRequest
+            from app.models.db.audit_trail import AuditTrail
+            from app.models.db.playbook import Playbook
+            from app.models.db.playbook_execution import PlaybookExecution
+
+            total_playbooks = db.query(func.count(Playbook.id)).scalar() or 0
+            total_executions = db.query(func.count(PlaybookExecution.id)).scalar() or 0
+            running = db.query(
+                func.count(PlaybookExecution.id)
+            ).filter(PlaybookExecution.status == "running").scalar() or 0
+            completed = db.query(
+                func.count(PlaybookExecution.id)
+            ).filter(PlaybookExecution.status == "completed").scalar() or 0
+            failed = db.query(
+                func.count(PlaybookExecution.id)
+            ).filter(PlaybookExecution.status == "failed").scalar() or 0
+            pending_approvals = db.query(
+                func.count(ApprovalRequest.id)
+            ).filter(ApprovalRequest.status == "pending").scalar() or 0
+            audit_entries = db.query(func.count(AuditTrail.id)).scalar() or 0
+
+            return {
+                "total_playbooks": total_playbooks,
+                "total_executions": total_executions,
+                "running": running,
+                "completed": completed,
+                "failed": failed,
+                "pending_approvals": pending_approvals,
+                "audit_entries": audit_entries,
+            }
+        except Exception as e:
+            logger.warning("Dashboard: automation data failed: %s", e)
+            return {
+                "total_playbooks": 0,
+                "total_executions": 0,
+                "running": 0,
+                "completed": 0,
+                "failed": 0,
+                "pending_approvals": 0,
+                "audit_entries": 0,
+            }
 
 
 dashboard_service = DashboardService()

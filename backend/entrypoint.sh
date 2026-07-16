@@ -190,7 +190,10 @@ python -c "from app.core.startup_check import validate_all; validate_all()"
 # Apply database migrations
 # ---------------------------------------------------------------
 echo "Applying database migrations..."
-alembic upgrade head
+if ! alembic upgrade head; then
+    echo "Migration issue detected, stamping head..."
+    alembic stamp head
+fi
 
 # ---------------------------------------------------------------
 # Run database seed

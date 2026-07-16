@@ -15,7 +15,7 @@ from datetime import UTC, datetime
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
-from app.providers.automation.base_provider import ExecutionContext
+from app.providers.automation.base_provider import ExecutionContext, StepResult
 from app.providers.automation.provider_factory import (
     get_automation_provider,
 )
@@ -471,77 +471,87 @@ class AutomationService:
                 message=f"Starting step: {step.name}",
             )
 
-            try:
-                provider = get_automation_provider(step.provider)
+            max_attempts = 1 + (step.retry_count or 0)
+            last_result = None
 
-                ctx = ExecutionContext(
-                    playbook_id=step.playbook_id,
-                    execution_id=execution_id,
-                    step_id=step.id,
-                    step_name=step.name,
-                    command=step.command,
-                    provider=step.provider,
-                    target_host=step.target_host,
-                    shell=step.shell,
-                    working_directory=step.working_directory,
-                    timeout_seconds=step.timeout_seconds,
-                    variables=variables,
-                )
-
-                result = await provider.execute_step(ctx)
-
-                ExecutionLogRepository.create(
-                    db,
-                    execution_id=execution_id,
-                    step_id=step.id,
-                    level="info" if result.success else "error",
-                    message=(
-                        f"Step '{step.name}' "
-                        f"{'succeeded' if result.success else 'failed'}"
-                    ),
-                    stdout=result.stdout,
-                    stderr=result.stderr,
-                    exit_code=result.exit_code,
-                    duration_ms=result.duration_ms,
-                )
-
-                if result.success:
-                    completed += 1
-                    all_output.append(
-                        f"[STEP {step.step_order}] {step.name}: OK"
-                    )
-                else:
-                    failed += 1
-                    all_output.append(
-                        f"[STEP {step.step_order}] {step.name}: FAILED - {result.error or result.stderr}"
+            for attempt in range(max_attempts):
+                if attempt > 0:
+                    ExecutionLogRepository.create(
+                        db,
+                        execution_id=execution_id,
+                        step_id=step.id,
+                        level="info",
+                        message=f"Retrying step '{step.name}' (attempt {attempt + 1}/{max_attempts})",
                     )
 
-                    if not step.continue_on_failure:
-                        if auto_rollback:
-                            await self._execute_rollback(
-                                db,
-                                execution_id,
-                                steps,
-                                step,
-                                variables,
-                            )
-                        skipped += len(steps) - completed - failed
+                try:
+                    provider = get_automation_provider(step.provider)
+
+                    ctx = ExecutionContext(
+                        playbook_id=step.playbook_id,
+                        execution_id=execution_id,
+                        step_id=step.id,
+                        step_name=step.name,
+                        command=step.command,
+                        provider=step.provider,
+                        target_host=step.target_host,
+                        shell=step.shell,
+                        working_directory=step.working_directory,
+                        timeout_seconds=step.timeout_seconds,
+                        variables=variables,
+                    )
+
+                    result = await provider.execute_step(ctx)
+                    last_result = result
+
+                    if result.success:
                         break
 
-            except Exception as exc:
-                failed += 1
-                ExecutionLogRepository.create(
-                    db,
-                    execution_id=execution_id,
-                    step_id=step.id,
-                    level="error",
-                    message=f"Step '{step.name}' exception: {exc}",
-                )
+                except Exception as exc:
+                    last_result = StepResult(
+                        success=False,
+                        error=str(exc),
+                        exit_code=-1,
+                    )
+
+            assert last_result is not None
+
+            ExecutionLogRepository.create(
+                db,
+                execution_id=execution_id,
+                step_id=step.id,
+                level="info" if last_result.success else "error",
+                message=(
+                    f"Step '{step.name}' "
+                    f"{'succeeded' if last_result.success else 'failed'}"
+                    + (f" after {max_attempts} attempt(s)" if max_attempts > 1 else "")
+                ),
+                stdout=last_result.stdout,
+                stderr=last_result.stderr,
+                exit_code=last_result.exit_code,
+                duration_ms=last_result.duration_ms,
+            )
+
+            if last_result.success:
+                completed += 1
                 all_output.append(
-                    f"[STEP {step.step_order}] {step.name}: EXCEPTION - {exc}"
+                    f"[STEP {step.step_order}] {step.name}: OK"
+                )
+            else:
+                failed += 1
+                all_output.append(
+                    f"[STEP {step.step_order}] {step.name}: FAILED - {last_result.error or last_result.stderr}"
                 )
 
                 if not step.continue_on_failure:
+                    if auto_rollback:
+                        await self._execute_rollback(
+                            db,
+                            execution_id,
+                            steps,
+                            step,
+                            variables,
+                        )
                     skipped += len(steps) - completed - failed
                     break
 
@@ -1304,6 +1314,220 @@ class AutomationService:
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"Playbook {playbook_id} not found",
             )
+
+    # ------------------------------------------------------------------ #
+    # Clone / Export / Import                                             #
+    # ------------------------------------------------------------------ #
+
+    async def clone_playbook(
+        self, db: Session, playbook_id: int, name: str | None = None
+    ) -> PlaybookResponse:
+        """Clone a playbook with all its steps and variables."""
+        source = PlaybookRepository.get_by_id(db, playbook_id)
+        if not source:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Playbook {playbook_id} not found",
+            )
+
+        clone_name = name or f"{source.name} (Copy)"
+        new_playbook = PlaybookRepository.create(
+            db,
+            name=clone_name,
+            description=source.description,
+            category=source.category,
+            tags=source.tags,
+            enabled=False,
+            requires_approval=source.requires_approval,
+            auto_rollback=source.auto_rollback,
+            timeout_seconds=source.timeout_seconds,
+            max_retries=source.max_retries,
+            created_by="clone",
+        )
+
+        source_steps = PlaybookStepRepository.get_by_playbook(
+            db, playbook_id
+        )
+        for step in source_steps:
+            PlaybookStepRepository.create(
+                db,
+                playbook_id=new_playbook.id,
+                name=step.name,
+                description=step.description,
+                step_type=step.step_type,
+                provider=step.provider,
+                command=step.command,
+                target_host=step.target_host,
+                shell=step.shell,
+                working_directory=step.working_directory,
+                environment_variables=step.environment_variables,
+                timeout_seconds=step.timeout_seconds,
+                retry_count=step.retry_count,
+                continue_on_failure=step.continue_on_failure,
+                rollback_command=step.rollback_command,
+                step_order=step.step_order,
+            )
+
+        source_vars = PlaybookVariableRepository.get_by_playbook(
+            db, playbook_id
+        )
+        for var in source_vars:
+            PlaybookVariableRepository.create(
+                db,
+                playbook_id=new_playbook.id,
+                name=var.name,
+                value=var.value,
+                variable_type=var.variable_type,
+                description=var.description,
+                required=var.required,
+                sensitive=var.sensitive,
+                default_value=var.default_value,
+            )
+
+        return PlaybookResponse.model_validate(new_playbook)
+
+    async def export_playbook(
+        self, db: Session, playbook_id: int
+    ) -> dict:
+        """Export a playbook with all steps and variables as a dict."""
+        playbook = PlaybookRepository.get_by_id(db, playbook_id)
+        if not playbook:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Playbook {playbook_id} not found",
+            )
+
+        steps = PlaybookStepRepository.get_by_playbook(
+            db, playbook_id
+        )
+        variables = PlaybookVariableRepository.get_by_playbook(
+            db, playbook_id
+        )
+
+        return {
+            "playbook": {
+                "name": playbook.name,
+                "description": playbook.description,
+                "category": playbook.category,
+                "tags": playbook.tags,
+                "requires_approval": playbook.requires_approval,
+                "auto_rollback": playbook.auto_rollback,
+                "timeout_seconds": playbook.timeout_seconds,
+                "max_retries": playbook.max_retries,
+            },
+            "steps": [
+                {
+                    "name": s.name,
+                    "description": s.description,
+                    "step_type": s.step_type,
+                    "provider": s.provider,
+                    "command": s.command,
+                    "target_host": s.target_host,
+                    "shell": s.shell,
+                    "working_directory": s.working_directory,
+                    "environment_variables": s.environment_variables,
+                    "timeout_seconds": s.timeout_seconds,
+                    "retry_count": s.retry_count,
+                    "continue_on_failure": s.continue_on_failure,
+                    "rollback_command": s.rollback_command,
+                    "step_order": s.step_order,
+                }
+                for s in steps
+            ],
+            "variables": [
+                {
+                    "name": v.name,
+                    "value": v.value if not v.sensitive else None,
+                    "variable_type": v.variable_type,
+                    "description": v.description,
+                    "required": v.required,
+                    "sensitive": v.sensitive,
+                    "default_value": v.default_value,
+                }
+                for v in variables
+            ],
+        }
+
+    async def import_playbook(
+        self, db: Session, data: dict
+    ) -> PlaybookResponse:
+        """Import a playbook from exported data."""
+        pb_data = data.get("playbook", {})
+        name = pb_data.get("name", "Imported Playbook")
+
+        existing = PlaybookRepository.get_filtered(db, search=name)
+        if len(existing) > 0:
+            name = f"{name} (Imported)"
+
+        new_playbook = PlaybookRepository.create(
+            db,
+            name=name,
+            description=pb_data.get("description"),
+            category=pb_data.get("category"),
+            tags=pb_data.get("tags"),
+            enabled=False,
+            requires_approval=pb_data.get("requires_approval", False),
+            auto_rollback=pb_data.get("auto_rollback", False),
+            timeout_seconds=pb_data.get("timeout_seconds", 3600),
+            max_retries=pb_data.get("max_retries", 0),
+            created_by="import",
+        )
+
+        for step_data in data.get("steps", []):
+            PlaybookStepRepository.create(
+                db,
+                playbook_id=new_playbook.id,
+                name=step_data.get("name", "Unnamed Step"),
+                description=step_data.get("description"),
+                step_type=step_data.get("step_type", "remote_command"),
+                provider=step_data.get("provider", "ssh"),
+                command=step_data.get("command", ""),
+                target_host=step_data.get("target_host"),
+                shell=step_data.get("shell"),
+                working_directory=step_data.get("working_directory"),
+                environment_variables=step_data.get("environment_variables"),
+                timeout_seconds=step_data.get("timeout_seconds", 300),
+                retry_count=step_data.get("retry_count", 0),
+                continue_on_failure=step_data.get("continue_on_failure", False),
+                rollback_command=step_data.get("rollback_command"),
+                step_order=step_data.get("step_order", 0),
+            )
+
+        for var_data in data.get("variables", []):
+            PlaybookVariableRepository.create(
+                db,
+                playbook_id=new_playbook.id,
+                name=var_data.get("name", "unnamed"),
+                value=var_data.get("value"),
+                variable_type=var_data.get("variable_type", "string"),
+                description=var_data.get("description"),
+                required=var_data.get("required", False),
+                sensitive=var_data.get("sensitive", False),
+                default_value=var_data.get("default_value"),
+            )
+
+        return PlaybookResponse.model_validate(new_playbook)
+
+    # ------------------------------------------------------------------ #
+    # Variable Substitution                                               #
+    # ------------------------------------------------------------------ #
+
+    @staticmethod
+    def substitute_variables(
+        text: str, variables: dict[str, str], max_depth: int = 5
+    ) -> str:
+        """Recursively substitute {{variable}} placeholders in text."""
+        result = text
+        for _ in range(max_depth):
+            changed = False
+            for key, value in variables.items():
+                placeholder = "{{" + key + "}}"
+                if placeholder in result:
+                    result = result.replace(placeholder, value)
+                    changed = True
+            if not changed:
+                break
+        return result
 
 
 automation_service = AutomationService()

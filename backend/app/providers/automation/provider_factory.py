@@ -10,6 +10,9 @@ Sprint 2.8 - Automation & Playbooks.
 import logging
 
 from app.providers.automation.base_provider import AutomationProvider
+from app.providers.automation.bash_provider import BashAutomationProvider
+from app.providers.automation.http_provider import HTTPAutomationProvider
+from app.providers.automation.powershell_provider import PowerShellAutomationProvider
 from app.providers.automation.ssh_provider import SSHAutomationProvider
 from app.providers.automation.winrm_provider import WinRMAutomationProvider
 from app.providers.automation.agent_provider import AgentAutomationProvider
@@ -26,6 +29,9 @@ def get_automation_provider(provider_name: str) -> AutomationProvider:
     Return the correct provider based on name.
 
     Supported providers:
+    - 'bash' -> BashAutomationProvider
+    - 'powershell' -> PowerShellAutomationProvider
+    - 'http' -> HTTPAutomationProvider
     - 'ssh' -> SSHAutomationProvider
     - 'winrm' -> WinRMAutomationProvider
     - 'agent' -> AgentAutomationProvider
@@ -40,6 +46,9 @@ def get_automation_provider(provider_name: str) -> AutomationProvider:
         return _providers[provider_name]
 
     provider_map: dict[str, type[AutomationProvider]] = {
+        "bash": BashAutomationProvider,
+        "powershell": PowerShellAutomationProvider,
+        "http": HTTPAutomationProvider,
         "ssh": SSHAutomationProvider,
         "winrm": WinRMAutomationProvider,
         "agent": AgentAutomationProvider,
@@ -65,6 +74,9 @@ def get_automation_provider(provider_name: str) -> AutomationProvider:
 def get_all_providers() -> dict[str, AutomationProvider]:
     """Return all available providers (creates them if needed)."""
     for name in [
+        "bash",
+        "powershell",
+        "http",
         "ssh",
         "winrm",
         "agent",

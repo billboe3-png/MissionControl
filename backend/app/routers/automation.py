@@ -616,3 +616,36 @@ async def fire_event(
         "event_type": event_type,
         "playbooks_triggered": len(results),
     }
+
+
+# ------------------------------------------------------------------ #
+# Clone / Export / Import                                             #
+# ------------------------------------------------------------------ #
+
+
+@router.post("/playbooks/{playbook_id}/clone")
+async def clone_playbook(
+    playbook_id: int,
+    name: str | None = Query(None, description="Name for the cloned playbook"),
+    db: Session = Depends(get_db),
+    service: AutomationService = Depends(get_automation_service),
+) -> PlaybookResponse:
+    return await service.clone_playbook(db, playbook_id, name)
+
+
+@router.get("/playbooks/{playbook_id}/export")
+async def export_playbook(
+    playbook_id: int,
+    db: Session = Depends(get_db),
+    service: AutomationService = Depends(get_automation_service),
+) -> dict:
+    return await service.export_playbook(db, playbook_id)
+
+
+@router.post("/playbooks/import", status_code=status.HTTP_201_CREATED)
+async def import_playbook(
+    payload: dict,
+    db: Session = Depends(get_db),
+    service: AutomationService = Depends(get_automation_service),
+) -> PlaybookResponse:
+    return await service.import_playbook(db, payload)

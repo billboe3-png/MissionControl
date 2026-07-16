@@ -6,6 +6,9 @@ import HealthBadges from "../components/dashboard/HealthBadges";
 import QuickActions from "../components/dashboard/QuickActions";
 import IntegrationsCard from "../components/dashboard/IntegrationsCard";
 import HyperVCard from "../components/dashboard/HyperVCard";
+import AICard from "../components/dashboard/AICard";
+import AgentCard from "../components/dashboard/AgentCard";
+import AutomationCard from "../components/dashboard/AutomationCard";
 import PageHeader from "../components/common/PageHeader";
 
 export default function DashboardPage() {
@@ -92,6 +95,9 @@ export default function DashboardPage() {
                     <IntegrationsCard items={data.integrations.profiles.items} />
                 )}
                 <HyperVCard />
+                {data.agents && <AgentCard data={data.agents} />}
+                {data.automation && <AutomationCard data={data.automation} />}
+                {data.ai && <AICard data={data.ai} />}
             </div>
         </>
     );

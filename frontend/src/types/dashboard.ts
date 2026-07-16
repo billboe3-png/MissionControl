@@ -184,6 +184,8 @@ export interface Summary {
     containers_running: number;
     containers_total: number;
     docker_engine: string;
+    agents_online: number;
+    agents_total: number;
 }
 
 export interface IntegrationStatus {
@@ -257,6 +259,24 @@ export interface RemoteData {
     recentCommands: RemoteCommand[];
 }
 
+export interface AgentStats {
+    total: number;
+    online: number;
+    offline: number;
+    avg_cpu: number;
+    avg_memory: number;
+}
+
+export interface AutomationStatus {
+    total_playbooks: number;
+    total_executions: number;
+    running: number;
+    completed: number;
+    failed: number;
+    pending_approvals: number;
+    audit_entries: number;
+}
+
 export interface DashboardResponse {
     application: ApplicationInfo;
     generated: string;
@@ -283,4 +303,21 @@ export interface DashboardResponse {
     integrations: Integrations;
     hyperv: HyperVStatus;
     proxmox: ProxmoxStatus;
+    agents: AgentStats;
+    automation: AutomationStatus;
+    ai: AIStatus;
+}
+
+export interface AIStatus {
+    health_score: {
+        score: number;
+        grade: string;
+    };
+    critical_incidents: number;
+    recommendations: number;
+    correlated_alerts: number;
+    top_risks: Array<{
+        title: string;
+        severity: string;
+    }>;
 }

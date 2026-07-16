@@ -32,6 +32,7 @@ export default function ApprovalsPage() {
     }, [loadData]);
 
     const handleApprove = async (id: number) => {
+        if (!window.confirm("Approve this request?")) return;
         try {
             await automationApi.approveRequest(id, {
                 approved_by: "ui_user",
@@ -45,6 +46,7 @@ export default function ApprovalsPage() {
     };
 
     const handleReject = async (id: number) => {
+        if (!window.confirm("Reject this request?")) return;
         try {
             await automationApi.rejectRequest(id, {
                 approved_by: "ui_user",

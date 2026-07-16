@@ -15,6 +15,7 @@ from app.seed.projects import seed as seed_projects
 from app.seed.resumes import seed as seed_resumes
 from app.seed.sites import seed as seed_sites
 from app.seed.tasks import seed as seed_tasks
+from app.seed.automation import seed as seed_automation
 
 logger = logging.getLogger(__name__)
 
@@ -27,6 +28,7 @@ SEED_MODULES: list[tuple[str, SeedFunction]] = [
     ("Notes", seed_notes),
     ("Resume", seed_resumes),
     ("Parking Lot", seed_parking_lot),
+    ("Automation Playbooks", seed_automation),
 ]
 
 
