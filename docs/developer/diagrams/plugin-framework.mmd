@@ -1,0 +1,46 @@
+```mermaid
+graph TB
+    subgraph PluginFramework["Plugin Framework (Future - Sprint 3.0+)"]
+        PluginAPI["Plugin API"]
+        PluginRegistry["Plugin Registry"]
+        PluginLoader["Plugin Loader"]
+        PluginSandbox["Plugin Sandbox"]
+        PermissionSystem["Permission System"]
+    end
+
+    subgraph PluginLifecycle["Plugin Lifecycle"]
+        Install["Install"]
+        Register["Register"]
+        Load["Load"]
+        Enable["Enable"]
+        Execute["Execute"]
+        Disable["Disable"]
+        Unload["Unload"]
+        Remove["Remove"]
+    end
+
+    Install --> Register
+    Register --> Load
+    Load --> Enable
+    Enable --> Execute
+    Execute --> Disable
+    Disable --> Unload
+    Unload --> Remove
+
+    PluginAPI --> PluginRegistry
+    PluginRegistry --> PluginLoader
+    PluginLoader --> PluginSandbox
+    PluginSandbox --> PermissionSystem
+
+    subgraph PluginTypes["Plugin Types"]
+        DashboardWidget["Dashboard Widget"]
+        AutomationProvider["Automation Provider"]
+        MonitoringPlugin["Monitoring Plugin"]
+        IntegrationPlugin["Integration Plugin"]
+    end
+
+    PluginAPI --> DashboardWidget
+    PluginAPI --> AutomationProvider
+    PluginAPI --> MonitoringPlugin
+    PluginAPI --> IntegrationPlugin
+```

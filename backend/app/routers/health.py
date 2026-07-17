@@ -1,8 +1,12 @@
+import logging
+
 from fastapi import APIRouter, status
 from fastapi.responses import JSONResponse
 
 from app.db.postgres import check_postgres
 from app.db.redis import check_redis
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/health", tags=["health"])
 

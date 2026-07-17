@@ -5,9 +5,12 @@ API endpoints for managing sites.
 Sprint 2.9 - Multi-Site Management.
 """
 
+import logging
+
 from fastapi import APIRouter, Depends, status
 from sqlalchemy.orm import Session
 
+from app.core.auth_dependency import get_current_user
 from app.db import get_db
 from app.schemas.site import (
     SiteCreate,
@@ -19,7 +22,13 @@ from app.schemas.site import (
 )
 from app.services.site_service import SiteService, site_service
 
-router = APIRouter(prefix="/sites", tags=["Sites"])
+logger = logging.getLogger(__name__)
+
+router = APIRouter(
+    prefix="/sites",
+    tags=["Sites"],
+    dependencies=[Depends(get_current_user)],
+)
 
 
 def get_site_service() -> SiteService:

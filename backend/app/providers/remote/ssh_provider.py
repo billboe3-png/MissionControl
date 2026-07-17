@@ -1034,7 +1034,6 @@ def _get_max_command_timeout() -> int:
 # File Transfer Methods (added to SSHProvider below)                  #
 # ------------------------------------------------------------------ #
 
-import base64
 import stat
 
 

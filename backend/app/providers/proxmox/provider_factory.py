@@ -29,11 +29,11 @@ def get_proxmox_provider(db: Session | None = None) -> ProxmoxProvider:
 
     if db is not None:
         try:
+            from app.core.config import get_settings
+            from app.core.security import CredentialCipher
             from app.repositories.integration_profile_repository import (
                 IntegrationProfileRepository,
             )
-            from app.core.security import CredentialCipher
-            from app.core.config import get_settings
 
             profile = IntegrationProfileRepository.get_enabled_by_type(
                 db, "proxmox"
@@ -41,14 +41,25 @@ def get_proxmox_provider(db: Session | None = None) -> ProxmoxProvider:
             if profile is not None:
                 settings = get_settings()
                 cipher = CredentialCipher(settings.missioncontrol_secret_key)
-                token_secret = cipher.decrypt(profile.encrypted_secret) if profile.encrypted_secret else ""
+                token_secret = ""
+                if profile.encrypted_secret:
+                    token_secret = cipher.decrypt(
+                        profile.encrypted_secret
+                    )
                 base_url = profile.base_url or ""
                 token_id = profile.username or ""
                 timeout = profile.timeout or 30
-                verify_ssl = profile.verify_ssl if profile.verify_ssl is not None else True
+                verify_ssl = (
+                    profile.verify_ssl
+                    if profile.verify_ssl is not None
+                    else True
+                )
 
                 if base_url and token_id:
-                    full_token = f"{token_id}:{token_secret}" if token_secret else token_id
+                    if token_secret:
+                        full_token = f"{token_id}={token_secret}"
+                    else:
+                        full_token = token_id
                     logger.info(
                         "Using production Proxmox provider (profile: %s)",
                         profile.name,

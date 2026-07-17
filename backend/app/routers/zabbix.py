@@ -12,6 +12,7 @@ import logging
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
+from app.core.auth_dependency import get_current_user
 from app.db.database import get_db
 from app.schemas.zabbix import (
     ZabbixConnectionTestResponse,
@@ -31,7 +32,11 @@ from app.services.zabbix_service import zabbix_service
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/zabbix", tags=["zabbix"])
+router = APIRouter(
+    prefix="/zabbix",
+    tags=["zabbix"],
+    dependencies=[Depends(get_current_user)],
+)
 
 
 @router.get(

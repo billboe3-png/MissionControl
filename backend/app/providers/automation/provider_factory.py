@@ -9,15 +9,15 @@ Sprint 2.8 - Automation & Playbooks.
 
 import logging
 
+from app.providers.automation.agent_provider import AgentAutomationProvider
 from app.providers.automation.base_provider import AutomationProvider
 from app.providers.automation.bash_provider import BashAutomationProvider
 from app.providers.automation.http_provider import HTTPAutomationProvider
+from app.providers.automation.hyperv_provider import HyperVAutomationProvider
 from app.providers.automation.powershell_provider import PowerShellAutomationProvider
+from app.providers.automation.proxmox_provider import ProxmoxAutomationProvider
 from app.providers.automation.ssh_provider import SSHAutomationProvider
 from app.providers.automation.winrm_provider import WinRMAutomationProvider
-from app.providers.automation.agent_provider import AgentAutomationProvider
-from app.providers.automation.hyperv_provider import HyperVAutomationProvider
-from app.providers.automation.proxmox_provider import ProxmoxAutomationProvider
 
 logger = logging.getLogger(__name__)
 

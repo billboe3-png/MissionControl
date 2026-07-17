@@ -21,12 +21,12 @@ logger = logging.getLogger(__name__)
 def _get_ad_provider_from_db(db: Session):
     """Get AD provider from the active IntegrationProfile, falling back to env/mock."""
     try:
+        from app.core.config import get_settings
+        from app.core.security import CredentialCipher
         from app.models.db.integration_profile import IntegrationProfile
         from app.providers.identity.ldap_ad_provider import (
             LDAPActiveDirectoryProvider,
         )
-        from app.core.config import get_settings
-        from app.core.security import CredentialCipher
 
         settings = get_settings()
         profile = (

@@ -6,14 +6,8 @@ Sprint 2.8 - Automation & Playbooks.
 
 from datetime import UTC, datetime
 
-from sqlalchemy import Boolean
-from sqlalchemy import DateTime
-from sqlalchemy import ForeignKey
-from sqlalchemy import Integer
-from sqlalchemy import String
-from sqlalchemy import Text
-from sqlalchemy.orm import Mapped
-from sqlalchemy.orm import mapped_column
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.database import Base
 
@@ -26,6 +20,19 @@ class EventTrigger(Base):
     id: Mapped[int] = mapped_column(
         Integer, primary_key=True, index=True
     )
+
+    company_id: Mapped[int | None] = mapped_column(
+        Integer,
+        nullable=True,
+        index=True,
+    )
+
+    site_id: Mapped[int | None] = mapped_column(
+        Integer,
+        nullable=True,
+        index=True,
+    )
+
     playbook_id: Mapped[int] = mapped_column(
         Integer,
         ForeignKey("playbooks.id", ondelete="CASCADE"),

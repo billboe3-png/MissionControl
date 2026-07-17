@@ -8,7 +8,7 @@ Sprint 2.8 - Automation & Playbooks.
 """
 
 from abc import ABC, abstractmethod
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 
 @dataclass

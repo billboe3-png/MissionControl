@@ -5,12 +5,14 @@ Tests the Proxmox provider, service, router, schemas, mock provider,
 VirtualizationProvider abstraction, and domain models.
 """
 
+
 import pytest
-from unittest.mock import patch
 
 from app.providers.proxmox.mock_provider import MockProxmoxProvider, set_mock_mode
-from app.providers.proxmox.provider_factory import get_proxmox_provider, reset_proxmox_provider
-
+from app.providers.proxmox.provider_factory import (
+    get_proxmox_provider,
+    reset_proxmox_provider,
+)
 
 # ------------------------------------------------------------------ #
 # Mock Provider Tests                                                 #
@@ -236,7 +238,7 @@ class TestMockProxmoxProvider:
     @pytest.mark.asyncio
     async def test_delete_snapshot(self) -> None:
         provider = MockProxmoxProvider()
-        result = await provider.delete_snapshot("100", "snap/1719000000")
+        result = await provider.delete_snapshot("100", "snap-1719000000")
         assert result["success"] is True
 
     @pytest.mark.asyncio
@@ -516,7 +518,7 @@ class TestProxmoxRouter:
         data = response.json()
         assert data["connected"] is True
         assert data["total_vms"] == 6
-        assert data["running"] == 3
+        assert data["running"] == 4
 
     def test_test_connection(self, client) -> None:
         response = client.get("/api/v1/proxmox/test")
@@ -645,7 +647,7 @@ class TestProxmoxRouter:
         assert data["success"] is True
 
     def test_delete_snapshot(self, client) -> None:
-        response = client.delete("/api/v1/proxmox/vms/100/snapshots/snap/1719000000")
+        response = client.delete("/api/v1/proxmox/vms/100/snapshots/snap-1719000000")
         assert response.status_code == 200
         assert response.json()["success"] is True
 
@@ -674,7 +676,7 @@ class TestProxmoxDashboardProvider:
         result = await provider.get_proxmox_data(None)
         assert result["connected"] is True
         assert result["total_vms"] == 6
-        assert result["running"] == 3
+        assert result["running"] == 4
         assert result["running_lxc"] == 3
 
     @pytest.mark.asyncio

@@ -1,13 +1,6 @@
-const API = "/api/v1/remote/files";
+import { apiClient } from "../utils/apiClient";
 
-async function handleResponse<T>(response: Response): Promise<T> {
-    if (!response.ok) {
-        const body = await response.json().catch(() => null);
-        const detail = body?.detail;
-        throw new Error(detail ?? `Request failed (${response.status})`);
-    }
-    return response.json();
-}
+const API = "/api/v1/remote/files";
 
 export interface FileListItem {
     name: string;
@@ -47,10 +40,9 @@ export interface SessionMetricsResponse {
 
 export const filesApi = {
     async list(hostId: number, path: string): Promise<FileListResponse> {
-        const response = await fetch(
+        return apiClient<FileListResponse>(
             `${API}/list?host_id=${hostId}&path=${encodeURIComponent(path)}`
         );
-        return handleResponse<FileListResponse>(response);
     },
 
     async upload(
@@ -58,65 +50,56 @@ export const filesApi = {
         remotePath: string,
         content: string
     ): Promise<FileTransferResponse> {
-        const response = await fetch(`${API}/upload`, {
+        return apiClient<FileTransferResponse>(`${API}/upload`, {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
+            json: {
                 host_id: hostId,
                 remote_path: remotePath,
                 content_base64: content,
-            }),
+            },
         });
-        return handleResponse<FileTransferResponse>(response);
     },
 
     async download(
         hostId: number,
         remotePath: string
     ): Promise<FileDownloadResponse> {
-        const response = await fetch(`${API}/download`, {
+        return apiClient<FileDownloadResponse>(`${API}/download`, {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
+            json: {
                 host_id: hostId,
                 remote_path: remotePath,
-            }),
+            },
         });
-        return handleResponse<FileDownloadResponse>(response);
     },
 
     async mkdir(
         hostId: number,
         remotePath: string
     ): Promise<FileTransferResponse> {
-        const response = await fetch(`${API}/mkdir`, {
+        return apiClient<FileTransferResponse>(`${API}/mkdir`, {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
+            json: {
                 host_id: hostId,
                 remote_path: remotePath,
-            }),
+            },
         });
-        return handleResponse<FileTransferResponse>(response);
     },
 
     async remove(
         hostId: number,
         remotePath: string
     ): Promise<FileTransferResponse> {
-        const response = await fetch(`${API}/delete`, {
+        return apiClient<FileTransferResponse>(`${API}/delete`, {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
+            json: {
                 host_id: hostId,
                 remote_path: remotePath,
-            }),
+            },
         });
-        return handleResponse<FileTransferResponse>(response);
     },
 
     async metrics(): Promise<SessionMetricsResponse> {
-        const response = await fetch(`/api/v1/remote/metrics`);
-        return handleResponse<SessionMetricsResponse>(response);
+        return apiClient<SessionMetricsResponse>(`/api/v1/remote/metrics`);
     },
 };

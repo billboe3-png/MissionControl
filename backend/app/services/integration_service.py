@@ -15,10 +15,11 @@ from sqlalchemy.orm import Session
 
 from app.core.security import CredentialCipher
 from app.models.db.integration_profile import IntegrationProfile
+from app.providers.hyperv.provider_factory import reset_hyperv_provider
+from app.providers.proxmox.provider_factory import reset_proxmox_provider
 from app.repositories.integration_profile_repository import (
     IntegrationProfileRepository,
 )
-from app.providers.hyperv.provider_factory import reset_hyperv_provider
 from app.schemas.integration import (
     IntegrationProfileCreate,
     IntegrationProfileListResponse,
@@ -119,6 +120,8 @@ class IntegrationService:
             self._reset_zabbix_singleton()
         if data.integration_type == "hyperv":
             reset_hyperv_provider(profile.id)
+        if data.integration_type == "proxmox":
+            reset_proxmox_provider()
         return self._to_response(profile)
 
     async def update_profile(
@@ -170,6 +173,8 @@ class IntegrationService:
             self._reset_zabbix_singleton()
         if profile.integration_type == "hyperv":
             reset_hyperv_provider(profile.id)
+        if profile.integration_type == "proxmox":
+            reset_proxmox_provider()
         return self._to_response(profile)
 
     async def delete_profile(
@@ -187,6 +192,8 @@ class IntegrationService:
             self._reset_zabbix_singleton()
         if existing and existing.integration_type == "hyperv":
             reset_hyperv_provider(profile_id)
+        if existing and existing.integration_type == "proxmox":
+            reset_proxmox_provider()
 
     # ------------------------------------------------------------------ #
     # Actions                                                             #
@@ -208,6 +215,8 @@ class IntegrationService:
             self._reset_zabbix_singleton()
         if profile.integration_type == "hyperv":
             reset_hyperv_provider(profile.id)
+        if profile.integration_type == "proxmox":
+            reset_proxmox_provider()
         return self._to_response(profile)
 
     async def disable_profile(
@@ -226,6 +235,8 @@ class IntegrationService:
             self._reset_zabbix_singleton()
         if profile.integration_type == "hyperv":
             reset_hyperv_provider(profile.id)
+        if profile.integration_type == "proxmox":
+            reset_proxmox_provider()
         return self._to_response(profile)
 
     async def test_connection(
@@ -384,9 +395,28 @@ class IntegrationService:
         self, profile: IntegrationProfile
     ) -> dict:
         """Test Proxmox connection using profile config."""
-        from app.providers.proxmox.mock_provider import MockProxmoxProvider
+        from app.providers.proxmox.proxmox_provider import ProxmoxRESTProvider
 
-        provider = MockProxmoxProvider()
+        token_secret = _decrypt(profile.encrypted_secret) or ""
+        token_id = profile.username or ""
+        base_url = profile.base_url or ""
+
+        if not base_url:
+            return {"connected": False, "error": "Proxmox server URL is required"}
+        if not token_id:
+            return {"connected": False, "error": "Proxmox API token ID is required"}
+
+        if token_secret:
+            full_token = f"{token_id}={token_secret}"
+        else:
+            full_token = token_id
+
+        provider = ProxmoxRESTProvider(
+            base_url=base_url,
+            token=full_token,
+            timeout=profile.timeout or 30,
+            verify_ssl=profile.verify_ssl if profile.verify_ssl is not None else True,
+        )
         return await provider.test_connection()
 
     # ------------------------------------------------------------------ #

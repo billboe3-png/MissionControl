@@ -7,9 +7,12 @@ scheduling, triggers, audit trails, rollback, and dry run.
 Sprint 2.8 - Automation & Playbooks.
 """
 
+import logging
+
 from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.orm import Session
 
+from app.core.auth_dependency import get_current_user
 from app.db import get_db
 from app.schemas.approval import (
     ApprovalAction,
@@ -66,7 +69,13 @@ from app.services.automation_service import (
     automation_service,
 )
 
-router = APIRouter(prefix="/automation", tags=["Automation"])
+logger = logging.getLogger(__name__)
+
+router = APIRouter(
+    prefix="/automation",
+    tags=["Automation"],
+    dependencies=[Depends(get_current_user)],
+)
 
 
 def get_automation_service() -> AutomationService:

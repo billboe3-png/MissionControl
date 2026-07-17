@@ -195,32 +195,32 @@ class DashboardService:
     async def _get_agent_data(self, db: Session) -> dict:
         """Get agent stats for the dashboard, never raise."""
         try:
-            from sqlalchemy import func
+            from sqlalchemy import func, select
 
             from app.models.db.agent import Agent
 
-            total = db.query(func.count(Agent.id)).scalar() or 0
-            online = db.query(
-                func.count(Agent.id)
-            ).filter(Agent.status == "online").scalar() or 0
-            offline = total - online
-            avg_cpu = db.query(
-                func.avg(Agent.cpu_percent)
-            ).filter(
-                Agent.status == "online",
-                Agent.cpu_percent.isnot(None),
-            ).scalar()
-            avg_mem = db.query(
-                func.avg(Agent.memory_percent)
-            ).filter(
-                Agent.status == "online",
-                Agent.memory_percent.isnot(None),
-            ).scalar()
+            row = db.execute(
+                select(
+                    func.count(Agent.id).label("total"),
+                    func.count(Agent.id).filter(Agent.status == "online").label("online"),
+                    func.avg(Agent.cpu_percent).filter(
+                        Agent.status == "online", Agent.cpu_percent.isnot(None)
+                    ).label("avg_cpu"),
+                    func.avg(Agent.memory_percent).filter(
+                        Agent.status == "online", Agent.memory_percent.isnot(None)
+                    ).label("avg_mem"),
+                )
+            ).one()
+
+            total = row.total or 0
+            online = row.online or 0
+            avg_cpu = row.avg_cpu
+            avg_mem = row.avg_mem
 
             return {
                 "total": total,
                 "online": online,
-                "offline": offline,
+                "offline": total - online,
                 "avg_cpu": round(float(avg_cpu), 1) if avg_cpu else 0,
                 "avg_memory": round(float(avg_mem), 1) if avg_mem else 0,
             }

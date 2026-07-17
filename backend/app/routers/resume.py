@@ -5,22 +5,27 @@ Sprint:
     1.5.1 - Resume API GET Operations
 """
 
-from fastapi import APIRouter
-from fastapi import Depends
-from fastapi import status
+import logging
+
+from fastapi import APIRouter, Depends, status
 from sqlalchemy.orm import Session
 
+from app.core.auth_dependency import get_current_user
 from app.db import get_db
-from app.schemas.resume import ResumeCreate
-from app.schemas.resume import ResumeListResponse
-from app.schemas.resume import ResumeResponse
-from app.schemas.resume import ResumeUpdate
-from app.services.resume_service import ResumeService
-from app.services.resume_service import resume_service
+from app.schemas.resume import (
+    ResumeCreate,
+    ResumeListResponse,
+    ResumeResponse,
+    ResumeUpdate,
+)
+from app.services.resume_service import ResumeService, resume_service
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(
     prefix="/resume",
     tags=["Resume"],
+    dependencies=[Depends(get_current_user)],
 )
 
 

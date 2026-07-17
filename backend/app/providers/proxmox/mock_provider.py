@@ -5,8 +5,7 @@ Returns realistic static data for development and testing.
 """
 
 import random
-from datetime import timedelta
-from datetime import datetime, timezone
+from datetime import UTC, datetime, timedelta
 
 from .base_provider import ProxmoxProvider
 
@@ -19,7 +18,7 @@ def set_mock_mode(mode: str) -> None:
 
 
 def _now() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 MOCK_NODES = [
@@ -436,7 +435,7 @@ MOCK_TASKS = [
 
 MOCK_SNAPSHOTS = [
     {
-        "id": "snap/1719000000",
+        "id": "snap-1719000000",
         "name": "pre-upgrade-2.5",
         "vm_name": "web-prod-01",
         "vm_id": "100",
@@ -447,18 +446,18 @@ MOCK_SNAPSHOTS = [
         "notes": "Before upgrade to v2.5",
     },
     {
-        "id": "snap/1719100000",
+        "id": "snap-1719100000",
         "name": "post-patch-july",
         "vm_name": "web-prod-01",
         "vm_id": "100",
         "checkpoint_type": "snapshot",
         "creation_time": (_now() - timedelta(days=5)).isoformat(),
         "size_bytes": 536870912,
-        "parent_checkpoint_id": "snap/1719000000",
+        "parent_checkpoint_id": "snap-1719000000",
         "notes": "After July security patches",
     },
     {
-        "id": "snap/1719200000",
+        "id": "snap-1719200000",
         "name": "db-backup-pre-migration",
         "vm_name": "db-prod-01",
         "vm_id": "102",

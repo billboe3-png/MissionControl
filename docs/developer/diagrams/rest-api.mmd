@@ -1,0 +1,55 @@
+```mermaid
+graph TB
+    subgraph RESTAPI["REST API Structure"]
+        Root["/api/v1"]
+        Health["/health"]
+        Auth["/auth"]
+        Dashboard["/dashboard"]
+        Projects["/projects"]
+        Tasks["/tasks"]
+        Notes["/notes"]
+        Remote["/remote"]
+        Identity["/identity"]
+        Zabbix["/zabbix"]
+        HyperV["/hyperv"]
+        Proxmox["/proxmox"]
+        AI["/ai"]
+        Agents["/agents"]
+        Automation["/automation"]
+        Companies["/companies"]
+    end
+
+    Root --> Health
+    Root --> Auth
+    Root --> Dashboard
+    Root --> Projects
+    Root --> Tasks
+    Root --> Notes
+    Root --> Remote
+    Root --> Identity
+    Root --> Zabbix
+    Root --> HyperV
+    Root --> Proxmox
+    Root --> AI
+    Root --> Agents
+    Root --> Automation
+    Root --> Companies
+
+    subgraph RemoteEndpoints["Remote Operations"]
+        RH["/remote/hosts"]
+        RC["/remote/credentials"]
+        RE["/remote/execute"]
+        RWS["/remote/console (WebSocket)"]
+        RF["/remote/files"]
+        RT["/remote/templates"]
+        RS["/remote/schedules"]
+    end
+
+    Remote --> RH
+    Remote --> RC
+    Remote --> RE
+    Remote --> RWS
+    Remote --> RF
+    Remote --> RT
+    Remote --> RS
+```

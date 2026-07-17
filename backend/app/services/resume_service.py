@@ -9,15 +9,16 @@ Sprint:
 
 import logging
 
-from fastapi import HTTPException
-from fastapi import status
+from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.repositories.resume_repository import ResumeRepository
-from app.schemas.resume import ResumeCreate
-from app.schemas.resume import ResumeListResponse
-from app.schemas.resume import ResumeResponse
-from app.schemas.resume import ResumeUpdate
+from app.schemas.resume import (
+    ResumeCreate,
+    ResumeListResponse,
+    ResumeResponse,
+    ResumeUpdate,
+)
 
 logger = logging.getLogger(__name__)
 

@@ -5,7 +5,6 @@ import base64
 import logging
 import os
 import platform
-import subprocess
 import tempfile
 import time
 from typing import Any
@@ -129,7 +128,10 @@ class CommandExecutor:
 
         try:
             if system == "Windows":
-                shell_cmd = ["powershell", "-ExecutionPolicy", "Bypass", "-File", tmp_path]
+                shell_cmd = [
+                    "powershell", "-ExecutionPolicy",
+                    "Bypass", "-File", tmp_path,
+                ]
             else:
                 os.chmod(tmp_path, 0o755)
                 shell_cmd = ["bash", tmp_path]

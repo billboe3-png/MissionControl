@@ -21,7 +21,6 @@ from app.providers.identity.provider_factory import (
     reset_providers,
 )
 
-
 # ------------------------------------------------------------------ #
 # AD Provider Tests                                                   #
 # ------------------------------------------------------------------ #

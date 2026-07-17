@@ -4,13 +4,11 @@ Mission Control Project Repository
 All database access for Project entities.
 """
 
-from sqlalchemy import func
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.models.db.project import Project
-from app.schemas.project import ProjectCreate
-from app.schemas.project import ProjectUpdate
+from app.schemas.project import ProjectCreate, ProjectUpdate
 
 
 class ProjectRepository:

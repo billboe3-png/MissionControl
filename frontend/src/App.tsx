@@ -1,7 +1,10 @@
 import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { AuthProvider } from "./contexts/AuthContext";
 import { SidebarProvider } from "./contexts/SidebarContext";
 import { ToastProvider } from "./contexts/ToastContext";
 import AppLayout from "./layouts/AppLayout";
+import RequireAuth from "./layouts/RequireAuth";
+import LoginPage from "./pages/auth/LoginPage";
 import DashboardPage from "./pages/DashboardPage";
 import OverviewPage from "./pages/infrastructure/OverviewPage";
 import SystemPage from "./pages/infrastructure/SystemPage";
@@ -19,6 +22,7 @@ import IdentityOverviewPage from "./pages/identity/IdentityOverviewPage";
 import ActiveDirectoryPage from "./pages/identity/ActiveDirectoryPage";
 import Microsoft365Page from "./pages/identity/Microsoft365Page";
 import GeneralPage from "./pages/settings/GeneralPage";
+import UsersPage from "./pages/settings/UsersPage";
 import IntegrationsPage from "./pages/settings/IntegrationsPage";
 import AppearancePage from "./pages/settings/AppearancePage";
 import AboutPage from "./pages/settings/AboutPage";
@@ -41,13 +45,23 @@ import CheckpointsPage from "./pages/hyperv/CheckpointsPage";
 import HyperVReplicationPage from "./pages/hyperv/ReplicationPage";
 import HyperVHealthPage from "./pages/hyperv/HealthPage";
 import ProxmoxOverviewPage from "./pages/proxmox/OverviewPage";
+import ProxmoxHealthPage from "./pages/proxmox/HealthPage";
 import ProxmoxNodesPage from "./pages/proxmox/NodesPage";
 import ProxmoxVirtualMachinesPage from "./pages/proxmox/VirtualMachinesPage";
 import ProxmoxContainersPage from "./pages/proxmox/ContainersPage";
 import ProxmoxStoragePage from "./pages/proxmox/StoragePage";
 import ProxmoxNetworksPage from "./pages/proxmox/NetworksPage";
 import ProxmoxTasksPage from "./pages/proxmox/TasksPage";
+import ProxmoxSnapshotsPage from "./pages/proxmox/SnapshotsPage";
 import PlaceholderPage from "./pages/PlaceholderPage";
+import AIOverviewPage from "./pages/ai/OverviewPage";
+import AIRecommendationsPage from "./pages/ai/RecommendationsPage";
+import AIIncidentAnalysisPage from "./pages/ai/IncidentAnalysisPage";
+import AICorrelationsPage from "./pages/ai/CorrelationsPage";
+import AIHealthScorePage from "./pages/ai/HealthScorePage";
+import AIHistoryPage from "./pages/ai/HistoryPage";
+import CompaniesPage from "./pages/companies/CompaniesPage";
+import CompanyDetailPage from "./pages/companies/CompanyDetailPage";
 import AutomationOverviewPage from "./pages/automation/OverviewPage";
 import PlaybooksPage from "./pages/automation/PlaybooksPage";
 import PlaybookDetailPage from "./pages/automation/PlaybookDetailPage";
@@ -62,10 +76,13 @@ import AgentDetailPage from "./pages/agents/AgentDetailPage";
 export default function App() {
     return (
         <BrowserRouter>
-            <SidebarProvider>
-                <ToastProvider>
-                    <Routes>
-                        <Route element={<AppLayout />}>
+            <AuthProvider>
+                <SidebarProvider>
+                    <ToastProvider>
+                        <Routes>
+                            <Route path="/login" element={<LoginPage />} />
+                            <Route element={<RequireAuth />}>
+                            <Route element={<AppLayout />}>
                             <Route path="/" element={<DashboardPage />} />
 
                             <Route path="/infrastructure" element={<OverviewPage />} />
@@ -98,6 +115,9 @@ export default function App() {
                             <Route path="/identity/active-directory" element={<ActiveDirectoryPage />} />
                             <Route path="/identity/microsoft-365" element={<Microsoft365Page />} />
 
+                            <Route path="/companies" element={<CompaniesPage />} />
+                            <Route path="/companies/:id" element={<CompanyDetailPage />} />
+
                             <Route path="/hyperv" element={<HyperVOverviewPage />} />
                             <Route path="/hyperv/vms" element={<VirtualMachinesPage />} />
                             <Route path="/hyperv/networks" element={<NetworksPage />} />
@@ -107,14 +127,17 @@ export default function App() {
                             <Route path="/hyperv/health" element={<HyperVHealthPage />} />
 
                             <Route path="/proxmox" element={<ProxmoxOverviewPage />} />
+                            <Route path="/proxmox/health" element={<ProxmoxHealthPage />} />
                             <Route path="/proxmox/nodes" element={<ProxmoxNodesPage />} />
                             <Route path="/proxmox/vms" element={<ProxmoxVirtualMachinesPage />} />
                             <Route path="/proxmox/lxc" element={<ProxmoxContainersPage />} />
                             <Route path="/proxmox/storage" element={<ProxmoxStoragePage />} />
                             <Route path="/proxmox/networks" element={<ProxmoxNetworksPage />} />
+                            <Route path="/proxmox/snapshots" element={<ProxmoxSnapshotsPage />} />
                             <Route path="/proxmox/tasks" element={<ProxmoxTasksPage />} />
 
                             <Route path="/settings" element={<GeneralPage />} />
+                            <Route path="/settings/users" element={<UsersPage />} />
                             <Route path="/settings/integrations" element={<IntegrationsPage />} />
                             <Route path="/settings/appearance" element={<AppearancePage />} />
                             <Route path="/settings/about" element={<AboutPage />} />
@@ -132,11 +155,19 @@ export default function App() {
                             <Route path="/automation/schedules" element={<SchedulesPage />} />
                             <Route path="/automation/triggers" element={<TriggersPage />} />
                             <Route path="/automation/audit" element={<AuditPage />} />
-                            <Route path="/ai-ops" element={<PlaceholderPage title="AI Ops" />} />
+
+                            <Route path="/ai" element={<AIOverviewPage />} />
+                            <Route path="/ai/recommendations" element={<AIRecommendationsPage />} />
+                            <Route path="/ai/incidents" element={<AIIncidentAnalysisPage />} />
+                            <Route path="/ai/correlations" element={<AICorrelationsPage />} />
+                            <Route path="/ai/health" element={<AIHealthScorePage />} />
+                            <Route path="/ai/history" element={<AIHistoryPage />} />
                         </Route>
-                    </Routes>
-                </ToastProvider>
-            </SidebarProvider>
+                        </Route>
+                        </Routes>
+                    </ToastProvider>
+                </SidebarProvider>
+            </AuthProvider>
         </BrowserRouter>
     );
 }

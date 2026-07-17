@@ -11,6 +11,7 @@ os.environ.setdefault(
     "MISSIONCONTROL_SECRET_KEY",
     Fernet.generate_key().decode(),
 )
+os.environ.setdefault("TESTING", "1")
 
 import pytest
 from fastapi.testclient import TestClient
@@ -18,12 +19,24 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
+from app.core.auth_dependency import get_current_user
 from app.core.config import get_settings
 from app.db.database import Base, get_db
 from app.main import app
 from app.models.db.credential_profile import CredentialProfile
 from app.models.db.project import Project
 from app.models.db.remote_host import RemoteHost
+
+
+class _FakeUser:
+    """Minimal user object for test auth bypass."""
+    id = 1
+    email = "test@test.local"
+    display_name = "Test User"
+    role = "global_admin"
+    company_id = None
+    site_id = None
+    enabled = True
 
 
 @pytest.fixture(autouse=True)
@@ -33,6 +46,41 @@ def mock_secret_key(monkeypatch):
     monkeypatch.setenv("MISSIONCONTROL_SECRET_KEY", test_key)
     get_settings.cache_clear()
     return test_key
+
+
+@pytest.fixture(autouse=True)
+def _override_auth():
+    """Override get_current_user globally for all tests.
+
+    When no Authorization header is present, return a mock admin user
+    so non-auth tests don't need to set up users/tokens.
+    When a real token is provided, let the real auth handle it (including
+    rejection for invalid tokens).
+    """
+    from fastapi import Depends, Header, HTTPException, status
+    from sqlalchemy.orm import Session
+
+    from app.db import get_db
+    from app.services.auth_service import AuthService
+
+    async def _smart_auth(
+        authorization: str | None = Header(None),
+        db: Session = Depends(get_db),
+    ):
+        if authorization and authorization.lower().startswith("bearer "):
+            token = authorization.split(" ", 1)[1]
+            try:
+                return AuthService.get_current_user(db, token)
+            except (ValueError, Exception) as exc:
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="Invalid or expired token",
+                ) from exc
+        return _FakeUser()
+
+    app.dependency_overrides[get_current_user] = _smart_auth
+    yield
+    app.dependency_overrides.pop(get_current_user, None)
 
 
 @pytest.fixture
@@ -59,7 +107,7 @@ def db_session():
 
 @pytest.fixture
 def client(db_session):
-    """Provide a FastAPI test client with database dependency override."""
+    """Provide a FastAPI test client with database override."""
 
     def override_get_db():
         try:
@@ -70,7 +118,7 @@ def client(db_session):
     app.dependency_overrides[get_db] = override_get_db
     with TestClient(app) as test_client:
         yield test_client
-    app.dependency_overrides.clear()
+    app.dependency_overrides.pop(get_db, None)
 
 
 def _fake_docker_data():

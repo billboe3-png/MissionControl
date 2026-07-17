@@ -19,6 +19,7 @@ class SiteCreate(BaseModel):
 
     name: str = Field(..., min_length=1, max_length=200)
     code: str = Field(..., min_length=1, max_length=100)
+    company_id: int | None = None
     description: str | None = None
     color: str | None = Field(None, max_length=7)
     icon: str | None = Field(None, max_length=50)
@@ -41,6 +42,7 @@ class SiteUpdate(BaseModel):
 
     name: str | None = Field(None, min_length=1, max_length=200)
     code: str | None = Field(None, min_length=1, max_length=100)
+    company_id: int | None = None
     description: str | None = None
     color: str | None = None
     icon: str | None = None
@@ -69,6 +71,8 @@ class SiteResponse(BaseModel):
     id: int
     name: str
     code: str
+    company_id: int | None = None
+    company_name: str | None = None
     description: str | None = None
     color: str | None = None
     icon: str | None = None

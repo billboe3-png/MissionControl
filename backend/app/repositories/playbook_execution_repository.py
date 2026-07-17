@@ -4,8 +4,7 @@ Mission Control Playbook Execution Repository
 All database access for PlaybookExecution entities.
 """
 
-from sqlalchemy import func
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.models.db.playbook_execution import PlaybookExecution

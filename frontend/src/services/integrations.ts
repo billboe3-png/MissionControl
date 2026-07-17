@@ -1,3 +1,5 @@
+import { apiClient } from "../utils/apiClient";
+
 const API = "/api/v1/integrations";
 
 export interface IntegrationProfile {
@@ -57,58 +59,41 @@ export interface IntegrationTestResponse {
 
 export const integrationsApi = {
     async list(): Promise<IntegrationProfile[]> {
-        const response = await fetch(API);
-        if (!response.ok) throw new Error("Failed to load integrations");
-        const data = await response.json();
+        const data = await apiClient<{ items: IntegrationProfile[] }>(API);
         return data.items ?? [];
     },
 
     async get(id: number): Promise<IntegrationProfile> {
-        const response = await fetch(`${API}/${id}`);
-        if (!response.ok) throw new Error("Failed to load integration");
-        return response.json();
+        return apiClient<IntegrationProfile>(`${API}/${id}`);
     },
 
     async create(input: IntegrationProfileCreate): Promise<IntegrationProfile> {
-        const response = await fetch(API, {
+        return apiClient<IntegrationProfile>(API, {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(input),
+            json: input,
         });
-        if (!response.ok) throw new Error("Failed to create integration");
-        return response.json();
     },
 
     async update(id: number, input: IntegrationProfileUpdate): Promise<IntegrationProfile> {
-        const response = await fetch(`${API}/${id}`, {
+        return apiClient<IntegrationProfile>(`${API}/${id}`, {
             method: "PUT",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(input),
+            json: input,
         });
-        if (!response.ok) throw new Error("Failed to update integration");
-        return response.json();
     },
 
     async remove(id: number): Promise<void> {
-        const response = await fetch(`${API}/${id}`, { method: "DELETE" });
-        if (!response.ok) throw new Error("Failed to delete integration");
+        return apiClient<void>(`${API}/${id}`, { method: "DELETE" });
     },
 
     async test(id: number): Promise<IntegrationTestResponse> {
-        const response = await fetch(`${API}/${id}/test`, { method: "POST" });
-        if (!response.ok) throw new Error("Connection test failed");
-        return response.json();
+        return apiClient<IntegrationTestResponse>(`${API}/${id}/test`, { method: "POST" });
     },
 
     async enable(id: number): Promise<IntegrationProfile> {
-        const response = await fetch(`${API}/${id}/enable`, { method: "POST" });
-        if (!response.ok) throw new Error("Failed to enable integration");
-        return response.json();
+        return apiClient<IntegrationProfile>(`${API}/${id}/enable`, { method: "POST" });
     },
 
     async disable(id: number): Promise<IntegrationProfile> {
-        const response = await fetch(`${API}/${id}/disable`, { method: "POST" });
-        if (!response.ok) throw new Error("Failed to disable integration");
-        return response.json();
+        return apiClient<IntegrationProfile>(`${API}/${id}/disable`, { method: "POST" });
     },
 };

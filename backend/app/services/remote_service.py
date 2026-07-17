@@ -53,9 +53,9 @@ from app.schemas.file_transfer import (
     FileDeleteRequest,
     FileDownloadRequest,
     FileDownloadResponse,
+    FileListItem,
     FileListResponse,
     FileMkdirRequest,
-    FileListItem,
     FileTransferResponse,
     FileUploadRequest,
 )
@@ -446,7 +446,6 @@ class RemoteService:
         username_override: str | None = None,
     ):
         """Stream command output as SSE events."""
-        import json
         host = RemoteHostRepository.get_by_id(db, request.host_id)
         if host is None:
             yield {"type": "error", "message": "Remote host not found"}

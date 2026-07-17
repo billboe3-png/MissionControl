@@ -1,7 +1,7 @@
 """Mission Control Agent - Self-update mechanism."""
 
+import asyncio
 import logging
-import subprocess
 import sys
 
 from agent.client import AgentClient
@@ -55,12 +55,23 @@ class AgentUpdater:
                 result["latest_version"],
             )
 
-            subprocess.run(
-                [sys.executable, "-m", "pip", "install", "--upgrade",
-                 "mission-control-agent"],
-                check=True,
-                timeout=120,
+            proc = await asyncio.create_subprocess_exec(
+                sys.executable, "-m", "pip", "install",
+                "--upgrade", "mission-control-agent",
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
             )
+            stdout, stderr = await asyncio.wait_for(
+                proc.communicate(), timeout=120,
+            )
+
+            if proc.returncode != 0:
+                msg = stderr.decode().strip()
+                logger.error("Update failed: %s", msg)
+                return {
+                    "updated": False,
+                    "message": f"pip upgrade failed: {msg}",
+                }
 
             return {
                 "updated": True,

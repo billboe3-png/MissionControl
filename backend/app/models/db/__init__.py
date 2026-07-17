@@ -17,6 +17,7 @@ from .execution_log import ExecutionLog
 from .integration_profile import IntegrationProfile
 from .note import Note
 from .parking_lot import ParkingLot
+from .plugin import Plugin
 from .playbook import Playbook
 from .playbook_execution import PlaybookExecution
 from .playbook_schedule import PlaybookSchedule
@@ -46,6 +47,7 @@ __all__ = [
     "IntegrationProfile",
     "Note",
     "ParkingLot",
+    "Plugin",
     "Playbook",
     "PlaybookExecution",
     "PlaybookSchedule",

@@ -10,7 +10,6 @@ from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict, Field
 
-
 # ------------------------------------------------------------------ #
 # Registration                                                        #
 # ------------------------------------------------------------------ #
@@ -32,6 +31,10 @@ class AgentRegisterRequest(BaseModel):
         max_length=500,
         description="Hostname of the agent machine.",
         examples=["web01.corp.local"],
+    )
+    registration_token: str | None = Field(
+        default=None,
+        description="Registration token for company/site assignment.",
     )
     operating_system: str | None = Field(
         default=None,

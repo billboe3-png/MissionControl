@@ -9,13 +9,13 @@ from collections.abc import Callable
 from sqlalchemy.orm import Session
 
 from app.db import SessionLocal
+from app.seed.automation import seed as seed_automation
 from app.seed.notes import seed as seed_notes
 from app.seed.parking_lot import seed as seed_parking_lot
 from app.seed.projects import seed as seed_projects
 from app.seed.resumes import seed as seed_resumes
 from app.seed.sites import seed as seed_sites
 from app.seed.tasks import seed as seed_tasks
-from app.seed.automation import seed as seed_automation
 
 logger = logging.getLogger(__name__)
 

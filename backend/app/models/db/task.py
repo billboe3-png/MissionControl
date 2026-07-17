@@ -2,17 +2,11 @@
 Mission Control Task ORM Model
 """
 
-from datetime import UTC
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import DateTime
-from sqlalchemy import ForeignKey
-from sqlalchemy import Integer
-from sqlalchemy import String
-from sqlalchemy.orm import Mapped
-from sqlalchemy.orm import mapped_column
-from sqlalchemy.orm import relationship
+from sqlalchemy import DateTime, ForeignKey, Integer, String
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.database import Base
 
@@ -30,6 +24,18 @@ class Task(Base):
     id: Mapped[int] = mapped_column(
         Integer,
         primary_key=True,
+        index=True,
+    )
+
+    company_id: Mapped[int | None] = mapped_column(
+        Integer,
+        nullable=True,
+        index=True,
+    )
+
+    site_id: Mapped[int | None] = mapped_column(
+        Integer,
+        nullable=True,
         index=True,
     )
 
@@ -54,12 +60,14 @@ class Task(Base):
         String(50),
         nullable=False,
         default="pending",
+        index=True,
     )
 
     priority: Mapped[str] = mapped_column(
         String(50),
         nullable=False,
         default="medium",
+        index=True,
     )
 
     created_at: Mapped[datetime] = mapped_column(

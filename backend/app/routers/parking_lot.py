@@ -5,23 +5,27 @@ Sprint:
     1.6.0 - Parking Lot API Foundation
 """
 
-from fastapi import APIRouter
-from fastapi import Depends
-from fastapi import Response
-from fastapi import status
+import logging
+
+from fastapi import APIRouter, Depends, Response, status
 from sqlalchemy.orm import Session
 
+from app.core.auth_dependency import get_current_user
 from app.db import get_db
-from app.schemas.parking_lot import ParkingLotCreate
-from app.schemas.parking_lot import ParkingLotListResponse
-from app.schemas.parking_lot import ParkingLotResponse
-from app.schemas.parking_lot import ParkingLotUpdate
-from app.services.parking_lot_service import ParkingLotService
-from app.services.parking_lot_service import parking_lot_service
+from app.schemas.parking_lot import (
+    ParkingLotCreate,
+    ParkingLotListResponse,
+    ParkingLotResponse,
+    ParkingLotUpdate,
+)
+from app.services.parking_lot_service import ParkingLotService, parking_lot_service
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(
     prefix="/parking-lot",
     tags=["Parking Lot"],
+    dependencies=[Depends(get_current_user)],
 )
 
 

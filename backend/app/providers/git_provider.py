@@ -9,7 +9,7 @@ Gracefully handles Git unavailable or not a repository.
 
 import logging
 import os
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 logger = logging.getLogger(__name__)
 
@@ -53,7 +53,7 @@ class GitProvider:
                 latest_commit = head_commit.hexsha[:12]
                 commit_author = str(head_commit.author.name)
                 commit_date = datetime.fromtimestamp(
-                    head_commit.committed_date, tz=timezone.utc
+                    head_commit.committed_date, tz=UTC
                 ).isoformat()
             except Exception:
                 pass
@@ -103,7 +103,7 @@ class GitProvider:
                 if os.path.exists(fetch_head_path):
                     mtime = os.path.getmtime(fetch_head_path)
                     last_pull = datetime.fromtimestamp(
-                        mtime, tz=timezone.utc
+                        mtime, tz=UTC
                     ).isoformat()
             except Exception:
                 pass

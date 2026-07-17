@@ -80,7 +80,7 @@ export default function AgentDetailPage() {
             return;
         try {
             await agentsApi.remove(agentId);
-            navigate("/");
+            navigate("/agents");
         } catch (e) {
             setError(e instanceof Error ? e.message : "Delete failed");
         }

@@ -10,6 +10,7 @@ import logging
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
+from app.core.auth_dependency import get_current_user
 from app.db import get_db
 from app.schemas.hyperv import (
     HyperVCheckpointActionResponse,
@@ -30,7 +31,11 @@ from app.services.hyperv_service import hyperv_service
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/hyperv", tags=["hyperv"])
+router = APIRouter(
+    prefix="/hyperv",
+    tags=["hyperv"],
+    dependencies=[Depends(get_current_user)],
+)
 
 
 # ------------------------------------------------------------------ #

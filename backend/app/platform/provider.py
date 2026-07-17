@@ -1,8 +1,7 @@
 import platform
 
-from app.platform.windows import WindowsPlatform
 from app.platform.linux import LinuxPlatform
-
+from app.platform.windows import WindowsPlatform
 
 _provider = None
 

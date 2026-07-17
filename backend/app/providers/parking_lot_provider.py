@@ -7,8 +7,7 @@ Treats parking lot as a backlog.
 
 import logging
 
-from sqlalchemy import func
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.models.db.parking_lot import ParkingLot

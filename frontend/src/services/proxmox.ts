@@ -1,3 +1,5 @@
+import { apiClient } from "../utils/apiClient";
+
 const API = "/api/v1/proxmox";
 
 export interface ProxmoxNode {
@@ -155,143 +157,100 @@ export interface ProxmoxActionResponse {
 
 export const proxmoxApi = {
     async getSummary(): Promise<ProxmoxSummary> {
-        const response = await fetch(`${API}/overview`);
-        if (!response.ok) throw new Error("Failed to load Proxmox overview");
-        return response.json();
+        return apiClient<ProxmoxSummary>(`${API}/overview`);
     },
 
     async getHealth(): Promise<ProxmoxHealth> {
-        const response = await fetch(`${API}/health`);
-        if (!response.ok) throw new Error("Failed to load Proxmox health");
-        return response.json();
+        return apiClient<ProxmoxHealth>(`${API}/health`);
     },
 
     async testConnection(): Promise<{ connected: boolean; latency_ms: number; message: string | null; hostname: string | null; error: string | null }> {
-        const response = await fetch(`${API}/test`);
-        if (!response.ok) throw new Error("Connection test failed");
-        return response.json();
+        return apiClient(`${API}/test`);
     },
 
     async listNodes(): Promise<ProxmoxNode[]> {
-        const response = await fetch(`${API}/nodes`);
-        if (!response.ok) throw new Error("Failed to load nodes");
-        const data = await response.json();
+        const data = await apiClient<{ items: ProxmoxNode[] }>(`${API}/nodes`);
         return data.items ?? [];
     },
 
     async listVms(): Promise<ProxmoxVm[]> {
-        const response = await fetch(`${API}/vms`);
-        if (!response.ok) throw new Error("Failed to load VMs");
-        const data = await response.json();
+        const data = await apiClient<{ items: ProxmoxVm[] }>(`${API}/vms`);
         return data.items ?? [];
     },
 
     async getVm(vmId: string): Promise<ProxmoxVm> {
-        const response = await fetch(`${API}/vms/${vmId}`);
-        if (!response.ok) throw new Error("Failed to load VM");
-        const data = await response.json();
+        const data = await apiClient<{ item: ProxmoxVm }>(`${API}/vms/${vmId}`);
         return data.item;
     },
 
     async startVm(vmId: string): Promise<ProxmoxActionResponse> {
-        const response = await fetch(`${API}/vms/${vmId}/start`, { method: "POST" });
-        if (!response.ok) throw new Error("Failed to start VM");
-        return response.json();
+        return apiClient<ProxmoxActionResponse>(`${API}/vms/${vmId}/start`, { method: "POST" });
     },
 
     async stopVm(vmId: string, force = false): Promise<ProxmoxActionResponse> {
-        const response = await fetch(`${API}/vms/${vmId}/stop?force=${force}`, { method: "POST" });
-        if (!response.ok) throw new Error("Failed to stop VM");
-        return response.json();
+        return apiClient<ProxmoxActionResponse>(`${API}/vms/${vmId}/stop?force=${force}`, { method: "POST" });
     },
 
     async restartVm(vmId: string): Promise<ProxmoxActionResponse> {
-        const response = await fetch(`${API}/vms/${vmId}/restart`, { method: "POST" });
-        if (!response.ok) throw new Error("Failed to restart VM");
-        return response.json();
+        return apiClient<ProxmoxActionResponse>(`${API}/vms/${vmId}/restart`, { method: "POST" });
     },
 
     async pauseVm(vmId: string): Promise<ProxmoxActionResponse> {
-        const response = await fetch(`${API}/vms/${vmId}/pause`, { method: "POST" });
-        if (!response.ok) throw new Error("Failed to suspend VM");
-        return response.json();
+        return apiClient<ProxmoxActionResponse>(`${API}/vms/${vmId}/pause`, { method: "POST" });
     },
 
     async resumeVm(vmId: string): Promise<ProxmoxActionResponse> {
-        const response = await fetch(`${API}/vms/${vmId}/resume`, { method: "POST" });
-        if (!response.ok) throw new Error("Failed to resume VM");
-        return response.json();
+        return apiClient<ProxmoxActionResponse>(`${API}/vms/${vmId}/resume`, { method: "POST" });
     },
 
     async listLxc(): Promise<ProxmoxLxc[]> {
-        const response = await fetch(`${API}/lxc`);
-        if (!response.ok) throw new Error("Failed to load LXC containers");
-        const data = await response.json();
+        const data = await apiClient<{ items: ProxmoxLxc[] }>(`${API}/lxc`);
         return data.items ?? [];
     },
 
     async getLxc(vmId: string): Promise<ProxmoxLxc> {
-        const response = await fetch(`${API}/lxc/${vmId}`);
-        if (!response.ok) throw new Error("Failed to load LXC container");
-        const data = await response.json();
+        const data = await apiClient<{ item: ProxmoxLxc }>(`${API}/lxc/${vmId}`);
         return data.item;
     },
 
     async startLxc(vmId: string): Promise<ProxmoxActionResponse> {
-        const response = await fetch(`${API}/lxc/${vmId}/start`, { method: "POST" });
-        if (!response.ok) throw new Error("Failed to start LXC container");
-        return response.json();
+        return apiClient<ProxmoxActionResponse>(`${API}/lxc/${vmId}/start`, { method: "POST" });
     },
 
     async stopLxc(vmId: string): Promise<ProxmoxActionResponse> {
-        const response = await fetch(`${API}/lxc/${vmId}/stop`, { method: "POST" });
-        if (!response.ok) throw new Error("Failed to stop LXC container");
-        return response.json();
+        return apiClient<ProxmoxActionResponse>(`${API}/lxc/${vmId}/stop`, { method: "POST" });
     },
 
     async listNetworks(): Promise<ProxmoxNetwork[]> {
-        const response = await fetch(`${API}/networks`);
-        if (!response.ok) throw new Error("Failed to load networks");
-        const data = await response.json();
+        const data = await apiClient<{ items: ProxmoxNetwork[] }>(`${API}/networks`);
         return data.items ?? [];
     },
 
     async listStorage(): Promise<ProxmoxStorage[]> {
-        const response = await fetch(`${API}/storage`);
-        if (!response.ok) throw new Error("Failed to load storage");
-        const data = await response.json();
+        const data = await apiClient<{ items: ProxmoxStorage[] }>(`${API}/storage`);
         return data.items ?? [];
     },
 
     async listTasks(node?: string): Promise<ProxmoxTask[]> {
         const url = node ? `${API}/tasks?node=${node}` : `${API}/tasks`;
-        const response = await fetch(url);
-        if (!response.ok) throw new Error("Failed to load tasks");
-        const data = await response.json();
+        const data = await apiClient<{ items: ProxmoxTask[] }>(url);
         return data.items ?? [];
     },
 
     async listSnapshots(vmId?: string): Promise<ProxmoxSnapshot[]> {
         const url = vmId ? `${API}/snapshots?vm_id=${vmId}` : `${API}/snapshots`;
-        const response = await fetch(url);
-        if (!response.ok) throw new Error("Failed to load snapshots");
-        const data = await response.json();
+        const data = await apiClient<{ items: ProxmoxSnapshot[] }>(url);
         return data.items ?? [];
     },
 
     async createSnapshot(vmId: string, name?: string): Promise<{ success: boolean; message: string | null; error: string | null }> {
-        const response = await fetch(`${API}/snapshots`, {
+        return apiClient(`${API}/snapshots`, {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ vm_id: vmId, name }),
+            json: { vm_id: vmId, name },
         });
-        if (!response.ok) throw new Error("Failed to create snapshot");
-        return response.json();
     },
 
     async deleteSnapshot(vmId: string, snapshotId: string): Promise<{ success: boolean; message: string | null; error: string | null }> {
-        const response = await fetch(`${API}/vms/${vmId}/snapshots/${snapshotId}`, { method: "DELETE" });
-        if (!response.ok) throw new Error("Failed to delete snapshot");
-        return response.json();
+        return apiClient(`${API}/vms/${vmId}/snapshots/${snapshotId}`, { method: "DELETE" });
     },
 };

@@ -10,6 +10,7 @@ import logging
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
+from app.core.auth_dependency import get_current_user
 from app.db import get_db
 from app.schemas.proxmox import (
     ProxmoxConnectionTestResponse,
@@ -33,7 +34,11 @@ from app.services.proxmox_service import proxmox_service
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/proxmox", tags=["proxmox"])
+router = APIRouter(
+    prefix="/proxmox",
+    tags=["proxmox"],
+    dependencies=[Depends(get_current_user)],
+)
 
 
 # ------------------------------------------------------------------ #

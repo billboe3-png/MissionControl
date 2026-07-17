@@ -1,0 +1,153 @@
+```mermaid
+erDiagram
+    companies {
+        int id PK
+        uuid uuid
+        string name UK
+        string status
+        string license_type
+        int max_sites
+        int max_agents
+        int max_users
+        bool is_global
+        bool enabled
+    }
+
+    sites {
+        int id PK
+        int company_id
+        string name UK
+        string code UK
+        string address
+        string city
+        string country
+        bool is_default
+    }
+
+    users {
+        int id PK
+        int company_id FK
+        int site_id FK
+        string email UK
+        string password_hash
+        string role
+        bool enabled
+    }
+
+    projects {
+        int id PK
+        int company_id
+        int site_id
+        string name
+        string description
+        bool active
+    }
+
+    tasks {
+        int id PK
+        int company_id
+        int site_id
+        int project_id FK
+        string title
+        string status
+        string priority
+        datetime created_at
+        datetime updated_at
+    }
+
+    notes {
+        int id PK
+        int company_id
+        int site_id
+        int project_id FK
+        string title
+        text content
+    }
+
+    remote_hosts {
+        int id PK
+        int company_id
+        int site_id
+        string name
+        string hostname
+        string connection_type
+        int port
+        bool enabled
+        int credential_profile_id FK
+    }
+
+    credential_profiles {
+        int id PK
+        int company_id
+        int site_id
+        string name
+        string authentication_type
+        string username
+        string password_encrypted
+        string private_key_encrypted
+    }
+
+    command_history {
+        int id PK
+        int host_id FK
+        int credential_id FK
+        string command
+        text stdout
+        text stderr
+        int exit_code
+        string execution_source
+    }
+
+    agents {
+        int id PK
+        string hostname
+        string api_key UK
+        string status
+        datetime last_heartbeat
+        string health
+    }
+
+    playbooks {
+        int id PK
+        string name UK
+        string version
+        string category
+        bool requires_approval
+        int timeout_seconds
+    }
+
+    playbook_steps {
+        int id PK
+        int playbook_id FK
+        string step_type
+        string provider
+        string command
+        int step_order
+    }
+
+    playbook_executions {
+        int id PK
+        int playbook_id FK
+        string status
+        string mode
+        string trigger_type
+    }
+
+    integration_profiles {
+        int id PK
+        int site_id FK
+        string integration_type
+        string encrypted_secret
+    }
+
+    companies ||--o{ sites : "has"
+    companies ||--o{ users : "has"
+    sites ||--o{ users : "has"
+    projects ||--o{ tasks : "has"
+    projects ||--o{ notes : "has"
+    credential_profiles ||--o{ remote_hosts : "linked"
+    remote_hosts ||--o{ command_history : "executes"
+    playbooks ||--o{ playbook_steps : "contains"
+    playbooks ||--o{ playbook_executions : "generates"
+    sites ||--o{ integration_profiles : "configures"
+```

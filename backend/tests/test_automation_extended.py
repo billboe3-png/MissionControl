@@ -6,22 +6,18 @@ retry logic, variable substitution, fire_event, provider factory,
 dashboard automation, execution logs, and all new features.
 """
 
-import asyncio
 import json
-from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from fastapi.testclient import TestClient
 
+from app.models.db.event_trigger import EventTrigger
+from app.models.db.execution_log import ExecutionLog
 from app.models.db.playbook import Playbook
+from app.models.db.playbook_execution import PlaybookExecution
 from app.models.db.playbook_step import PlaybookStep
 from app.models.db.playbook_variable import PlaybookVariable
-from app.models.db.playbook_execution import PlaybookExecution
-from app.models.db.execution_log import ExecutionLog
-from app.models.db.event_trigger import EventTrigger
-from app.models.db.audit_trail import AuditTrail
 from app.providers.automation.base_provider import ExecutionContext, StepResult
-
 
 # ------------------------------------------------------------------ #
 # Helpers                                                              #
@@ -250,7 +246,9 @@ class TestPowerShellProvider:
 
     @pytest.mark.asyncio
     async def test_execute_echo(self):
-        from app.providers.automation.powershell_provider import PowerShellAutomationProvider
+        from app.providers.automation.powershell_provider import (
+            PowerShellAutomationProvider,
+        )
         provider = PowerShellAutomationProvider()
         ctx = _make_context(command="Write-Output 'hello ps'", provider="powershell")
         result = await provider.execute_step(ctx)
@@ -261,7 +259,9 @@ class TestPowerShellProvider:
 
     @pytest.mark.asyncio
     async def test_validate_valid(self):
-        from app.providers.automation.powershell_provider import PowerShellAutomationProvider
+        from app.providers.automation.powershell_provider import (
+            PowerShellAutomationProvider,
+        )
         provider = PowerShellAutomationProvider()
         ctx = _make_context(command="Get-Process", provider="powershell")
         result = await provider.validate_step(ctx)
@@ -269,7 +269,9 @@ class TestPowerShellProvider:
 
     @pytest.mark.asyncio
     async def test_validate_no_command(self):
-        from app.providers.automation.powershell_provider import PowerShellAutomationProvider
+        from app.providers.automation.powershell_provider import (
+            PowerShellAutomationProvider,
+        )
         provider = PowerShellAutomationProvider()
         ctx = _make_context(command="", provider="powershell")
         result = await provider.validate_step(ctx)
@@ -277,12 +279,16 @@ class TestPowerShellProvider:
         assert "Command is required" in result["errors"]
 
     def test_provider_name(self):
-        from app.providers.automation.powershell_provider import PowerShellAutomationProvider
+        from app.providers.automation.powershell_provider import (
+            PowerShellAutomationProvider,
+        )
         provider = PowerShellAutomationProvider()
         assert provider.provider_name == "powershell"
 
     def test_supported_step_types(self):
-        from app.providers.automation.powershell_provider import PowerShellAutomationProvider
+        from app.providers.automation.powershell_provider import (
+            PowerShellAutomationProvider,
+        )
         provider = PowerShellAutomationProvider()
         assert set(provider.supported_step_types) == {"powershell", "shell"}
 

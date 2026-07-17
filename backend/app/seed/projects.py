@@ -1,10 +1,8 @@
 """Seed default projects."""
 
-from datetime import UTC
-from datetime import datetime
+from datetime import UTC, datetime
 
-from sqlalchemy import func
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.models.db.project import Project

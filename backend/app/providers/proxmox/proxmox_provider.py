@@ -224,45 +224,63 @@ class ProxmoxRESTProvider(ProxmoxProvider):
         return {"connected": False, "error": f"VM not found: {vm_id}"}
 
     async def start_vm(self, vm_id: str) -> dict:
-        nodes_r = await self._get("/nodes")
-        if not nodes_r["success"]:
-            return {"connected": False, "error": nodes_r["error"]}
-        for node in nodes_r["data"] or []:
-            result = await self._post(f"/nodes/{node['node']}/qemu/{vm_id}/status/start")
-            if result["success"]:
-                return {"success": True, "message": "VM started"}
-        return {"success": False, "error": f"VM not found: {vm_id}"}
+        res_r = await self._get("/cluster/resources", type="vm")
+        if not res_r["success"]:
+            return {"connected": False, "error": res_r["error"]}
+        target = next((v for v in (res_r["data"] or []) if str(v.get("vmid")) == vm_id and v.get("type") == "qemu"), None)
+        if not target:
+            return {"success": False, "error": f"VM not found: {vm_id}"}
+        node = target.get("node", "")
+        if target.get("status") == "running":
+            return {"success": True, "message": "VM already running"}
+        result = await self._post(f"/nodes/{node}/qemu/{vm_id}/status/start")
+        if not result["success"]:
+            return {"success": False, "error": result.get("error", "Failed to start VM")}
+        return {"success": True, "message": "VM started"}
 
     async def stop_vm(self, vm_id: str, force: bool = False) -> dict:
-        nodes_r = await self._get("/nodes")
-        if not nodes_r["success"]:
-            return {"connected": False, "error": nodes_r["error"]}
+        res_r = await self._get("/cluster/resources", type="vm")
+        if not res_r["success"]:
+            return {"connected": False, "error": res_r["error"]}
+        target = next((v for v in (res_r["data"] or []) if str(v.get("vmid")) == vm_id and v.get("type") == "qemu"), None)
+        if not target:
+            return {"success": False, "error": f"VM not found: {vm_id}"}
+        node = target.get("node", "")
+        if target.get("status") == "stopped":
+            return {"success": True, "message": "VM already stopped"}
         action = "stop" if force else "shutdown"
-        for node in nodes_r["data"] or []:
-            result = await self._post(f"/nodes/{node['node']}/qemu/{vm_id}/status/{action}")
-            if result["success"]:
-                return {"success": True, "message": f"VM {action} initiated"}
-        return {"success": False, "error": f"VM not found: {vm_id}"}
+        result = await self._post(f"/nodes/{node}/qemu/{vm_id}/status/{action}")
+        if not result["success"]:
+            return {"success": False, "error": result.get("error", f"Failed to {action} VM")}
+        return {"success": True, "message": f"VM {action} initiated"}
 
     async def restart_vm(self, vm_id: str) -> dict:
-        nodes_r = await self._get("/nodes")
-        if not nodes_r["success"]:
-            return {"connected": False, "error": nodes_r["error"]}
-        for node in nodes_r["data"] or []:
-            result = await self._post(f"/nodes/{node['node']}/qemu/{vm_id}/status/reboot")
-            if result["success"]:
-                return {"success": True, "message": "VM reboot initiated"}
-        return {"success": False, "error": f"VM not found: {vm_id}"}
+        res_r = await self._get("/cluster/resources", type="vm")
+        if not res_r["success"]:
+            return {"connected": False, "error": res_r["error"]}
+        target = next((v for v in (res_r["data"] or []) if str(v.get("vmid")) == vm_id and v.get("type") == "qemu"), None)
+        if not target:
+            return {"success": False, "error": f"VM not found: {vm_id}"}
+        node = target.get("node", "")
+        result = await self._post(f"/nodes/{node}/qemu/{vm_id}/status/reboot")
+        if not result["success"]:
+            return {"success": False, "error": result.get("error", "Failed to reboot VM")}
+        return {"success": True, "message": "VM reboot initiated"}
 
     async def pause_vm(self, vm_id: str) -> dict:
-        nodes_r = await self._get("/nodes")
-        if not nodes_r["success"]:
-            return {"connected": False, "error": nodes_r["error"]}
-        for node in nodes_r["data"] or []:
-            result = await self._post(f"/nodes/{node['node']}/qemu/{vm_id}/status/suspend")
-            if result["success"]:
-                return {"success": True, "message": "VM suspended"}
-        return {"success": False, "error": f"VM not found: {vm_id}"}
+        res_r = await self._get("/cluster/resources", type="vm")
+        if not res_r["success"]:
+            return {"connected": False, "error": res_r["error"]}
+        target = next((v for v in (res_r["data"] or []) if str(v.get("vmid")) == vm_id and v.get("type") == "qemu"), None)
+        if not target:
+            return {"success": False, "error": f"VM not found: {vm_id}"}
+        node = target.get("node", "")
+        if target.get("status") != "running":
+            return {"success": False, "error": "VM must be running to suspend"}
+        result = await self._post(f"/nodes/{node}/qemu/{vm_id}/status/suspend")
+        if not result["success"]:
+            return {"success": False, "error": result.get("error", "Failed to suspend VM")}
+        return {"success": True, "message": "VM suspended"}
 
     async def resume_vm(self, vm_id: str) -> dict:
         return await self.start_vm(vm_id)
@@ -416,24 +434,34 @@ class ProxmoxRESTProvider(ProxmoxProvider):
         return {"connected": True, "count": len(items), "items": items}
 
     async def start_lxc(self, vm_id: str) -> dict:
-        nodes_r = await self._get("/nodes")
-        if not nodes_r["success"]:
-            return {"connected": False, "error": nodes_r["error"]}
-        for node in nodes_r["data"] or []:
-            result = await self._post(f"/nodes/{node['node']}/lxc/{vm_id}/status/start")
-            if result["success"]:
-                return {"success": True, "message": "Container started"}
-        return {"success": False, "error": f"LXC container not found: {vm_id}"}
+        res_r = await self._get("/cluster/resources", type="vm")
+        if not res_r["success"]:
+            return {"connected": False, "error": res_r["error"]}
+        target = next((c for c in (res_r["data"] or []) if str(c.get("vmid")) == vm_id and c.get("type") == "lxc"), None)
+        if not target:
+            return {"success": False, "error": f"LXC container not found: {vm_id}"}
+        node = target.get("node", "")
+        if target.get("status") == "running":
+            return {"success": True, "message": "Container already running"}
+        result = await self._post(f"/nodes/{node}/lxc/{vm_id}/status/start")
+        if not result["success"]:
+            return {"success": False, "error": result.get("error", "Failed to start container")}
+        return {"success": True, "message": "Container started"}
 
     async def stop_lxc(self, vm_id: str) -> dict:
-        nodes_r = await self._get("/nodes")
-        if not nodes_r["success"]:
-            return {"connected": False, "error": nodes_r["error"]}
-        for node in nodes_r["data"] or []:
-            result = await self._post(f"/nodes/{node['node']}/lxc/{vm_id}/status/stop")
-            if result["success"]:
-                return {"success": True, "message": "Container stopped"}
-        return {"success": False, "error": f"LXC container not found: {vm_id}"}
+        res_r = await self._get("/cluster/resources", type="vm")
+        if not res_r["success"]:
+            return {"connected": False, "error": res_r["error"]}
+        target = next((c for c in (res_r["data"] or []) if str(c.get("vmid")) == vm_id and c.get("type") == "lxc"), None)
+        if not target:
+            return {"success": False, "error": f"LXC container not found: {vm_id}"}
+        node = target.get("node", "")
+        if target.get("status") == "stopped":
+            return {"success": True, "message": "Container already stopped"}
+        result = await self._post(f"/nodes/{node}/lxc/{vm_id}/status/stop")
+        if not result["success"]:
+            return {"success": False, "error": result.get("error", "Failed to stop container")}
+        return {"success": True, "message": "Container stopped"}
 
     async def get_lxc_containers(self) -> dict:
         result = await self._get("/cluster/resources", type="vm")

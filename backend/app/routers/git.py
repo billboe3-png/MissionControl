@@ -1,4 +1,8 @@
+import logging
+
 from fastapi import APIRouter, HTTPException
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/git", tags=["git"])
 

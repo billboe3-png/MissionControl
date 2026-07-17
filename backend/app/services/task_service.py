@@ -9,17 +9,13 @@ Sprint:
 
 import logging
 
-from fastapi import HTTPException
-from fastapi import status
+from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.models.db.task import Task
 from app.repositories.project_repository import ProjectRepository
 from app.repositories.task_repository import TaskRepository
-from app.schemas.task import TaskCreate
-from app.schemas.task import TaskListResponse
-from app.schemas.task import TaskResponse
-from app.schemas.task import TaskUpdate
+from app.schemas.task import TaskCreate, TaskListResponse, TaskResponse, TaskUpdate
 
 logger = logging.getLogger(__name__)
 

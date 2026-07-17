@@ -7,8 +7,8 @@ All database access for ApprovalWorkflow and ApprovalRequest entities.
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models.db.approval_workflow import ApprovalWorkflow
 from app.models.db.approval_request import ApprovalRequest
+from app.models.db.approval_workflow import ApprovalWorkflow
 
 
 class ApprovalWorkflowRepository:

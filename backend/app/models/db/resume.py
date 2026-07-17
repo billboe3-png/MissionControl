@@ -2,15 +2,10 @@
 Mission Control Resume ORM Model
 """
 
-from datetime import UTC
-from datetime import datetime
+from datetime import UTC, datetime
 
-from sqlalchemy import Boolean
-from sqlalchemy import DateTime
-from sqlalchemy import Integer
-from sqlalchemy import String
-from sqlalchemy.orm import Mapped
-from sqlalchemy.orm import mapped_column
+from sqlalchemy import Boolean, DateTime, Integer, String
+from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.database import Base
 
@@ -25,6 +20,18 @@ class Resume(Base):
     id: Mapped[int] = mapped_column(
         Integer,
         primary_key=True,
+        index=True,
+    )
+
+    company_id: Mapped[int | None] = mapped_column(
+        Integer,
+        nullable=True,
+        index=True,
+    )
+
+    site_id: Mapped[int | None] = mapped_column(
+        Integer,
+        nullable=True,
         index=True,
     )
 

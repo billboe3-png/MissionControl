@@ -1,0 +1,39 @@
+```mermaid
+graph TB
+    subgraph FutureKubernetes["Future Kubernetes Deployment (Sprint 4.0+)"]
+        Ingress["Ingress Controller"]
+        FrontendDeploy["Frontend Deployment"]
+        FrontendSvc["Frontend Service"]
+        BackendDeploy["Backend Deployment"]
+        BackendSvc["Backend Service"]
+        PostgreSQLSTS["PostgreSQL StatefulSet"]
+        PostgreSQLSvc["PostgreSQL Service"]
+        RedisDeploy["Redis Deployment"]
+        RedisSvc["Redis Service"]
+        ConfigMap["ConfigMap"]
+        Secret["Secret"]
+        PVC["PersistentVolumeClaim"]
+    end
+
+    Ingress --> FrontendSvc
+    Ingress --> BackendSvc
+    FrontendSvc --> FrontendDeploy
+    BackendSvc --> BackendDeploy
+    PostgreSQLSvc --> PostgreSQLSTS
+    RedisSvc --> RedisDeploy
+    BackendDeploy --> PostgreSQLSvc
+    BackendDeploy --> RedisSvc
+    BackendDeploy --> ConfigMap
+    BackendDeploy --> Secret
+    PostgreSQLSTS --> PVC
+
+    subgraph future["Future Components"]
+        HPA["HorizontalPodAutoscaler"]
+        PDB["PodDisruptionBudget"]
+        NetworkPolicy["NetworkPolicy"]
+    end
+
+    FrontendDeploy -.-> HPA
+    BackendDeploy -.-> HPA
+    PostgreSQLSTS -.-> PDB
+```

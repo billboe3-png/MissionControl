@@ -21,9 +21,17 @@ class AgentRepository:
     # ------------------------------------------------------------------ #
 
     @staticmethod
-    def get_all(db: Session) -> list[Agent]:
+    def get_all(
+        db: Session,
+        company_id: int | None = None,
+        site_id: int | None = None,
+    ) -> list[Agent]:
         """Return all agents ordered by creation date."""
         stmt = select(Agent).order_by(Agent.created_at.desc())
+        if company_id is not None:
+            stmt = stmt.where(Agent.company_id == company_id)
+        if site_id is not None:
+            stmt = stmt.where(Agent.site_id == site_id)
         return list(db.scalars(stmt).all())
 
     @staticmethod
@@ -180,6 +188,8 @@ class AgentCommandRepository:
         limit: int = 100,
         status: str | None = None,
         command_type: str | None = None,
+        company_id: int | None = None,
+        site_id: int | None = None,
     ) -> list[AgentCommand]:
         """Return all commands with optional filters."""
         stmt = select(AgentCommand)
@@ -189,6 +199,10 @@ class AgentCommandRepository:
             stmt = stmt.where(
                 AgentCommand.command_type == command_type
             )
+        if company_id is not None:
+            stmt = stmt.where(AgentCommand.company_id == company_id)
+        if site_id is not None:
+            stmt = stmt.where(AgentCommand.site_id == site_id)
         stmt = stmt.order_by(
             AgentCommand.created_at.desc()
         ).limit(limit)

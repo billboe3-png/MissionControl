@@ -1,3 +1,5 @@
+import { apiClient } from "../utils/apiClient";
+
 const API_BASE = "/api/v1/zabbix";
 
 export interface ZabbixConnectionTestResult {
@@ -196,33 +198,17 @@ export interface ZabbixHealthResponse {
     error: string | null;
 }
 
-async function get<T>(path: string): Promise<T> {
-    const response = await fetch(`${API_BASE}${path}`);
-    if (!response.ok) {
-        throw new Error(`Zabbix API error: ${response.status}`);
-    }
-    return response.json();
-}
-
-async function post<T>(path: string): Promise<T> {
-    const response = await fetch(`${API_BASE}${path}`, { method: "POST" });
-    if (!response.ok) {
-        throw new Error(`Zabbix API error: ${response.status}`);
-    }
-    return response.json();
-}
-
 export const zabbixApi = {
-    testConnection: () => post<ZabbixConnectionTestResult>("/test"),
-    getOverview: () => get<ZabbixSummary>("/overview"),
-    getHosts: () => get<ZabbixHostsResponse>("/hosts"),
-    getGroups: () => get<ZabbixHostGroupsResponse>("/groups"),
-    getTemplates: () => get<ZabbixTemplatesResponse>("/templates"),
-    getItems: () => get<ZabbixItemsResponse>("/items"),
-    getTriggers: () => get<ZabbixTriggersResponse>("/triggers"),
-    getProblems: () => get<ZabbixProblemsResponse>("/problems"),
-    getEvents: () => get<ZabbixEventsResponse>("/events"),
-    getMaps: () => get<ZabbixMapsResponse>("/maps"),
-    getDashboards: () => get<ZabbixDashboardsResponse>("/dashboards"),
-    getHealth: () => get<ZabbixHealthResponse>("/health"),
+    testConnection: () => apiClient<ZabbixConnectionTestResult>(`${API_BASE}/test`, { method: "POST" }),
+    getOverview: () => apiClient<ZabbixSummary>(`${API_BASE}/overview`),
+    getHosts: () => apiClient<ZabbixHostsResponse>(`${API_BASE}/hosts`),
+    getGroups: () => apiClient<ZabbixHostGroupsResponse>(`${API_BASE}/groups`),
+    getTemplates: () => apiClient<ZabbixTemplatesResponse>(`${API_BASE}/templates`),
+    getItems: () => apiClient<ZabbixItemsResponse>(`${API_BASE}/items`),
+    getTriggers: () => apiClient<ZabbixTriggersResponse>(`${API_BASE}/triggers`),
+    getProblems: () => apiClient<ZabbixProblemsResponse>(`${API_BASE}/problems`),
+    getEvents: () => apiClient<ZabbixEventsResponse>(`${API_BASE}/events`),
+    getMaps: () => apiClient<ZabbixMapsResponse>(`${API_BASE}/maps`),
+    getDashboards: () => apiClient<ZabbixDashboardsResponse>(`${API_BASE}/dashboards`),
+    getHealth: () => apiClient<ZabbixHealthResponse>(`${API_BASE}/health`),
 };

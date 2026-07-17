@@ -1,11 +1,17 @@
-from fastapi import APIRouter
+import logging
 
+from fastapi import APIRouter, Depends
+
+from app.core.auth_dependency import get_current_user
 from app.models.docker import DockerResponse
 from app.services.docker_service import get_docker_status
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(
     prefix="/system/docker",
     tags=["Docker"],
+    dependencies=[Depends(get_current_user)],
 )
 
 

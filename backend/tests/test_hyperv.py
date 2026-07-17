@@ -5,12 +5,14 @@ Tests the Hyper-V provider, service, router, schemas, mock provider,
 VirtualizationProvider abstraction, and domain models.
 """
 
+
 import pytest
-from unittest.mock import patch
 
 from app.providers.hyperv.mock_provider import MockHyperVProvider, set_mock_mode
-from app.providers.hyperv.provider_factory import get_hyperv_provider, reset_hyperv_provider
-
+from app.providers.hyperv.provider_factory import (
+    get_hyperv_provider,
+    reset_hyperv_provider,
+)
 
 # ------------------------------------------------------------------ #
 # Mock Provider Tests                                                 #

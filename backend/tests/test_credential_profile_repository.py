@@ -3,8 +3,10 @@ Credential Profile Repository Tests
 """
 
 from app.repositories.credential_profile_repository import CredentialProfileRepository
-from app.schemas.credential_profile import CredentialProfileCreate
-from app.schemas.credential_profile import CredentialProfileUpdate
+from app.schemas.credential_profile import (
+    CredentialProfileCreate,
+    CredentialProfileUpdate,
+)
 
 
 def test_create_credential_profile(db_session):

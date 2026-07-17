@@ -1,8 +1,13 @@
 import { Link } from "react-router-dom";
-import type { AIOverview } from "../../services/ai";
 
 interface AICardProps {
-    data: AIOverview;
+    data: {
+        health_score?: { score?: number; grade?: string };
+        critical_incidents?: number;
+        recommendations?: number;
+        correlated_alerts?: number;
+        top_risks?: Array<{ title?: string; message?: string; severity?: string }>;
+    };
 }
 
 export default function AICard({ data }: AICardProps) {
@@ -47,7 +52,7 @@ export default function AICard({ data }: AICardProps) {
                 </div>
             </div>
             <div className="ai-card-links">
-                <Link to="/ai/overview" className="ai-link">
+                <Link to="/ai" className="ai-link">
                     Overview
                 </Link>
                 <Link to="/ai/recommendations" className="ai-link">

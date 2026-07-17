@@ -4,8 +4,7 @@ Mission Control File Transfer API Schemas
 Sprint 2.1.8 - Remote Operations Finalization.
 """
 
-from pydantic import BaseModel
-from pydantic import Field
+from pydantic import BaseModel, Field
 
 
 class FileUploadRequest(BaseModel):

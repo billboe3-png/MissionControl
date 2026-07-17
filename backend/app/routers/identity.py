@@ -12,12 +12,13 @@ import logging
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
+from app.core.auth_dependency import get_current_user
 from app.db import get_db
 from app.schemas.identity import (
     ADActionResponse,
     ADDevicesResponse,
-    ADGroupsResponse,
     ADGroupMembershipRequest,
+    ADGroupsResponse,
     ADHealthResponse,
     ADPasswordResetRequest,
     ADRenameRequest,
@@ -37,7 +38,11 @@ from app.services.identity_service import identity_service
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/identity", tags=["identity"])
+router = APIRouter(
+    prefix="/identity",
+    tags=["identity"],
+    dependencies=[Depends(get_current_user)],
+)
 
 
 # ------------------------------------------------------------------ #

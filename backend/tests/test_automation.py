@@ -6,22 +6,17 @@ dry run, rollback, approvals, audit trail, schedules,
 event triggers, and automation dashboard.
 """
 
-import json
 
 import pytest
 from fastapi.testclient import TestClient
 
+from app.models.db.approval_request import ApprovalRequest
+from app.models.db.approval_workflow import ApprovalWorkflow
 from app.models.db.playbook import Playbook
+from app.models.db.playbook_execution import PlaybookExecution
+from app.models.db.playbook_schedule import PlaybookSchedule
 from app.models.db.playbook_step import PlaybookStep
 from app.models.db.playbook_variable import PlaybookVariable
-from app.models.db.playbook_execution import PlaybookExecution
-from app.models.db.approval_workflow import ApprovalWorkflow
-from app.models.db.approval_request import ApprovalRequest
-from app.models.db.audit_trail import AuditTrail
-from app.models.db.playbook_schedule import PlaybookSchedule
-from app.models.db.event_trigger import EventTrigger
-from app.models.db.execution_log import ExecutionLog
-
 
 # ------------------------------------------------------------------ #
 # Helpers                                                              #

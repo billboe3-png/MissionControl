@@ -1,0 +1,56 @@
+```mermaid
+graph TB
+    subgraph ReactApp["React Application"]
+        Entry["main.tsx"]
+        App["App.tsx"]
+        AuthCtx["AuthProvider"]
+        SidebarCtx["SidebarProvider"]
+        ToastCtx["ToastProvider"]
+        Router["BrowserRouter + Routes"]
+    end
+
+    subgraph Layout["AppLayout Shell"]
+        Sidebar["Sidebar (260px)"]
+        TopBar["TopBar + Breadcrumb"]
+        Content["Content Area (Outlet)"]
+        StatusBar["StatusBar"]
+    end
+
+    subgraph PageTypes["Page Types"]
+        Dashboard["DashboardPage"]
+        CRUD["CRUD Pages"]
+        Detail["Detail Pages"]
+        Placeholder["PlaceholderPage"]
+    end
+
+    subgraph CommonComponents["Common Components"]
+        PageHeader["PageHeader"]
+        DataTable["DataTable<T>"]
+        StatusBadge["StatusBadge"]
+        EmptyState["EmptyState"]
+        SearchInput["SearchInput"]
+        LoadingButton["LoadingButton"]
+    end
+
+    Entry --> App
+    App --> AuthCtx
+    AuthCtx --> SidebarCtx
+    SidebarCtx --> ToastCtx
+    ToastCtx --> Router
+    Router -->|/login| LoginPage
+    Router -->|Authenticated| Layout
+    Layout --> Content
+    Content --> Dashboard
+    Content --> CRUD
+    Content --> Detail
+    Content --> Placeholder
+
+    CRUD --> PageHeader
+    CRUD --> DataTable
+    CRUD --> SearchInput
+    CRUD --> EmptyState
+
+    style ReactApp fill:#1e3a5f,stroke:#3b82f6,color:#fff
+    style Layout fill:#2d1f3d,stroke:#a855f7,color:#fff
+    style CommonComponents fill:#1a332e,stroke:#22c55e,color:#fff
+```

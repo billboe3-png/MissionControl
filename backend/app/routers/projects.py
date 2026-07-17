@@ -5,23 +5,27 @@ Sprint:
     1.2.1 - Project API Foundation
 """
 
-from fastapi import APIRouter
-from fastapi import Depends
-from fastapi import HTTPException
-from fastapi import status
+import logging
+
+from fastapi import APIRouter, Depends, status
 from sqlalchemy.orm import Session
 
+from app.core.auth_dependency import get_current_user
 from app.db import get_db
-from app.schemas.project import ProjectCreate
-from app.schemas.project import ProjectListResponse
-from app.schemas.project import ProjectResponse
-from app.schemas.project import ProjectUpdate
-from app.services.project_service import ProjectService
-from app.services.project_service import project_service
+from app.schemas.project import (
+    ProjectCreate,
+    ProjectListResponse,
+    ProjectResponse,
+    ProjectUpdate,
+)
+from app.services.project_service import ProjectService, project_service
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(
     prefix="/projects",
     tags=["Projects"],
+    dependencies=[Depends(get_current_user)],
 )
 
 

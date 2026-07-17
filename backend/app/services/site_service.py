@@ -36,7 +36,12 @@ class SiteService:
     async def list_sites(self, db: Session) -> SiteListResponse:
         """List all sites with computed counts."""
         sites = SiteRepository.get_all(db)
-        items = [self._to_response(s, db) for s in sites]
+        all_stats = SiteRepository.get_all_site_stats(db)
+        all_company_names = self._get_company_names(db, sites)
+        items = [
+            self._to_response(s, db, all_stats=all_stats, all_company_names=all_company_names)
+            for s in sites
+        ]
         return SiteListResponse(count=len(items), items=items)
 
     async def list_summaries(
@@ -104,6 +109,7 @@ class SiteService:
         kwargs = {
             "name": data.name.strip(),
             "code": data.code.strip().lower(),
+            "company_id": data.company_id,
             "description": data.description,
             "color": data.color,
             "icon": data.icon,
@@ -318,13 +324,59 @@ class SiteService:
     # Helpers                                                             #
     # ------------------------------------------------------------------ #
 
-    def _to_response(self, site: Site, db: Session) -> SiteResponse:
+    @staticmethod
+    def _get_company_names(db: Session, sites: list[Site]) -> dict[int, str]:
+        """Batch-load company display names for a list of sites."""
+        company_ids = {s.company_id for s in sites if s.company_id is not None}
+        if not company_ids:
+            return {}
+        from app.models.db.company import Company
+
+        rows = db.execute(
+            select(Company.id, Company.display_name).where(
+                Company.id.in_(company_ids)
+            )
+        ).all()
+        return {row.id: row.display_name for row in rows}
+
+    def _to_response(
+        self,
+        site: Site,
+        db: Session,
+        all_stats: dict | None = None,
+        all_company_names: dict | None = None,
+    ) -> SiteResponse:
         """Convert an ORM site to a response with computed counts."""
-        stats = SiteRepository.get_site_stats(db, site.id)
+        if all_stats is not None:
+            stats = all_stats.get(
+                site.id, {"integration_count": 0, "host_count": 0}
+            )
+        else:
+            stats = SiteRepository.get_site_stats(db, site.id)
+
+        company_name = None
+        if all_company_names is not None:
+            company_name = all_company_names.get(site.company_id) if site.company_id else None
+        elif site.company_id is not None:
+            try:
+                from sqlalchemy import select as sel
+
+                from app.models.db.company import Company
+
+                company = db.scalar(
+                    sel(Company).where(Company.id == site.company_id)
+                )
+                if company is not None:
+                    company_name = company.display_name
+            except Exception:
+                pass
+
         return SiteResponse(
             id=site.id,
             name=site.name,
             code=site.code,
+            company_id=site.company_id,
+            company_name=company_name,
             description=site.description,
             color=site.color,
             icon=site.icon,

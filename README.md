@@ -1,6 +1,6 @@
 ﻿# Mission Control
 
-A full-stack IT operations platform for managing remote infrastructure, monitoring system health, and executing commands across your environment from a single unified dashboard.
+**v3.0.0** - A full-stack IT operations platform for managing remote infrastructure, monitoring system health, and executing commands across your environment from a single unified dashboard.
 
 ## Vision
 
@@ -8,26 +8,21 @@ One dashboard. One workflow. One place to manage everything.
 
 ## Overview
 
-Mission Control is a production-grade operations platform built for senior IT professionals and system administrators. It provides remote host management, secure credential storage, command execution, file browsing, and infrastructure monitoring through a modern web interface inspired by Windows Admin Center.
+Mission Control is a production-grade operations platform built for senior IT professionals and system administrators. It provides multi-tenant company/site management, remote host management, secure credential storage, command execution, file browsing, automation playbooks, AI-assisted operations, and infrastructure monitoring through a modern web interface inspired by Windows Admin Center.
 
 ## Tech Stack
 
 | Layer | Technology |
 |-------|-----------|
 | Backend | Python 3.14, FastAPI, SQLAlchemy ORM |
-| Database | PostgreSQL, Alembic migrations |
+| Database | PostgreSQL, Alembic migrations (21) |
+| Cache | Redis 5.x (rate limiting, session store) |
 | Frontend | React 18, TypeScript (strict), Vite 5 |
 | Styling | Tailwind-inspired custom CSS (dark theme) |
-| Security | Fernet encryption (AES-128-CBC), credential vault |
+| Security | Fernet encryption (AES-128-CBC), HMAC-signed JWT tokens, credential vault |
 | Remote | Paramiko (SSH), pywinrm (WinRM) |
-| Testing | pytest (307 tests), TypeScript strict mode |
-| Containerization | Docker Compose |
-
-## Current Status
-
-**Sprint 2.1.9** - Production-Readiness Finalization
-
-All remote operations are production-complete. The platform is ready for Sprint 2.2.
+| Testing | pytest (1062+ tests), ruff linting, TypeScript strict mode |
+| Containerization | Docker Compose (dev + prod) |
 
 ## Features
 
@@ -38,6 +33,12 @@ All remote operations are production-complete. The platform is ready for Sprint 
 - Project, task, and note summaries
 - Remote host overview with recent command history
 - Health status badges for all services
+
+### Authentication & Multi-Tenancy
+- JWT-based authentication with Bearer tokens
+- Role-based access control (global_admin, company_admin, operator, viewer)
+- Company and site scoping for multi-tenant isolation
+- User management (CRUD, role assignment, enable/disable)
 
 ### Remote Operations
 - **Host Management** - Full CRUD for SSH and WinRM hosts with credential assignment
@@ -50,6 +51,26 @@ All remote operations are production-complete. The platform is ready for Sprint 
 - **Command History** - Full audit trail with execution source tracking (manual, template, scheduled, bulk)
 - **Connection Testing** - Verify host connectivity before execution
 - **Session Metrics** - Track active sessions, command counts, and latency
+
+### Automation & Playbooks
+- **Playbooks** - Multi-step automation workflows with variable substitution
+- **Playbook Steps** - Ordered steps with per-step command execution
+- **Playbook Schedules** - Cron-based playbook scheduling
+- **Playbook Execution Logs** - Full execution history with status tracking
+- **Event Triggers** - Event-driven automation hooks
+- **Execution Logs** - Audit trail for all automation activity
+
+### Platform Integrations
+- **Agent Management** - Register and authenticate remote agents via API keys
+- **Integration Profiles** - Configure external platform connections (Zabbix, Proxmox, Hyper-V, Azure AD)
+- **Zabbix** - Host monitoring integration
+- **Proxmox** - Virtual machine management
+- **Hyper-V** - Windows hypervisor management
+- **Identity (Azure AD/M365)** - Directory and identity provider integration
+
+### AI-Assisted Operations
+- AI provider integration for operational assistance
+- Natural language command suggestions
 
 ### Infrastructure Monitoring
 - System overview (hostname, OS, CPU, memory, disk)
@@ -73,33 +94,47 @@ All remote operations are production-complete. The platform is ready for Sprint 
 │  └──────────┴──────────┴──────────┴──────────┘         │
 │                                                         │
 │  Pages: Dashboard | Hosts | Credentials | Execute |     │
-│         History | Files | Infrastructure | Settings     │
+│         History | Files | Infrastructure | Settings |   │
+│         Auth | Agents | Automation | AI |                │
+│         Companies | Identity | Zabbix | Proxmox | HyperV│
 ├─────────────────────────────────────────────────────────┤
 │                    FastAPI Backend                       │
 │  ┌──────────────────────────────────────────────┐      │
 │  │                  Routers                      │      │
-│  │  /remote  /dashboard  /projects  /tasks       │      │
+│  │  /remote /dashboard /projects /tasks          │      │
+│  │  /auth /agents /automation /integration       │      │
+│  │  /identity /zabbix /proxmox /hyperv /ai      │      │
 │  └──────────────────┬───────────────────────────┘      │
 │  ┌──────────────────┴───────────────────────────┐      │
 │  │               Service Layer                   │      │
-│  │  RemoteService | DashboardService | etc.      │      │
+│  │  RemoteService | AuthService | AgentService   │      │
+│  │  AutomationService | PlaybookService | etc.   │      │
 │  └──────────────────┬───────────────────────────┘      │
 │  ┌──────────────────┴───────────────────────────┐      │
 │  │              Repository Layer                 │      │
-│  │  RemoteHostRepo | CredentialRepo | HistoryRepo│      │
+│  │  25 repositories (host, credential, agent,    │      │
+│  │  playbook, integration, approval, etc.)       │      │
 │  └──────────────────┬───────────────────────────┘      │
 │  ┌──────────────────┴───────────────────────────┐      │
 │  │           Provider Layer (Strategy)           │      │
 │  │  SSHProvider | WinRMProvider | ProviderFactory │      │
+│  │  ZabbixProvider | ProxmoxProvider | etc.       │      │
 │  └──────────────────┬───────────────────────────┘      │
 │  ┌──────────────────┴───────────────────────────┐      │
 │  │              SQLAlchemy ORM                   │      │
-│  │  RemoteHost | CredentialProfile | CommandHistory│     │
-│  │  CommandTemplate | ScheduledCommand | etc.    │      │
+│  │  27 models across all domains                 │      │
+│  └──────────────────────────────────────────────┘      │
+│  ┌──────────────────────────────────────────────┐      │
+│  │           Middleware & Security               │      │
+│  │  JWT auth | Rate limiting | CORS | Fernet     │      │
 │  └──────────────────────────────────────────────┘      │
 ├─────────────────────────────────────────────────────────┤
-│                    PostgreSQL                           │
-│  9 Alembic migrations | 10 ORM models                  │
+│                    Data Layer                            │
+│  ┌────────────────────┬────────────────────────┐       │
+│  │    PostgreSQL       │       Redis            │       │
+│  │  21 migrations      │  Rate limiting cache   │       │
+│  │  27 ORM models      │  Session store         │       │
+│  └────────────────────┴────────────────────────┘       │
 └─────────────────────────────────────────────────────────┘
 ```
 
@@ -115,22 +150,46 @@ All remote operations are production-complete. The platform is ready for Sprint 
 
 | Model | Table | Purpose |
 |-------|-------|---------|
+| **Core** | | |
+| `User` | `users` | User accounts with role-based access |
+| `Company` | `companies` | Tenant company definitions |
+| `Site` | `sites` | Site locations within companies |
+| **Remote Operations** | | |
 | `RemoteHost` | `remote_hosts` | SSH/WinRM host definitions |
 | `CredentialProfile` | `credential_profiles` | Encrypted auth credentials |
 | `CommandHistory` | `command_history` | Execution audit trail |
 | `CommandTemplate` | `command_templates` | Reusable command library |
 | `ScheduledCommand` | `scheduled_commands` | Cron-based command scheduling |
+| **Agent & Integration** | | |
+| `Agent` | `agents` | Registered remote agent instances |
+| `AgentCommand` | `agent_commands` | Commands dispatched to agents |
+| `AgentRegistrationToken` | `agent_registration_tokens` | Agent API key management |
+| `IntegrationProfile` | `integration_profiles` | External platform connections |
+| **Automation** | | |
+| `Playbook` | `playbooks` | Multi-step automation workflows |
+| `PlaybookStep` | `playbook_steps` | Individual workflow steps |
+| `PlaybookVariable` | `playbook_variables` | Workflow variable definitions |
+| `PlaybookSchedule` | `playbook_schedules` | Cron-based playbook scheduling |
+| `PlaybookExecution` | `playbook_executions` | Workflow execution history |
+| `EventTrigger` | `event_triggers` | Event-driven automation hooks |
+| `ExecutionLog` | `execution_logs` | Automation activity audit trail |
+| **Approval** | | |
+| `ApprovalWorkflow` | `approval_workflows` | Approval process definitions |
+| `ApprovalRequest` | `approval_requests` | Pending approval records |
+| **Project Management** | | |
 | `Project` | `projects` | Project management |
 | `Task` | `tasks` | Task tracking |
 | `Note` | `notes` | Notes and documentation |
 | `ParkingLot` | `parking_lot` | Backlog parking lot |
 | `Resume` | `resumes` | Resume context |
+| **Audit** | | |
+| `AuditTrail` | `audit_trail` | System-wide audit logging |
 
 ## UI Design
 
 Mission Control v3 uses a **Windows Admin Center-inspired layout**:
 
-- **Persistent Sidebar** - Collapsible nav groups (Dashboard, Infrastructure, Remote Operations, Settings)
+- **Persistent Sidebar** - Collapsible nav groups (Dashboard, Infrastructure, Remote Operations, Automation, Platform, Settings)
 - **Top Bar** - Breadcrumb navigation with route labels
 - **Status Bar** - Live clock, connection status, version info
 - **Content Area** - Full-width page content with `<Outlet />` routing
@@ -147,46 +206,73 @@ All pages follow consistent patterns:
 
 ```
 MissionControl/
+├── .agents/                      # Autonomous agent framework
+│   ├── agent/                    # Agent implementation
+│   ├── skills/                   # Agent skill modules
+│   └── tests/                    # Agent test suite
+├── .github/
+│   └── workflows/ci.yml          # GitHub Actions CI pipeline
 ├── backend/
-│   ├── alembic/versions/        # 9 migrations
+│   ├── alembic/versions/         # 21 migrations
 │   ├── app/
-│   │   ├── core/                # Config, security (Fernet cipher)
-│   │   ├── db/                  # Database engine, session
-│   │   ├── models/db/           # 10 SQLAlchemy ORM models
-│   │   ├── providers/           # Strategy pattern providers
-│   │   │   ├── remote/          # SSH, WinRM, provider factory
-│   │   │   ├── health_provider.py
-│   │   │   ├── system_provider.py
-│   │   │   ├── docker_provider.py
-│   │   │   └── git_provider.py
-│   │   ├── repositories/        # Data access layer (8 repos)
-│   │   ├── routers/             # FastAPI routers
-│   │   ├── schemas/             # Pydantic request/response models
-│   │   ├── seed/                # Idempotent seed framework
-│   │   └── services/            # Business logic layer
-│   ├── tests/                   # 307 pytest tests
+│   │   ├── ai/                   # AI provider integration
+│   │   ├── api/                  # API utilities
+│   │   ├── core/                 # Config, security, auth dependency
+│   │   ├── db/                   # Database engine, session
+│   │   ├── infrastructure/       # Infrastructure utilities
+│   │   ├── models/db/            # 27 SQLAlchemy ORM models
+│   │   ├── platform/             # Platform integration layer
+│   │   ├── providers/            # Strategy pattern providers
+│   │   │   ├── remote/           # SSH, WinRM, provider factory
+│   │   │   ├── zabbix/           # Zabbix monitoring
+│   │   │   ├── proxmox/          # Proxmox VE
+│   │   │   ├── hyperv/           # Hyper-V
+│   │   │   └── identity/         # Azure AD / M365
+│   │   ├── repositories/         # Data access layer (25 repos)
+│   │   ├── routers/              # FastAPI routers (26 endpoints)
+│   │   ├── schemas/              # Pydantic request/response models
+│   │   ├── seed/                 # Idempotent seed framework
+│   │   ├── services/             # Business logic layer
+│   │   ├── storage/              # File storage utilities
+│   │   └── utils/                # Shared utilities
+│   ├── tests/                    # 1062+ pytest tests
+│   ├── Dockerfile
+│   ├── entrypoint.sh
 │   └── requirements.txt
 ├── frontend/
 │   ├── src/
 │   │   ├── components/
-│   │   │   ├── common/          # DataTable, EmptyState, PageHeader, etc.
-│   │   │   ├── dashboard/       # StatCard, HealthBadges, QuickActions
-│   │   │   ├── modals/          # HostModal, CredentialModal
-│   │   │   └── sidebar/         # NavGroup, NavItem, UserBadge
-│   │   ├── contexts/            # SidebarContext, ToastContext
-│   │   ├── layouts/             # AppLayout, Sidebar, TopBar, StatusBar, Breadcrumb
+│   │   │   ├── common/           # DataTable, EmptyState, PageHeader, etc.
+│   │   │   ├── dashboard/        # StatCard, HealthBadges, QuickActions
+│   │   │   ├── modals/           # HostModal, CredentialModal
+│   │   │   └── sidebar/          # NavGroup, NavItem, UserBadge
+│   │   ├── contexts/             # SidebarContext, ToastContext
+│   │   ├── layouts/              # AppLayout, Sidebar, TopBar, StatusBar
 │   │   ├── pages/
-│   │   │   ├── infrastructure/  # Overview, System, Docker, Git, Health
-│   │   │   ├── remote/          # Hosts, Credentials, Execute, History, Files
-│   │   │   └── settings/        # General, Appearance, About
-│   │   ├── services/            # API clients (remote.ts, files.ts, api.ts)
-│   │   ├── styles.css           # 2425-line dark theme
-│   │   └── types/               # TypeScript type definitions
+│   │   │   ├── agents/           # Agent management
+│   │   │   ├── ai/               # AI assistant
+│   │   │   ├── auth/             # Login, user management
+│   │   │   ├── automation/       # Playbook management
+│   │   │   ├── companies/        # Company management
+│   │   │   ├── hyperv/           # Hyper-V management
+│   │   │   ├── identity/         # Identity provider
+│   │   │   ├── infrastructure/   # Overview, System, Docker, Git, Health
+│   │   │   ├── proxmox/          # Proxmox management
+│   │   │   ├── remote/           # Hosts, Credentials, Execute, History, Files
+│   │   │   ├── settings/         # General, Appearance, About
+│   │   │   └── zabbix/           # Zabbix monitoring
+│   │   ├── services/             # API clients
+│   │   ├── styles.css            # Dark theme
+│   │   └── types/                # TypeScript type definitions
 │   ├── package.json
 │   └── vite.config.ts
-├── docker/                      # Docker Compose configuration
+├── docker/                       # Docker build context
+├── nginx/                        # Nginx reverse proxy config
+├── scripts/                      # PowerShell utility scripts
+├── tests/                        # Root-level integration tests
 ├── .env.example
-├── docker-compose.yml
+├── docker-compose.yml            # Development stack
+├── docker-compose.prod.yml       # Production stack
 └── README.md
 ```
 
@@ -197,9 +283,10 @@ MissionControl/
 - Python 3.14+
 - Node.js 18+
 - PostgreSQL 15+
+- Redis 7+
 - Docker & Docker Compose (optional)
 
-### Docker (Recommended)
+### Docker - Development
 
 ```bash
 git clone <repository>
@@ -222,8 +309,23 @@ The backend entrypoint will:
 3. Seed the database
 4. Start the API server
 
-**Frontend:** http://localhost:5173  
-**Backend API:** http://localhost:8000/api/v1  
+**Frontend:** http://localhost:5173
+**Backend API:** http://localhost:8000/api/v1
+**API Docs:** http://localhost:8000/docs
+
+### Docker - Production
+
+```bash
+# Copy and configure production env
+cp .env.example .env
+# Edit .env with production values (see Environment Variables below)
+
+# Start production stack (Nginx reverse proxy, no Vite dev server)
+docker compose -f docker-compose.prod.yml up -d
+```
+
+**Application:** http://localhost:80 (via Nginx)
+**Backend API:** http://localhost:8000/api/v1
 **API Docs:** http://localhost:8000/docs
 
 ### Local Development
@@ -254,6 +356,25 @@ All credential data (passwords, SSH keys, passphrases) is encrypted at rest usin
 - Response schemas never expose sensitive fields
 - Key versioning supports secret rotation
 
+### JWT Authentication
+
+Users authenticate via `/api/v1/auth/login` and receive an HMAC-signed access token. All protected endpoints require a `Bearer` token in the `Authorization` header.
+
+- Tokens are lightweight HMAC-signed JWTs (no external JWT library dependency)
+- Role-based access control: `global_admin`, `company_admin`, `operator`, `viewer`
+- Company and site scoping enforced at the service layer
+
+### Rate Limiting
+
+In-memory sliding-window rate limiting protects the API:
+
+- General endpoints: 60 requests/minute per IP
+- Authentication endpoints: 5 requests/minute per IP (brute-force protection)
+
+### CORS
+
+Production CORS origins are configurable via `BACKEND_CORS_ORIGINS`. The default allows `localhost`, `localhost:3000`, and `localhost:5173`.
+
 ### Generating a Secret Key
 
 ```bash
@@ -268,6 +389,17 @@ python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().d
 4. Restart the stack
 
 ## API Endpoints
+
+### Authentication
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/auth/login` | Authenticate and receive access token |
+| GET | `/auth/me` | Get current authenticated user |
+| POST | `/auth/change-password` | Change current user's password |
+| GET | `/auth/users` | List users (company_admin+) |
+| POST | `/auth/users` | Create user (company_admin+) |
+| PUT | `/auth/users/{id}` | Update user (company_admin+) |
+| DELETE | `/auth/users/{id}` | Delete user (company_admin+) |
 
 ### Hosts
 | Method | Endpoint | Description |
@@ -317,9 +449,11 @@ python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().d
 ### System
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| GET | `/api/v1/dashboard` | Full dashboard data |
+| GET | `/dashboard` | Full dashboard data |
 | GET | `/remote/metrics` | Session and provider metrics |
 | GET | `/health` | Health check |
+| GET | `/doctor` | System diagnostics |
+| GET | `/version` | Version info |
 
 ## Environment Variables
 
@@ -331,7 +465,11 @@ python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().d
 | `POSTGRES_PASSWORD` | No | `mission_control` | PostgreSQL password |
 | `POSTGRES_HOST` | No | `postgres` | PostgreSQL host |
 | `POSTGRES_PORT` | No | `5432` | PostgreSQL port |
-| `BACKEND_CORS_ORIGINS` | No | `http://localhost:5173` | Allowed CORS origins |
+| `REDIS_HOST` | No | `redis` | Redis host |
+| `REDIS_PORT` | No | `6379` | Redis port |
+| `BACKEND_CORS_ORIGINS` | No | `http://localhost,http://localhost:3000,http://localhost:5173` | Allowed CORS origins |
+| `RATE_LIMIT_PER_MINUTE` | No | `60` | Max API requests per minute per IP |
+| `RATE_LIMIT_AUTH_PER_MINUTE` | No | `5` | Max login attempts per minute per IP |
 | `SSH_CONNECT_TIMEOUT` | No | `10` | SSH connection timeout (seconds) |
 | `SSH_COMMAND_TIMEOUT` | No | `60` | SSH command timeout (seconds) |
 | `WINRM_CONNECT_TIMEOUT` | No | `10` | WinRM connection timeout (seconds) |
@@ -341,9 +479,12 @@ python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().d
 ## Testing
 
 ```bash
-# Backend (307 tests)
+# Backend (1062+ tests)
 cd backend
 python -m pytest tests/ -v
+
+# Linting
+ruff check app/ tests/
 
 # Frontend type checking
 cd frontend
@@ -356,13 +497,16 @@ npm run build
 
 ### Test Coverage
 
-| Area | Tests | Description |
-|------|-------|-------------|
-| API Integration | 68 | CRUD endpoints, auth, remote operations |
-| Repositories | 45 | Data access, search, encryption |
-| Services | 89 | Business logic, validation, credential handling |
-| Providers | 52 | SSH, WinRM, provider factory, dummy provider |
-| History & Audit | 53 | Command history, templates, schedules, bulk execution |
+| Area | Description |
+|------|-------------|
+| API Integration | CRUD endpoints, auth, remote operations |
+| Repositories | Data access, search, encryption |
+| Services | Business logic, validation, credential handling |
+| Providers | SSH, WinRM, provider factory, platform integrations |
+| History & Audit | Command history, templates, schedules, bulk execution |
+| Automation | Playbook execution, scheduling, event triggers |
+| Auth & Multi-Tenancy | Login, JWT, role-based access, company/site scoping |
+| Agent Management | Agent registration, command dispatch, authentication |
 
 ## Roadmap
 
@@ -376,21 +520,44 @@ npm run build
 - **Sprint 2.1.8** - Templates, bulk execution, scheduled commands, file transfer, metrics
 - **Sprint 2.1.9** - Production readiness (migrations, UI completion, dead code removal)
 - **UI v3** - Windows Admin Center-inspired layout
+- **Sprint 2.2** - Connection pooling with idle cleanup
+- **Sprint 2.3** - Streaming command output (SSE/WebSocket)
+- **Sprint 2.5** - Command cancellation support
+- **Sprint 2.7** - Host/credential validation module
+- **Sprint 2.8** - Standalone metrics provider
+- **Sprint 3.0** - Multi-tenant platform (JWT auth, companies, sites, agents, automation playbooks, platform integrations, AI operations)
 
-### Planned (Sprint 2.2+)
-- Connection pooling with idle cleanup
-- Streaming command output (SSE/WebSocket)
-- Command cancellation support
-- Host/credential validation module
-- Standalone metrics provider
-- Monitoring integration
-- Identity & Access management
-- Automation workflows
-- AI-powered operations assistant
+### Future
+- Monitoring integration (extended Zabbix/Proxmox/Hyper-V coverage)
+- Identity & Access management (expanded Azure AD/M365)
+- Advanced automation workflows
+- AI-powered operations assistant (expanded)
 
 ## Contributing
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines on contributing to Mission Control.
+
+### Quick Reference
+
+```bash
+# Lint
+ruff check app/ tests/
+
+# Format
+ruff format app/ tests/
+
+# Test
+python -m pytest tests/ -v
+
+# Frontend type check
+npx tsc --noEmit
+```
+
+## Deployment
+
+See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for architecture details and [docs/operations/](docs/operations/) for operational runbooks.
+
+For production deployment, use `docker-compose.prod.yml` which runs the backend and Nginx reverse proxy without the Vite dev server.
 
 ## License
 

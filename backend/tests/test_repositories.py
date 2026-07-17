@@ -2,8 +2,7 @@
 Repository layer tests.
 """
 
-from datetime import UTC
-from datetime import datetime
+from datetime import UTC, datetime
 
 from app.models.db.note import Note
 from app.models.db.project import Project

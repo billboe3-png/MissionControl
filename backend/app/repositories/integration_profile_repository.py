@@ -16,11 +16,19 @@ class IntegrationProfileRepository:
     """Data access layer for integration profiles stored in PostgreSQL."""
 
     @staticmethod
-    def get_all(db: Session) -> list[IntegrationProfile]:
+    def get_all(
+        db: Session,
+        company_id: int | None = None,
+        site_id: int | None = None,
+    ) -> list[IntegrationProfile]:
         """Return all integration profiles ordered by creation date."""
         stmt = select(IntegrationProfile).order_by(
             IntegrationProfile.created_at.desc()
         )
+        if company_id is not None:
+            stmt = stmt.where(IntegrationProfile.company_id == company_id)
+        if site_id is not None:
+            stmt = stmt.where(IntegrationProfile.site_id == site_id)
         return list(db.scalars(stmt).all())
 
     @staticmethod
@@ -45,24 +53,38 @@ class IntegrationProfileRepository:
 
     @staticmethod
     def get_enabled_by_type(
-        db: Session, integration_type: str
+        db: Session,
+        integration_type: str,
+        company_id: int | None = None,
+        site_id: int | None = None,
     ) -> IntegrationProfile | None:
         """Return the first enabled integration profile of a given type."""
         stmt = select(IntegrationProfile).where(
             IntegrationProfile.integration_type == integration_type,
             IntegrationProfile.enabled.is_(True),
         ).order_by(IntegrationProfile.created_at.desc())
+        if company_id is not None:
+            stmt = stmt.where(IntegrationProfile.company_id == company_id)
+        if site_id is not None:
+            stmt = stmt.where(IntegrationProfile.site_id == site_id)
         return db.scalar(stmt)
 
     @staticmethod
     def get_all_enabled_by_type(
-        db: Session, integration_type: str
+        db: Session,
+        integration_type: str,
+        company_id: int | None = None,
+        site_id: int | None = None,
     ) -> list[IntegrationProfile]:
         """Return all enabled integration profiles of a given type."""
         stmt = select(IntegrationProfile).where(
             IntegrationProfile.integration_type == integration_type,
             IntegrationProfile.enabled.is_(True),
         ).order_by(IntegrationProfile.name.asc())
+        if company_id is not None:
+            stmt = stmt.where(IntegrationProfile.company_id == company_id)
+        if site_id is not None:
+            stmt = stmt.where(IntegrationProfile.site_id == site_id)
         return list(db.scalars(stmt).all())
 
     @staticmethod

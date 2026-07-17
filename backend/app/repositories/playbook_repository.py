@@ -4,8 +4,7 @@ Mission Control Playbook Repository
 All database access for Playbook entities.
 """
 
-from sqlalchemy import func
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.models.db.playbook import Playbook
@@ -15,8 +14,17 @@ class PlaybookRepository:
     """Data access layer for playbook records."""
 
     @staticmethod
-    def get_all(db: Session) -> list[Playbook]:
-        stmt = select(Playbook).order_by(Playbook.updated_at.desc())
+    def get_all(
+        db: Session,
+        company_id: int | None = None,
+        site_id: int | None = None,
+    ) -> list[Playbook]:
+        stmt = select(Playbook)
+        if company_id is not None:
+            stmt = stmt.where(Playbook.company_id == company_id)
+        if site_id is not None:
+            stmt = stmt.where(Playbook.site_id == site_id)
+        stmt = stmt.order_by(Playbook.updated_at.desc())
         return list(db.scalars(stmt).all())
 
     @staticmethod
@@ -30,8 +38,15 @@ class PlaybookRepository:
         search: str | None = None,
         category: str | None = None,
         enabled: bool | None = None,
+        company_id: int | None = None,
+        site_id: int | None = None,
     ) -> list[Playbook]:
         stmt = select(Playbook)
+
+        if company_id is not None:
+            stmt = stmt.where(Playbook.company_id == company_id)
+        if site_id is not None:
+            stmt = stmt.where(Playbook.site_id == site_id)
 
         if search:
             term = f"%{search.strip().lower()}%"

@@ -2,23 +2,90 @@ name: CI
 
 on:
   push:
-    branches: [ main, master ]
+    branches: [main]
   pull_request:
-    branches: [ main, master ]
+    branches: [main]
 
 jobs:
-  quality-gate:
-    runs-on: windows-latest
-    
+  backend:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: mission_control
+          POSTGRES_USER: mission_control
+          POSTGRES_PASSWORD: mission_control
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      redis:
+        image: redis:7.2-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
     steps:
-    - name: Checkout
-      uses: actions/checkout@v4
-    
-    - name: Install PowerShell 7
-      uses: actions/setup-powershell@v2
-      with:
-        powershell-version: 'latest'
-    
-    - name: Run Quality Gate
-      shell: pwsh
-      run: ./scripts/Invoke-Quality.ps1
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        working-directory: backend
+        run: |
+          pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install ruff
+
+      - name: Lint with ruff
+        working-directory: backend
+        run: ruff check app/ tests/
+
+      - name: Run tests
+        working-directory: backend
+        env:
+          MISSIONCONTROL_SECRET_KEY: test-key-for-ci-only-1234567890abcdefghij
+          POSTGRES_DB: mission_control
+          POSTGRES_USER: mission_control
+          POSTGRES_PASSWORD: mission_control
+          POSTGRES_HOST: localhost
+          POSTGRES_PORT: 5432
+          REDIS_HOST: localhost
+          REDIS_PORT: 6379
+          BACKEND_CORS_ORIGINS: http://localhost
+        run: python -m pytest tests/ -q --tb=short
+
+  frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: TypeScript check
+        working-directory: frontend
+        run: npx tsc --noEmit
+
+      - name: Build
+        working-directory: frontend
+        run: npm run build

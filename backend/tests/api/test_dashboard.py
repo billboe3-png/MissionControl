@@ -9,7 +9,6 @@ from app.models.db.parking_lot import ParkingLot
 from app.models.db.project import Project
 from app.models.db.task import Task
 
-
 DASHBOARD_URL = "/api/v1/dashboard"
 
 

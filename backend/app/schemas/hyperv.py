@@ -6,7 +6,6 @@ Pydantic request/response models for the Hyper-V API.
 
 from pydantic import BaseModel
 
-
 # ------------------------------------------------------------------ #
 # VM                                                                  #
 # ------------------------------------------------------------------ #

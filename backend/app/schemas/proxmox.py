@@ -6,7 +6,6 @@ Pydantic request/response models for the Proxmox API.
 
 from pydantic import BaseModel
 
-
 # ------------------------------------------------------------------ #
 # VM                                                                  #
 # ------------------------------------------------------------------ #

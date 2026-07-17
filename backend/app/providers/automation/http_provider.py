@@ -9,7 +9,6 @@ Sprint 2.8 - Automation & Playbooks.
 import json
 import logging
 import time
-from urllib.parse import urljoin
 
 import httpx
 

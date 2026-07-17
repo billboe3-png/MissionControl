@@ -67,7 +67,7 @@ class BashAutomationProvider(AutomationProvider):
                     process.communicate(),
                     timeout=context.timeout_seconds,
                 )
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 process.kill()
                 await process.wait()
                 duration_ms = int((time.monotonic() - start) * 1000)

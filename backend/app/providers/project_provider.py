@@ -7,8 +7,7 @@ Supports search, sort, and filter operations.
 
 import logging
 
-from sqlalchemy import func
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.models.db.project import Project

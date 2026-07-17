@@ -56,7 +56,7 @@ async def _run_powershell_winrm(
             "stderr": stderr,
             "exit_code": result.status_code,
         }
-    except asyncio.TimeoutError:
+    except TimeoutError:
         return {"success": False, "stdout": "", "stderr": "Command timed out", "exit_code": -1}
     except Exception as e:
         return {"success": False, "stdout": "", "stderr": str(e), "exit_code": -1}
@@ -100,7 +100,7 @@ async def _run_powershell_ssh(
             "stderr": stderr.decode("utf-8", errors="replace"),
             "exit_code": proc.returncode,
         }
-    except asyncio.TimeoutError:
+    except TimeoutError:
         return {"success": False, "stdout": "", "stderr": "Command timed out", "exit_code": -1}
     except Exception as e:
         return {"success": False, "stdout": "", "stderr": str(e), "exit_code": -1}

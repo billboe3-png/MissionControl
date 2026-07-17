@@ -1,6 +1,5 @@
 """Mission Control Agent - Heartbeat system."""
 
-import asyncio
 import logging
 
 from agent.client import AgentClient

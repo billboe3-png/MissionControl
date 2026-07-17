@@ -1,3 +1,5 @@
+import { apiClient } from "../utils/apiClient";
+
 const API = "/api/v1/hyperv";
 
 export interface HyperVHost {
@@ -142,85 +144,59 @@ function hostParamAmp(hostId: number | null): string {
 
 export const hypervApi = {
     async listHosts(): Promise<HyperVHost[]> {
-        const response = await fetch(`${API}/hosts`);
-        if (!response.ok) throw new Error("Failed to load Hyper-V hosts");
-        const data = await response.json();
+        const data = await apiClient<{ hosts: HyperVHost[] }>(`${API}/hosts`);
         return data.hosts ?? [];
     },
 
     async getSummary(hostId: number | null = null): Promise<HyperVSummary> {
-        const response = await fetch(`${API}/overview${hostParam(hostId)}`);
-        if (!response.ok) throw new Error("Failed to load Hyper-V overview");
-        return response.json();
+        return apiClient<HyperVSummary>(`${API}/overview${hostParam(hostId)}`);
     },
 
     async getHealth(hostId: number | null = null): Promise<HyperVHealth> {
-        const response = await fetch(`${API}/health${hostParam(hostId)}`);
-        if (!response.ok) throw new Error("Failed to load Hyper-V health");
-        return response.json();
+        return apiClient<HyperVHealth>(`${API}/health${hostParam(hostId)}`);
     },
 
     async testConnection(hostId: number | null = null): Promise<{ connected: boolean; latency_ms: number; message: string | null; hostname: string | null; error: string | null }> {
-        const response = await fetch(`${API}/test${hostParam(hostId)}`);
-        if (!response.ok) throw new Error("Connection test failed");
-        return response.json();
+        return apiClient(`${API}/test${hostParam(hostId)}`);
     },
 
     async listVms(hostId: number | null = null): Promise<HyperVVm[]> {
-        const response = await fetch(`${API}/vms${hostParam(hostId)}`);
-        if (!response.ok) throw new Error("Failed to load VMs");
-        const data = await response.json();
+        const data = await apiClient<{ items: HyperVVm[] }>(`${API}/vms${hostParam(hostId)}`);
         return data.items ?? [];
     },
 
     async getVm(vmId: string, hostId: number | null = null): Promise<HyperVVm> {
-        const response = await fetch(`${API}/vms/${vmId}${hostParamAmp(hostId)}`);
-        if (!response.ok) throw new Error("Failed to load VM");
-        const data = await response.json();
+        const data = await apiClient<{ item: HyperVVm }>(`${API}/vms/${vmId}${hostParamAmp(hostId)}`);
         return data.item;
     },
 
     async startVm(vmId: string, hostId: number | null = null): Promise<HyperVActionResponse> {
-        const response = await fetch(`${API}/vms/${vmId}/start${hostParam(hostId)}`, { method: "POST" });
-        if (!response.ok) throw new Error("Failed to start VM");
-        return response.json();
+        return apiClient<HyperVActionResponse>(`${API}/vms/${vmId}/start${hostParam(hostId)}`, { method: "POST" });
     },
 
     async stopVm(vmId: string, force = false, hostId: number | null = null): Promise<HyperVActionResponse> {
-        const response = await fetch(`${API}/vms/${vmId}/stop?force=${force}${hostParamAmp(hostId)}`, { method: "POST" });
-        if (!response.ok) throw new Error("Failed to stop VM");
-        return response.json();
+        return apiClient<HyperVActionResponse>(`${API}/vms/${vmId}/stop?force=${force}${hostParamAmp(hostId)}`, { method: "POST" });
     },
 
     async restartVm(vmId: string, hostId: number | null = null): Promise<HyperVActionResponse> {
-        const response = await fetch(`${API}/vms/${vmId}/restart${hostParam(hostId)}`, { method: "POST" });
-        if (!response.ok) throw new Error("Failed to restart VM");
-        return response.json();
+        return apiClient<HyperVActionResponse>(`${API}/vms/${vmId}/restart${hostParam(hostId)}`, { method: "POST" });
     },
 
     async pauseVm(vmId: string, hostId: number | null = null): Promise<HyperVActionResponse> {
-        const response = await fetch(`${API}/vms/${vmId}/pause${hostParam(hostId)}`, { method: "POST" });
-        if (!response.ok) throw new Error("Failed to pause VM");
-        return response.json();
+        return apiClient<HyperVActionResponse>(`${API}/vms/${vmId}/pause${hostParam(hostId)}`, { method: "POST" });
     },
 
     async resumeVm(vmId: string, hostId: number | null = null): Promise<HyperVActionResponse> {
-        const response = await fetch(`${API}/vms/${vmId}/resume${hostParam(hostId)}`, { method: "POST" });
-        if (!response.ok) throw new Error("Failed to resume VM");
-        return response.json();
+        return apiClient<HyperVActionResponse>(`${API}/vms/${vmId}/resume${hostParam(hostId)}`, { method: "POST" });
     },
 
     async listNetworks(hostId: number | null = null): Promise<HyperVNetwork[]> {
-        const response = await fetch(`${API}/networks${hostParam(hostId)}`);
-        if (!response.ok) throw new Error("Failed to load networks");
-        const data = await response.json();
+        const data = await apiClient<{ items: HyperVNetwork[] }>(`${API}/networks${hostParam(hostId)}`);
         return data.items ?? [];
     },
 
     async listStorage(hostId: number | null = null): Promise<HyperVStorage[]> {
-        const response = await fetch(`${API}/storage${hostParam(hostId)}`);
-        if (!response.ok) throw new Error("Failed to load storage");
-        const data = await response.json();
+        const data = await apiClient<{ items: HyperVStorage[] }>(`${API}/storage${hostParam(hostId)}`);
         return data.items ?? [];
     },
 
@@ -230,33 +206,24 @@ export const hypervApi = {
         if (vmId) params.push(`vm_id=${vmId}`);
         if (hostId) params.push(`host_id=${hostId}`);
         if (params.length) url += `?${params.join("&")}`;
-        const response = await fetch(url);
-        if (!response.ok) throw new Error("Failed to load checkpoints");
-        const data = await response.json();
+        const data = await apiClient<{ items: HyperVCheckpoint[] }>(url);
         return data.items ?? [];
     },
 
     async createCheckpoint(vmId: string, name?: string, hostId: number | null = null): Promise<{ success: boolean; message: string | null; error: string | null }> {
         let url = `${API}/checkpoints`;
         if (hostId) url += `?host_id=${hostId}`;
-        const response = await fetch(url, {
+        return apiClient(url, {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ vm_id: vmId, name }),
+            json: { vm_id: vmId, name },
         });
-        if (!response.ok) throw new Error("Failed to create checkpoint");
-        return response.json();
     },
 
     async deleteCheckpoint(vmId: string, checkpointId: string, hostId: number | null = null): Promise<{ success: boolean; message: string | null; error: string | null }> {
-        const response = await fetch(`${API}/vms/${vmId}/checkpoints/${checkpointId}${hostParam(hostId)}`, { method: "DELETE" });
-        if (!response.ok) throw new Error("Failed to delete checkpoint");
-        return response.json();
+        return apiClient(`${API}/vms/${vmId}/checkpoints/${checkpointId}${hostParam(hostId)}`, { method: "DELETE" });
     },
 
     async getReplication(hostId: number | null = null): Promise<HyperVReplication> {
-        const response = await fetch(`${API}/replication${hostParam(hostId)}`);
-        if (!response.ok) throw new Error("Failed to load replication status");
-        return response.json();
+        return apiClient<HyperVReplication>(`${API}/replication${hostParam(hostId)}`);
     },
 };

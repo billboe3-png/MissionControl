@@ -33,6 +33,19 @@ export default function PlaybookDetailPage() {
     const [triggerType, setTriggerType] = useState("manual");
     const [savingSchedule, setSavingSchedule] = useState(false);
     const [savingTrigger, setSavingTrigger] = useState(false);
+    const [showVariableForm, setShowVariableForm] = useState(false);
+    const [savingVariable, setSavingVariable] = useState(false);
+    const [variableName, setVariableName] = useState("");
+    const [variableValue, setVariableValue] = useState("");
+    const [variableType, setVariableType] = useState("string");
+    const [variableRequired, setVariableRequired] = useState(false);
+    const [variableSensitive, setVariableSensitive] = useState(false);
+    const [variableDefault, setVariableDefault] = useState("");
+    const [editingVariableId, setEditingVariableId] = useState<number | null>(null);
+    const [editVariableValue, setEditVariableValue] = useState("");
+    const [editingName, setEditingName] = useState(false);
+    const [editNameValue, setEditNameValue] = useState("");
+    const [savingName, setSavingName] = useState(false);
 
     const loadData = useCallback(async () => {
         if (!id) return;
@@ -100,7 +113,76 @@ export default function PlaybookDetailPage() {
     return (
         <>
             <PageHeader
-                title={playbook.name}
+                title={
+                    editingName ? (
+                        <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
+                            <input
+                                type="text"
+                                className="form-input"
+                                value={editNameValue}
+                                onChange={(e) => setEditNameValue(e.target.value)}
+                                onKeyDown={async (e) => {
+                                    if (e.key === "Enter" && editNameValue.trim() && id) {
+                                        setSavingName(true);
+                                        try {
+                                            await automationApi.updatePlaybook(Number(id), { name: editNameValue.trim() });
+                                            showToast("Playbook renamed", "success");
+                                            setEditingName(false);
+                                            loadData();
+                                        } catch (err: unknown) {
+                                            showToast(err instanceof Error ? err.message : "Rename failed", "error");
+                                        } finally {
+                                            setSavingName(false);
+                                        }
+                                    } else if (e.key === "Escape") {
+                                        setEditingName(false);
+                                    }
+                                }}
+                                disabled={savingName}
+                                autoFocus
+                                style={{ fontSize: "1.1rem", fontWeight: 700, width: "300px" }}
+                            />
+                            <button
+                                className="btn btn-primary btn-sm"
+                                disabled={savingName || !editNameValue.trim()}
+                                onClick={async () => {
+                                    if (!id) return;
+                                    setSavingName(true);
+                                    try {
+                                        await automationApi.updatePlaybook(Number(id), { name: editNameValue.trim() });
+                                        showToast("Playbook renamed", "success");
+                                        setEditingName(false);
+                                        loadData();
+                                    } catch (err: unknown) {
+                                        showToast(err instanceof Error ? err.message : "Rename failed", "error");
+                                    } finally {
+                                        setSavingName(false);
+                                    }
+                                }}
+                            >
+                                {savingName ? "…" : "✓"}
+                            </button>
+                            <button
+                                className="btn btn-secondary btn-sm"
+                                onClick={() => setEditingName(false)}
+                                disabled={savingName}
+                            >
+                                ✕
+                            </button>
+                        </div>
+                    ) : (
+                        <span
+                            onClick={() => {
+                                setEditingName(true);
+                                setEditNameValue(playbook.name);
+                            }}
+                            style={{ cursor: "pointer", borderBottom: "1px dashed var(--text-muted)", paddingBottom: "1px" }}
+                            title="Click to rename"
+                        >
+                            {playbook.name}
+                        </span>
+                    )
+                }
                 subtitle={`v${playbook.version} · ${playbook.description ?? "No description"}`}
                 actions={
                     <div style={{ display: "flex", gap: "0.5rem" }}>
@@ -122,10 +204,12 @@ export default function PlaybookDetailPage() {
                             className="btn btn-secondary"
                             onClick={async () => {
                                 if (!id) return;
+                                const newName = window.prompt("Clone name:", `${playbook.name} (Copy)`);
+                                if (newName === null) return;
                                 try {
-                                    await automationApi.clonePlaybook(Number(id));
+                                    const cloned = await automationApi.clonePlaybook(Number(id), newName || undefined);
                                     showToast("Playbook cloned", "success");
-                                    loadData();
+                                    navigate(`/automation/playbooks/${cloned.id}`);
                                 } catch (e: unknown) {
                                     showToast(e instanceof Error ? e.message : "Clone failed", "error");
                                 }
@@ -246,10 +330,111 @@ export default function PlaybookDetailPage() {
                 )}
             </div>
 
-            <div className="card">
+            <div className="card" style={{ marginBottom: "1.5rem" }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
                     <h3 className="card-title" style={{ margin: 0 }}>Variables ({variables.length})</h3>
+                    <button
+                        className="btn btn-primary btn-sm"
+                        onClick={() => setShowVariableForm(!showVariableForm)}
+                    >
+                        {showVariableForm ? "Cancel" : "+ Add Variable"}
+                    </button>
                 </div>
+                {showVariableForm && (
+                    <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem", marginBottom: "1rem", padding: "1rem", background: "var(--surface)", borderRadius: "8px" }}>
+                        <div style={{ display: "flex", gap: "0.5rem" }}>
+                            <input
+                                type="text"
+                                className="form-input"
+                                placeholder="Variable name"
+                                value={variableName}
+                                onChange={(e) => setVariableName(e.target.value)}
+                                style={{ flex: 1 }}
+                            />
+                            <select
+                                className="form-input"
+                                value={variableType}
+                                onChange={(e) => setVariableType(e.target.value)}
+                                style={{ flex: 1 }}
+                            >
+                                <option value="string">String</option>
+                                <option value="number">Number</option>
+                                <option value="boolean">Boolean</option>
+                                <option value="json">JSON</option>
+                                <option value="list">List</option>
+                            </select>
+                        </div>
+                        <div style={{ display: "flex", gap: "0.5rem" }}>
+                            <input
+                                type="text"
+                                className="form-input"
+                                placeholder="Value"
+                                value={variableValue}
+                                onChange={(e) => setVariableValue(e.target.value)}
+                                style={{ flex: 1 }}
+                            />
+                            <input
+                                type="text"
+                                className="form-input"
+                                placeholder="Default value"
+                                value={variableDefault}
+                                onChange={(e) => setVariableDefault(e.target.value)}
+                                style={{ flex: 1 }}
+                            />
+                        </div>
+                        <div style={{ display: "flex", gap: "1rem", alignItems: "center" }}>
+                            <label style={{ display: "flex", alignItems: "center", gap: "0.35rem", cursor: "pointer" }}>
+                                <input
+                                    type="checkbox"
+                                    checked={variableRequired}
+                                    onChange={(e) => setVariableRequired(e.target.checked)}
+                                />
+                                Required
+                            </label>
+                            <label style={{ display: "flex", alignItems: "center", gap: "0.35rem", cursor: "pointer" }}>
+                                <input
+                                    type="checkbox"
+                                    checked={variableSensitive}
+                                    onChange={(e) => setVariableSensitive(e.target.checked)}
+                                />
+                                Sensitive
+                            </label>
+                        </div>
+                        <button
+                            className="btn btn-primary btn-sm"
+                            disabled={savingVariable || !variableName}
+                            onClick={async () => {
+                                if (!id) return;
+                                try {
+                                    setSavingVariable(true);
+                                    await automationApi.createVariable(Number(id), {
+                                        name: variableName,
+                                        value: variableValue || undefined,
+                                        variable_type: variableType,
+                                        required: variableRequired,
+                                        sensitive: variableSensitive,
+                                        default_value: variableDefault || undefined,
+                                    });
+                                    showToast("Variable created", "success");
+                                    setShowVariableForm(false);
+                                    setVariableName("");
+                                    setVariableValue("");
+                                    setVariableType("string");
+                                    setVariableRequired(false);
+                                    setVariableSensitive(false);
+                                    setVariableDefault("");
+                                    loadData();
+                                } catch (e: unknown) {
+                                    showToast(e instanceof Error ? e.message : "Failed to create variable", "error");
+                                } finally {
+                                    setSavingVariable(false);
+                                }
+                            }}
+                        >
+                            {savingVariable ? "Saving…" : "Save Variable"}
+                        </button>
+                    </div>
+                )}
                 {variables.length === 0 ? (
                     <p className="text-muted">No variables defined.</p>
                 ) : (
@@ -260,25 +445,113 @@ export default function PlaybookDetailPage() {
                                 style={{
                                     display: "flex",
                                     justifyContent: "space-between",
+                                    alignItems: "center",
                                     padding: "0.5rem 1rem",
                                     background: "var(--surface)",
                                     borderRadius: "8px",
                                 }}
                             >
-                                <div>
+                                <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
                                     <span style={{ fontWeight: 600 }}>{v.name}</span>
-                                    <span className="text-muted" style={{ marginLeft: "0.5rem" }}>
+                                    <span className="text-muted" style={{ fontSize: "0.8rem" }}>
                                         ({v.variable_type})
                                     </span>
-                                </div>
-                                <div>
-                                    {v.sensitive ? (
-                                        <span className="text-muted">•••••</span>
-                                    ) : (
-                                        <code>{v.value ?? v.default_value ?? "—"}</code>
-                                    )}
                                     {v.required && (
                                         <StatusBadge status="warning" label="Required" />
+                                    )}
+                                    {v.sensitive && (
+                                        <StatusBadge status="info" label="Sensitive" />
+                                    )}
+                                </div>
+                                <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                                    {editingVariableId === v.id ? (
+                                        <>
+                                            <input
+                                                type="text"
+                                                className="form-input"
+                                                value={editVariableValue}
+                                                onChange={(e) => setEditVariableValue(e.target.value)}
+                                                placeholder="New value"
+                                                style={{ width: "200px" }}
+                                            />
+                                            <button
+                                                className="btn btn-primary btn-sm"
+                                                onClick={async () => {
+                                                    try {
+                                                        await automationApi.updateVariable(v.id, { value: editVariableValue });
+                                                        showToast("Variable updated", "success");
+                                                        setEditingVariableId(null);
+                                                        loadData();
+                                                    } catch (e: unknown) {
+                                                        showToast(e instanceof Error ? e.message : "Update failed", "error");
+                                                    }
+                                                }}
+                                            >
+                                                Save
+                                            </button>
+                                            <button
+                                                className="btn btn-secondary btn-sm"
+                                                onClick={() => setEditingVariableId(null)}
+                                            >
+                                                Cancel
+                                            </button>
+                                        </>
+                                    ) : (
+                                        <>
+                                            {v.sensitive ? (
+                                                <span className="text-muted">•••••</span>
+                                            ) : (
+                                                <code style={{ fontSize: "0.85rem" }}>{v.value ?? v.default_value ?? "—"}</code>
+                                            )}
+                                            {!v.sensitive && (
+                                                <button
+                                                    className="btn btn-secondary btn-sm"
+                                                    onClick={() => {
+                                                        setEditingVariableId(v.id);
+                                                        setEditVariableValue(v.value ?? v.default_value ?? "");
+                                                    }}
+                                                >
+                                                    Edit
+                                                </button>
+                                            )}
+                                            <button
+                                                className="btn btn-secondary btn-sm"
+                                                onClick={async () => {
+                                                    if (!id) return;
+                                                    try {
+                                                        await automationApi.createVariable(Number(id), {
+                                                            name: `${v.name}_copy`,
+                                                            value: v.value ?? undefined,
+                                                            variable_type: v.variable_type,
+                                                            required: v.required,
+                                                            sensitive: v.sensitive,
+                                                            default_value: v.default_value ?? undefined,
+                                                        });
+                                                        showToast("Variable duplicated", "success");
+                                                        loadData();
+                                                    } catch (e: unknown) {
+                                                        showToast(e instanceof Error ? e.message : "Duplicate failed", "error");
+                                                    }
+                                                }}
+                                            >
+                                                ⧉
+                                            </button>
+                                            <button
+                                                className="btn btn-danger btn-sm"
+                                                onClick={async () => {
+                                                    if (!window.confirm(`Delete variable "${v.name}"?`)) return;
+                                                    try {
+                                                        await automationApi.deleteVariable(v.id);
+                                                        showToast("Variable deleted", "success");
+                                                        loadData();
+                                                    } catch (e: unknown) {
+                                                        showToast(e instanceof Error ? e.message : "Delete failed", "error");
+                                                    }
+                                                }}
+                                            >
+                                                ×
+                                            </button>
+                                        </>
                                     )}
                                 </div>
                             </div>

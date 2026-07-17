@@ -2,14 +2,12 @@
 Note CRUD API integration tests.
 """
 
-from datetime import UTC
-from datetime import datetime
-from datetime import timedelta
+from datetime import UTC, datetime, timedelta
 
 import pytest
 
-from app.models.db.project import Project
 from app.models.db.note import Note
+from app.models.db.project import Project
 from app.repositories.note_repository import NoteRepository
 from app.repositories.project_repository import ProjectRepository
 

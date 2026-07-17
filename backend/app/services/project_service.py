@@ -6,16 +6,17 @@ Business logic for the Projects dashboard section and CRUD API.
 
 import logging
 
-from fastapi import HTTPException
-from fastapi import status
+from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.models.db.project import Project
 from app.repositories.project_repository import ProjectRepository
-from app.schemas.project import ProjectCreate
-from app.schemas.project import ProjectListResponse
-from app.schemas.project import ProjectResponse
-from app.schemas.project import ProjectUpdate
+from app.schemas.project import (
+    ProjectCreate,
+    ProjectListResponse,
+    ProjectResponse,
+    ProjectUpdate,
+)
 
 logger = logging.getLogger(__name__)
 

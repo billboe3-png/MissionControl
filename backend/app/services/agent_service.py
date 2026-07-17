@@ -5,9 +5,7 @@ Business logic for agent management: registration, heartbeat processing,
 command dispatch, inventory updates, and file transfer.
 """
 
-import base64
 import hashlib
-import hmac
 import json
 import logging
 import secrets
@@ -27,7 +25,6 @@ from app.schemas.agent import (
     AgentCommandResponse,
     AgentCommandResultRequest,
     AgentCommandResultResponse,
-    AgentCreate,
     AgentHeartbeatRequest,
     AgentHeartbeatResponse,
     AgentInventoryResponse,
@@ -63,7 +60,11 @@ class AgentService:
     # ------------------------------------------------------------------ #
 
     async def register_agent(
-        self, db: Session, data: AgentRegisterRequest
+        self,
+        db: Session,
+        data: AgentRegisterRequest,
+        company_id: int | None = None,
+        site_id: int | None = None,
     ) -> AgentRegisterResponse:
         """Register a new agent with Mission Control."""
         existing = AgentRepository.get_by_hostname(
@@ -98,6 +99,8 @@ class AgentService:
             name=data.name,
             hostname=data.hostname,
             api_key=api_key,
+            company_id=company_id,
+            site_id=site_id,
             operating_system=data.operating_system,
             os_version=data.os_version,
             ip_address=data.ip_address,

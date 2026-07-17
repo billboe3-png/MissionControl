@@ -26,6 +26,12 @@ class RemoteHost(Base):
         index=True,
     )
 
+    company_id: Mapped[int | None] = mapped_column(
+        Integer,
+        nullable=True,
+        index=True,
+    )
+
     site_id: Mapped[int | None] = mapped_column(
         Integer,
         ForeignKey("sites.id", ondelete="SET NULL"),
@@ -69,6 +75,7 @@ class RemoteHost(Base):
         Boolean,
         nullable=False,
         default=True,
+        index=True,
     )
 
     credential_profile_id: Mapped[int | None] = mapped_column(

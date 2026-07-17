@@ -7,9 +7,12 @@ command dispatch, inventory, and CRUD.
 Sprint 2.7 - Mission Control Agent.
 """
 
+import logging
+
 from fastapi import APIRouter, Depends, Header, Query, status
 from sqlalchemy.orm import Session
 
+from app.core.auth_dependency import get_current_user
 from app.db import get_db
 from app.schemas.agent import (
     AgentCommandDispatchRequest,
@@ -17,7 +20,6 @@ from app.schemas.agent import (
     AgentCommandResponse,
     AgentCommandResultRequest,
     AgentCommandResultResponse,
-    AgentCreate,
     AgentHeartbeatRequest,
     AgentHeartbeatResponse,
     AgentInventoryResponse,
@@ -29,11 +31,24 @@ from app.schemas.agent import (
 )
 from app.services.agent_service import AgentService, agent_service
 
+logger = logging.getLogger(__name__)
+
 router = APIRouter(prefix="/agents", tags=["Agents"])
 
 
 def get_agent_service() -> AgentService:
     return agent_service
+
+
+# ------------------------------------------------------------------ #
+# Version (Agent -> Server)                                           #
+# ------------------------------------------------------------------ #
+
+
+@router.get("/version")
+async def get_agent_version():
+    """Return the latest agent version for self-update checks."""
+    return {"version": "1.0.0"}
 
 
 # ------------------------------------------------------------------ #
@@ -52,7 +67,22 @@ async def register_agent(
     service: AgentService = Depends(get_agent_service),
 ) -> AgentRegisterResponse:
     """Register a new agent with Mission Control."""
-    return await service.register_agent(db, payload)
+    company_id = None
+    site_id = None
+
+    if payload.registration_token:
+        from app.services.agent_token_service import AgentTokenService
+
+        token = AgentTokenService.validate_token(
+            db, payload.registration_token
+        )
+        company_id = token.company_id
+        site_id = token.site_id
+        AgentTokenService.consume_token(db, token)
+
+    return await service.register_agent(
+        db, payload, company_id=company_id, site_id=site_id
+    )
 
 
 @router.post(
@@ -110,6 +140,7 @@ async def update_inventory(
 
 @router.get("", response_model=AgentListResponse)
 async def list_agents(
+    current_user: object = Depends(get_current_user),
     db: Session = Depends(get_db),
     service: AgentService = Depends(get_agent_service),
 ) -> AgentListResponse:
@@ -120,6 +151,7 @@ async def list_agents(
 @router.get("/{agent_id}", response_model=AgentResponse)
 async def get_agent(
     agent_id: int,
+    current_user: object = Depends(get_current_user),
     db: Session = Depends(get_db),
     service: AgentService = Depends(get_agent_service),
 ) -> AgentResponse:
@@ -131,6 +163,7 @@ async def get_agent(
 async def update_agent(
     agent_id: int,
     payload: AgentUpdate,
+    current_user: object = Depends(get_current_user),
     db: Session = Depends(get_db),
     service: AgentService = Depends(get_agent_service),
 ) -> AgentResponse:
@@ -144,6 +177,7 @@ async def update_agent(
 )
 async def delete_agent(
     agent_id: int,
+    current_user: object = Depends(get_current_user),
     db: Session = Depends(get_db),
     service: AgentService = Depends(get_agent_service),
 ) -> None:
@@ -157,6 +191,7 @@ async def delete_agent(
 )
 async def enable_agent(
     agent_id: int,
+    current_user: object = Depends(get_current_user),
     db: Session = Depends(get_db),
     service: AgentService = Depends(get_agent_service),
 ) -> AgentResponse:
@@ -170,6 +205,7 @@ async def enable_agent(
 )
 async def disable_agent(
     agent_id: int,
+    current_user: object = Depends(get_current_user),
     db: Session = Depends(get_db),
     service: AgentService = Depends(get_agent_service),
 ) -> AgentResponse:
@@ -190,6 +226,7 @@ async def disable_agent(
 async def dispatch_command(
     agent_id: int,
     payload: AgentCommandDispatchRequest,
+    current_user: object = Depends(get_current_user),
     db: Session = Depends(get_db),
     service: AgentService = Depends(get_agent_service),
 ) -> AgentCommandResponse:
@@ -205,6 +242,7 @@ async def dispatch_command(
 async def get_agent_commands(
     agent_id: int,
     limit: int = Query(50, ge=1, le=500),
+    current_user: object = Depends(get_current_user),
     db: Session = Depends(get_db),
     service: AgentService = Depends(get_agent_service),
 ) -> AgentCommandListResponse:
@@ -220,6 +258,7 @@ async def get_all_commands(
     agent_id: int | None = Query(None),
     status_filter: str | None = Query(None, alias="status"),
     limit: int = Query(100, ge=1, le=500),
+    current_user: object = Depends(get_current_user),
     db: Session = Depends(get_db),
     service: AgentService = Depends(get_agent_service),
 ) -> AgentCommandListResponse:
@@ -240,6 +279,7 @@ async def get_all_commands(
 )
 async def get_inventory(
     agent_id: int,
+    current_user: object = Depends(get_current_user),
     db: Session = Depends(get_db),
     service: AgentService = Depends(get_agent_service),
 ) -> AgentInventoryResponse:

@@ -5,22 +5,22 @@ Sprint:
     1.3.2 - Note API Foundation
 """
 
-from fastapi import APIRouter
-from fastapi import Depends
-from fastapi import status
+import logging
+
+from fastapi import APIRouter, Depends, status
 from sqlalchemy.orm import Session
 
+from app.core.auth_dependency import get_current_user
 from app.db import get_db
-from app.schemas.note import NoteCreate
-from app.schemas.note import NoteListResponse
-from app.schemas.note import NoteResponse
-from app.schemas.note import NoteUpdate
-from app.services.note_service import NoteService
-from app.services.note_service import note_service
+from app.schemas.note import NoteCreate, NoteListResponse, NoteResponse, NoteUpdate
+from app.services.note_service import NoteService, note_service
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(
     prefix="/notes",
     tags=["Notes"],
+    dependencies=[Depends(get_current_user)],
 )
 
 

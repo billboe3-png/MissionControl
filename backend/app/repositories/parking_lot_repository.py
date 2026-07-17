@@ -4,13 +4,11 @@ Mission Control Parking Lot Repository
 All database access for Parking Lot entities.
 """
 
-from sqlalchemy import func
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.models.db.parking_lot import ParkingLot
-from app.schemas.parking_lot import ParkingLotCreate
-from app.schemas.parking_lot import ParkingLotUpdate
+from app.schemas.parking_lot import ParkingLotCreate, ParkingLotUpdate
 
 
 class ParkingLotRepository:

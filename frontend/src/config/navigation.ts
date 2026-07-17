@@ -8,6 +8,13 @@ export const navigation: NavGroup[] = [
         defaultOpen: true,
     },
     {
+        label: "Tenants",
+        icon: "🏢",
+        items: [
+            { label: "Companies", path: "/companies", icon: "🏢" },
+        ],
+    },
+    {
         label: "Infrastructure",
         icon: "🖥️",
         items: [
@@ -75,12 +82,26 @@ export const navigation: NavGroup[] = [
         icon: "🐧",
         items: [
             { label: "Overview", path: "/proxmox", icon: "📊" },
+            { label: "Health", path: "/proxmox/health", icon: "💓" },
             { label: "Nodes", path: "/proxmox/nodes", icon: "🖧" },
             { label: "Virtual Machines", path: "/proxmox/vms", icon: "🖥️" },
             { label: "Containers", path: "/proxmox/lxc", icon: "📦" },
             { label: "Storage", path: "/proxmox/storage", icon: "💾" },
             { label: "Networks", path: "/proxmox/networks", icon: "🌐" },
+            { label: "Snapshots", path: "/proxmox/snapshots", icon: "📸" },
             { label: "Tasks", path: "/proxmox/tasks", icon: "📋" },
+        ],
+    },
+    {
+        label: "AI Operations",
+        icon: "🧠",
+        items: [
+            { label: "Overview", path: "/ai", icon: "📊" },
+            { label: "Recommendations", path: "/ai/recommendations", icon: "💡" },
+            { label: "Incidents", path: "/ai/incidents", icon: "🚨" },
+            { label: "Correlations", path: "/ai/correlations", icon: "🔗" },
+            { label: "Health Score", path: "/ai/health", icon: "💓" },
+            { label: "History", path: "/ai/history", icon: "📋" },
         ],
     },
     {
@@ -108,6 +129,7 @@ export const navigation: NavGroup[] = [
         icon: "⚙️",
         items: [
             { label: "General", path: "/settings", icon: "🔧" },
+            { label: "Users", path: "/settings/users", icon: "👥" },
             { label: "Integrations", path: "/settings/integrations", icon: "🔌" },
             { label: "Appearance", path: "/settings/appearance", icon: "🎨" },
             { label: "About", path: "/settings/about", icon: "ℹ️" },

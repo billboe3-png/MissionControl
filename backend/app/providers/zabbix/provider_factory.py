@@ -36,8 +36,8 @@ def _is_zabbix_configured() -> bool:
 
 def _build_provider_from_profile(profile) -> ZabbixProvider:
     """Create an ApiZabbixProvider from a database IntegrationProfile."""
-    from app.core.security import CredentialCipher
     from app.core.config import get_settings
+    from app.core.security import CredentialCipher
     from app.providers.zabbix.zabbix_provider import ApiZabbixProvider
 
     password = None

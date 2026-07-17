@@ -1,8 +1,7 @@
 """Mission Control Agent - Inventory collection."""
 
-import asyncio
-import json
 import logging
+import os
 import platform
 import socket
 from typing import Any
@@ -267,11 +266,17 @@ class InventoryCollector:
         try:
             import subprocess
 
+            cmd = (
+                "Get-ItemProperty"
+                " HKLM:\\Software\\Microsoft\\Windows"
+                "\\CurrentVersion\\Uninstall\\*"
+                " | Select-Object -ExpandProperty DisplayName"
+            )
             out = subprocess.check_output(
                 [
                     "powershell",
                     "-Command",
-                    "Get-ItemProperty HKLM:\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\* | Select-Object -ExpandProperty DisplayName",
+                    cmd,
                 ],
                 timeout=30,
                 stderr=subprocess.DEVNULL,

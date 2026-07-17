@@ -4,14 +4,11 @@ Mission Control Task Repository
 All database access for Task entities.
 """
 
-from sqlalchemy import func
-from sqlalchemy import select
-from sqlalchemy.orm import Session
-from sqlalchemy.orm import selectinload
+from sqlalchemy import func, select
+from sqlalchemy.orm import Session, selectinload
 
 from app.models.db.task import Task
-from app.schemas.task import TaskCreate
-from app.schemas.task import TaskUpdate
+from app.schemas.task import TaskCreate, TaskUpdate
 
 
 class TaskRepository:

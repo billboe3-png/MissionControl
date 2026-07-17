@@ -1,0 +1,67 @@
+export interface NavItem {
+  label: string
+  href: string
+  children?: NavItem[]
+}
+
+export const mainNavigation: NavItem[] = [
+  { label: 'Home', href: '/' },
+  {
+    label: 'Features',
+    href: '/features',
+    children: [
+      { label: 'Dashboard', href: '/features/dashboard' },
+      { label: 'Infrastructure', href: '/features/infrastructure' },
+      { label: 'Monitoring', href: '/features/monitoring' },
+      { label: 'Zabbix', href: '/features/zabbix' },
+      { label: 'Hyper-V', href: '/features/hyper-v' },
+      { label: 'Proxmox', href: '/features/proxmox' },
+      { label: 'Docker', href: '/features/docker' },
+      { label: 'Active Directory', href: '/features/active-directory' },
+      { label: 'Microsoft 365', href: '/features/office-365' },
+      { label: 'Remote Operations', href: '/features/remote-operations' },
+      { label: 'Automation', href: '/features/automation' },
+      { label: 'Playbooks', href: '/features/playbooks' },
+      { label: 'Mission Control Agent', href: '/features/mc-agent' },
+      { label: 'AI Operations', href: '/features/ai-operations' },
+      { label: 'Plugin Framework', href: '/features/plugin-framework' },
+      { label: 'Multi-Tenant', href: '/features/multi-tenant' },
+      { label: 'Multi-Site', href: '/features/multi-site' },
+      { label: 'Reporting', href: '/features/reporting' },
+      { label: 'Credential Vault', href: '/features/credential-vault' },
+      { label: 'REST API', href: '/features/rest-api' },
+    ],
+  },
+  {
+    label: 'Solutions',
+    href: '/solutions',
+    children: [
+      { label: 'Enterprise', href: '/solutions/enterprise' },
+      { label: 'Managed Service Providers', href: '/solutions/msp' },
+      { label: 'Education', href: '/solutions/education' },
+      { label: 'Government', href: '/solutions/government' },
+      { label: 'Healthcare', href: '/solutions/healthcare' },
+      { label: 'Finance', href: '/solutions/finance' },
+      { label: 'Manufacturing', href: '/solutions/manufacturing' },
+      { label: 'Small Business', href: '/solutions/small-business' },
+    ],
+  },
+  { label: 'Architecture', href: '/architecture' },
+  { label: 'Documentation', href: '/documentation' },
+  { label: 'Downloads', href: '/downloads' },
+  { label: 'Roadmap', href: '/roadmap' },
+  { label: 'Blog', href: '/blog' },
+  { label: 'Pricing', href: '/pricing' },
+  { label: 'Partners', href: '/partners' },
+  { label: 'Case Studies', href: '/case-studies' },
+  { label: 'Knowledge Base', href: '/knowledge-base' },
+  { label: 'API Reference', href: '/api-reference' },
+  { label: 'Community', href: '/community' },
+  { label: 'Support', href: '/support' },
+  { label: 'Security', href: '/security' },
+  { label: 'Trust Center', href: '/trust-center' },
+  { label: 'Status', href: '/status' },
+  { label: 'About', href: '/about' },
+  { label: 'Contact', href: '/contact' },
+  { label: 'Release Notes', href: '/release-notes' },
+]

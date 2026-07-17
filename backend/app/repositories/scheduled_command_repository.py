@@ -14,10 +14,17 @@ class ScheduledCommandRepository:
     """Data access layer for scheduled commands."""
 
     @staticmethod
-    def get_all(db: Session) -> list[ScheduledCommand]:
-        stmt = select(ScheduledCommand).order_by(
-            ScheduledCommand.id
-        )
+    def get_all(
+        db: Session,
+        company_id: int | None = None,
+        site_id: int | None = None,
+    ) -> list[ScheduledCommand]:
+        stmt = select(ScheduledCommand)
+        if company_id is not None:
+            stmt = stmt.where(ScheduledCommand.company_id == company_id)
+        if site_id is not None:
+            stmt = stmt.where(ScheduledCommand.site_id == site_id)
+        stmt = stmt.order_by(ScheduledCommand.id)
         return list(db.scalars(stmt).all())
 
     @staticmethod
@@ -30,10 +37,18 @@ class ScheduledCommandRepository:
         return db.scalar(stmt)
 
     @staticmethod
-    def get_enabled(db: Session) -> list[ScheduledCommand]:
+    def get_enabled(
+        db: Session,
+        company_id: int | None = None,
+        site_id: int | None = None,
+    ) -> list[ScheduledCommand]:
         stmt = select(ScheduledCommand).where(
             ScheduledCommand.enabled.is_(True)
         )
+        if company_id is not None:
+            stmt = stmt.where(ScheduledCommand.company_id == company_id)
+        if site_id is not None:
+            stmt = stmt.where(ScheduledCommand.site_id == site_id)
         return list(db.scalars(stmt).all())
 
     @staticmethod

@@ -9,17 +9,13 @@ Sprint:
 
 import logging
 
-from fastapi import HTTPException
-from fastapi import status
+from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.models.db.note import Note
-from app.repositories.project_repository import ProjectRepository
 from app.repositories.note_repository import NoteRepository
-from app.schemas.note import NoteCreate
-from app.schemas.note import NoteListResponse
-from app.schemas.note import NoteResponse
-from app.schemas.note import NoteUpdate
+from app.repositories.project_repository import ProjectRepository
+from app.schemas.note import NoteCreate, NoteListResponse, NoteResponse, NoteUpdate
 
 logger = logging.getLogger(__name__)
 

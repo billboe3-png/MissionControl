@@ -6,9 +6,12 @@ API endpoints for managing external integration profiles.
 Sprint 2.3.1 - Integration Management (Production Configuration UI).
 """
 
+import logging
+
 from fastapi import APIRouter, Depends, status
 from sqlalchemy.orm import Session
 
+from app.core.auth_dependency import get_current_user
 from app.db import get_db
 from app.schemas.integration import (
     IntegrationProfileCreate,
@@ -22,7 +25,13 @@ from app.services.integration_service import (
     integration_service,
 )
 
-router = APIRouter(prefix="/integrations", tags=["Integrations"])
+logger = logging.getLogger(__name__)
+
+router = APIRouter(
+    prefix="/integrations",
+    tags=["Integrations"],
+    dependencies=[Depends(get_current_user)],
+)
 
 
 def get_integration_service() -> IntegrationService:

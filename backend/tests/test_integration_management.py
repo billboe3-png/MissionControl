@@ -12,12 +12,10 @@ Covers:
 - Connection test dispatch
 """
 
+
 import pytest
-from datetime import UTC, datetime
-from unittest.mock import patch, AsyncMock
 
 from app.core.security import CredentialCipher
-from app.models.db.integration_profile import IntegrationProfile
 from app.repositories.integration_profile_repository import (
     IntegrationProfileRepository,
 )
@@ -25,7 +23,6 @@ from app.schemas.integration import (
     IntegrationProfileCreate,
     IntegrationProfileUpdate,
 )
-
 
 # ------------------------------------------------------------------ #
 # Fixtures                                                            #
@@ -282,6 +279,7 @@ class TestIntegrationService:
     @pytest.mark.asyncio
     async def test_create_invalid_type(self, db_session):
         from fastapi import HTTPException
+
         from app.services.integration_service import (
             IntegrationService,
         )
@@ -372,6 +370,7 @@ class TestIntegrationService:
     @pytest.mark.asyncio
     async def test_delete_not_found(self, db_session):
         from fastapi import HTTPException
+
         from app.services.integration_service import (
             IntegrationService,
         )
@@ -384,6 +383,7 @@ class TestIntegrationService:
     @pytest.mark.asyncio
     async def test_get_not_found(self, db_session):
         from fastapi import HTTPException
+
         from app.services.integration_service import (
             IntegrationService,
         )

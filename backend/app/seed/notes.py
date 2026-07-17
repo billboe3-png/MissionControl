@@ -1,7 +1,6 @@
 """Seed default notes."""
 
-from sqlalchemy import func
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.models.db.note import Note

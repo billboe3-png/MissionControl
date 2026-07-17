@@ -24,8 +24,8 @@ from app.repositories.approval_repository import (
     ApprovalWorkflowRepository,
 )
 from app.repositories.audit_trail_repository import AuditTrailRepository
-from app.repositories.execution_log_repository import ExecutionLogRepository
 from app.repositories.event_trigger_repository import EventTriggerRepository
+from app.repositories.execution_log_repository import ExecutionLogRepository
 from app.repositories.playbook_execution_repository import (
     PlaybookExecutionRepository,
 )
@@ -41,7 +41,6 @@ from app.repositories.playbook_variable_repository import (
 )
 from app.schemas.approval import (
     ApprovalAction,
-    ApprovalRequestCreate,
     ApprovalRequestListResponse,
     ApprovalRequestResponse,
     ApprovalWorkflowCreate,

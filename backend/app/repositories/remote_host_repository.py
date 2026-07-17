@@ -4,23 +4,29 @@ Mission Control Remote Host Repository
 All database access for RemoteHost entities.
 """
 
-from sqlalchemy import func
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.models.db.credential_profile import CredentialProfile
 from app.models.db.remote_host import RemoteHost
-from app.schemas.remote_host import RemoteHostCreate
-from app.schemas.remote_host import RemoteHostUpdate
+from app.schemas.remote_host import RemoteHostCreate, RemoteHostUpdate
 
 
 class RemoteHostRepository:
     """Data access layer for remote hosts stored in PostgreSQL."""
 
     @staticmethod
-    def get_all(db: Session) -> list[RemoteHost]:
+    def get_all(
+        db: Session,
+        company_id: int | None = None,
+        site_id: int | None = None,
+    ) -> list[RemoteHost]:
         """Return all remote hosts ordered by creation date descending."""
         stmt = select(RemoteHost).order_by(RemoteHost.created_at.desc())
+        if company_id is not None:
+            stmt = stmt.where(RemoteHost.company_id == company_id)
+        if site_id is not None:
+            stmt = stmt.where(RemoteHost.site_id == site_id)
         return list(db.scalars(stmt).all())
 
     @staticmethod

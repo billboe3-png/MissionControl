@@ -24,7 +24,15 @@
     --danger: #ef4444;
 
     --radius: 12px;
+    --radius-sm: 6px;
     --shadow: 0 10px 30px rgba(0, 0, 0, .25);
+
+    --bg-primary: #0f172a;
+    --bg-secondary: #1e293b;
+    --border-color: #334155;
+    --text-primary: #f8fafc;
+    --text-secondary: #94a3b8;
+    --color-primary: #3b82f6;
 }
 
 html,
@@ -3172,6 +3180,145 @@ select.form-input {
     margin-top: 6px;
 }
 
+/* VM / LXC Card Grid */
+
+.proxmox-vm-grid,
+.proxmox-lxc-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+    gap: 16px;
+}
+
+.proxmox-vm-card,
+.proxmox-lxc-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.proxmox-vm-card.state-running,
+.proxmox-lxc-card.state-running {
+    border-left: 3px solid var(--success);
+}
+
+.proxmox-vm-card.state-stopped,
+.proxmox-lxc-card.state-stopped {
+    border-left: 3px solid var(--danger);
+}
+
+.proxmox-vm-card.state-paused,
+.proxmox-lxc-card.state-paused {
+    border-left: 3px solid var(--warning);
+}
+
+.proxmox-vm-header,
+.proxmox-lxc-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.proxmox-vm-header h3,
+.proxmox-lxc-header h3 {
+    margin: 0;
+    font-size: 0.95rem;
+}
+
+.proxmox-vm-meta,
+.proxmox-lxc-meta {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    font-size: 0.82rem;
+    color: var(--text-muted);
+}
+
+.proxmox-vm-actions,
+.proxmox-lxc-actions {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    padding-top: 6px;
+    border-top: 1px solid var(--border);
+}
+
+.proxmox-storage-usage {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.proxmox-progress-fill.warning {
+    background: var(--warning, #f59e0b);
+}
+
+/* Health Page */
+
+.proxmox-health-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+    gap: 16px;
+}
+
+.proxmox-health-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.proxmox-health-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.proxmox-health-header h3 {
+    margin: 0;
+    font-size: 0.95rem;
+}
+
+.proxmox-health-metrics {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.proxmox-health-metric {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.proxmox-metric-label {
+    font-size: 0.82rem;
+    color: var(--text-muted);
+    min-width: 50px;
+}
+
+.proxmox-metric-value {
+    font-size: 0.82rem;
+    font-weight: 600;
+    min-width: 40px;
+    text-align: right;
+}
+
+.proxmox-health-meta {
+    display: flex;
+    gap: 12px;
+    font-size: 0.82rem;
+    color: var(--text-muted);
+    padding-top: 6px;
+    border-top: 1px solid var(--border);
+}
+
 /* ==========================================================================
    Agents — Sprint 2.7
    ========================================================================== */
@@ -3290,6 +3437,77 @@ select.form-input {
 
 .agent-plugins {
     color: var(--primary);
+}
+
+/* Dashboard Agent Card */
+
+.dashboard-agent-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.dashboard-agent-header h3 {
+    margin: 0;
+}
+
+.dashboard-agent-stats {
+    display: flex;
+    gap: 16px;
+}
+
+.dashboard-agent-stat {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.dashboard-agent-stat-label {
+    font-size: 0.78rem;
+    color: var(--text-muted);
+}
+
+.dashboard-agent-stat-value {
+    font-size: 1.3rem;
+    font-weight: 600;
+}
+
+.dashboard-agent-stat-value.agent-online {
+    color: var(--success);
+}
+
+.dashboard-agent-stat-value.agent-offline {
+    color: var(--danger);
+}
+
+.dashboard-agent-metrics {
+    display: flex;
+    gap: 16px;
+    padding-top: 8px;
+    border-top: 1px solid var(--border);
+}
+
+.dashboard-agent-metric {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.82rem;
+}
+
+.dashboard-agent-metric-label {
+    color: var(--text-muted);
+}
+
+.dashboard-agent-metric-value {
+    font-weight: 500;
+}
+
+.dashboard-agent-metric-value.warning {
+    color: var(--warning);
+}
+
+.dashboard-agent-metric-value.danger {
+    color: var(--danger);
 }
 
 /* Agent Detail Page */
@@ -3767,4 +3985,588 @@ select.form-input {
     text-transform: uppercase;
     letter-spacing: 0.5px;
     margin-bottom: 2px;
+}
+
+/* ==========================================================================
+   Login
+   ========================================================================== */
+
+.login-container {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    background: var(--bg-primary);
+}
+
+.login-card {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    padding: 2.5rem;
+    width: 100%;
+    max-width: 400px;
+}
+
+.login-header {
+    text-align: center;
+    margin-bottom: 2rem;
+}
+
+.login-header h1 {
+    font-size: 1.6rem;
+    margin: 0 0 0.5rem;
+    color: var(--text-primary);
+}
+
+.login-header p {
+    margin: 0;
+    color: var(--text-muted);
+}
+
+.btn-block {
+    display: block;
+    width: 100%;
+    margin-top: 1rem;
+}
+
+/* ==========================================================================
+   AI Health Score
+   ========================================================================== */
+
+.ai-health-hero {
+    display: flex;
+    align-items: baseline;
+    gap: 12px;
+    padding: 20px 0;
+    justify-content: center;
+}
+
+.ai-health-grade {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 48px;
+    height: 48px;
+    border-radius: 12px;
+    font-size: 1.6rem;
+    font-weight: 800;
+}
+
+.ai-grade-green {
+    background: rgba(34, 197, 94, 0.15);
+    color: var(--success);
+}
+
+.ai-grade-amber {
+    background: rgba(245, 158, 11, 0.15);
+    color: var(--warning);
+}
+
+.ai-grade-red {
+    background: rgba(239, 68, 68, 0.15);
+    color: var(--danger);
+}
+
+.ai-health-score-big {
+    font-size: 3rem;
+    font-weight: 800;
+    color: var(--text);
+    line-height: 1;
+}
+
+.ai-health-score-label {
+    font-size: 1.2rem;
+    color: var(--text-muted);
+    font-weight: 500;
+}
+
+.ai-health-breakdown-full {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.ai-health-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 8px 12px;
+    background: var(--background);
+    border-radius: 8px;
+}
+
+.ai-health-source-name {
+    min-width: 110px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    text-transform: capitalize;
+}
+
+.ai-health-bar-container {
+    flex: 1;
+    height: 8px;
+    background: rgba(255, 255, 255, 0.08);
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.ai-health-bar {
+    height: 100%;
+    border-radius: 4px;
+    transition: width 0.4s ease;
+}
+
+.ai-health-bar-available,
+.ai-health-bar-connected {
+    background: var(--success);
+}
+
+.ai-health-bar-unknown {
+    background: var(--text-muted);
+}
+
+.ai-health-bar-disconnected,
+.ai-health-bar-degraded {
+    background: var(--danger);
+}
+
+.ai-health-bar-partial {
+    background: var(--warning);
+}
+
+.ai-health-score-num {
+    min-width: 30px;
+    text-align: right;
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: var(--text);
+}
+
+.ai-health-status-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 8px;
+    border-radius: 6px;
+    font-size: 0.72rem;
+    font-weight: 600;
+    text-transform: capitalize;
+    min-width: 90px;
+    justify-content: center;
+}
+
+.ai-health-available,
+.ai-health-connected {
+    background: rgba(34, 197, 94, 0.15);
+    color: var(--success);
+}
+
+.ai-health-unknown {
+    background: rgba(148, 163, 184, 0.15);
+    color: var(--text-muted);
+}
+
+.ai-health-disconnected,
+.ai-health-degraded {
+    background: rgba(239, 68, 68, 0.15);
+    color: var(--danger);
+}
+
+.ai-health-partial {
+    background: rgba(245, 158, 11, 0.15);
+    color: var(--warning);
+}
+
+.ai-health-details {
+    font-size: 0.78rem;
+    color: var(--text-muted);
+}
+
+.ai-factors-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: 10px;
+}
+
+.ai-factor-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 12px;
+    background: var(--background);
+    border-radius: 8px;
+    text-align: center;
+}
+
+.ai-factor-name {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    text-transform: capitalize;
+    margin-bottom: 4px;
+}
+
+.ai-factor-value {
+    font-size: 1.4rem;
+    font-weight: 700;
+    color: var(--text);
+}
+
+/* ==========================================================================
+   Dashboard Components - AICard
+   ========================================================================== */
+
+.ai-card {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.ai-card-score {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.ai-grade {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 42px;
+    height: 42px;
+    border-radius: 10px;
+    font-size: 1.3rem;
+    font-weight: 800;
+}
+
+.ai-score-value {
+    font-size: 2rem;
+    font-weight: 800;
+}
+
+.ai-card-stats {
+    display: flex;
+    gap: 16px;
+}
+
+.ai-stat {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.ai-stat-label {
+    font-size: 0.72rem;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+}
+
+.ai-stat-value {
+    font-size: 1.1rem;
+    font-weight: 700;
+}
+
+.ai-critical {
+    color: var(--danger);
+}
+
+.ai-card-links {
+    display: flex;
+    gap: 12px;
+    padding-top: 8px;
+    border-top: 1px solid var(--border);
+}
+
+.ai-link {
+    font-size: 0.82rem;
+    color: var(--primary);
+    text-decoration: none;
+    font-weight: 500;
+}
+
+.ai-link:hover {
+    text-decoration: underline;
+}
+
+/* ==========================================================================
+   Dashboard Components - AgentCard
+   ========================================================================== */
+
+.dashboard-agent-card {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.dashboard-agent-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.dashboard-agent-header h3 {
+    margin: 0;
+}
+
+.dashboard-agent-stats {
+    display: flex;
+    gap: 16px;
+}
+
+.dashboard-agent-stat {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.dashboard-agent-stat-label {
+    font-size: 0.72rem;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+}
+
+.dashboard-agent-stat-value {
+    font-size: 1.1rem;
+    font-weight: 700;
+}
+
+.agent-online {
+    color: var(--success);
+}
+
+.agent-offline {
+    color: var(--danger);
+}
+
+.dashboard-agent-metrics {
+    display: flex;
+    gap: 16px;
+    padding-top: 8px;
+    border-top: 1px solid var(--border);
+}
+
+.dashboard-agent-metric {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.dashboard-agent-metric-label {
+    font-size: 0.72rem;
+    color: var(--text-muted);
+    text-transform: uppercase;
+}
+
+.dashboard-agent-metric-value {
+    font-size: 0.95rem;
+    font-weight: 600;
+}
+
+.dashboard-agent-metric-value.danger {
+    color: var(--danger);
+}
+
+.dashboard-agent-metric-value.warning {
+    color: var(--warning);
+}
+
+/* ==========================================================================
+   Dashboard Components - SystemGauges
+   ========================================================================== */
+
+.system-gauges {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.gauge-item {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.gauge-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.gauge-label {
+    font-size: 0.82rem;
+    font-weight: 500;
+    color: var(--text);
+}
+
+.gauge-value {
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: var(--text);
+}
+
+.gauge-bar {
+    width: 100%;
+    height: 8px;
+    background: rgba(255, 255, 255, 0.08);
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.gauge-fill {
+    height: 100%;
+    border-radius: 4px;
+    transition: width 0.4s ease;
+}
+
+.gauge-green {
+    background: var(--success);
+}
+
+.gauge-amber {
+    background: var(--warning);
+}
+
+.gauge-red {
+    background: var(--danger);
+}
+
+/* ==========================================================================
+   Dashboard Components - RecentCommands
+   ========================================================================== */
+
+.recent-commands-empty {
+    color: var(--text-muted);
+    font-size: 0.85rem;
+    text-align: center;
+    padding: 16px;
+}
+
+.recent-command-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 6px 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.recent-command-item:last-child {
+    border-bottom: none;
+}
+
+.recent-command-text {
+    flex: 1;
+    font-family: "Cascadia Code", "Fira Code", monospace;
+    font-size: 0.8rem;
+    color: var(--text);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* ==========================================================================
+   Hyper-V Dashboard Card
+   ========================================================================== */
+
+.hyperv-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.hyperv-card-header h3 {
+    margin: 0;
+}
+
+.hyperv-host-cards {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.hyperv-host-card {
+    background: var(--background);
+    border-radius: 8px;
+    padding: 12px;
+    cursor: pointer;
+    transition: border-color 0.15s ease;
+    border: 1px solid transparent;
+}
+
+.hyperv-host-card:hover {
+    border-color: var(--primary);
+}
+
+.hyperv-host-card-header {
+    margin-bottom: 8px;
+}
+
+.hyperv-host-card-body {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.hyperv-resource-item {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+}
+
+.hyperv-resource-label {
+    font-size: 0.78rem;
+    color: var(--text-muted);
+}
+
+.hyperv-progress-bar {
+    width: 100%;
+    height: 6px;
+    background: rgba(255, 255, 255, 0.08);
+    border-radius: 3px;
+    overflow: hidden;
+}
+
+.hyperv-progress-fill {
+    height: 100%;
+    border-radius: 3px;
+    transition: width 0.3s ease;
+    background: var(--success);
+}
+
+.hyperv-progress-fill.warning {
+    background: var(--warning);
+}
+
+.hyperv-progress-fill.danger {
+    background: var(--danger);
+}
+
+.hyperv-host-card-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 8px;
+    font-size: 0.78rem;
+    color: var(--text-muted);
+}
+
+.hyperv-host-card-action {
+    color: var(--primary);
+    font-weight: 500;
+}
+
+.btn-link {
+    background: none;
+    border: none;
+    color: var(--primary);
+    padding: 0;
+    cursor: pointer;
+    font-size: inherit;
+    text-decoration: none;
+}
+
+.btn-link:hover {
+    text-decoration: underline;
 }

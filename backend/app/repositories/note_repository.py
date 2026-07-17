@@ -4,14 +4,11 @@ Mission Control Note Repository
 All database access for Note entities.
 """
 
-from sqlalchemy import func
-from sqlalchemy import select
-from sqlalchemy.orm import Session
-from sqlalchemy.orm import selectinload
+from sqlalchemy import func, select
+from sqlalchemy.orm import Session, selectinload
 
 from app.models.db.note import Note
-from app.schemas.note import NoteCreate
-from app.schemas.note import NoteUpdate
+from app.schemas.note import NoteCreate, NoteUpdate
 
 
 class NoteRepository:

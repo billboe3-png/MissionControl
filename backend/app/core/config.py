@@ -62,12 +62,12 @@ class Settings(BaseSettings):
     )
 
     postgres_user: str = Field(
-        default="mission_control",
+        default="",
         alias="POSTGRES_USER",
     )
 
     postgres_password: str = Field(
-        default="mission_control",
+        default="",
         alias="POSTGRES_PASSWORD",
     )
 
@@ -248,6 +248,20 @@ class Settings(BaseSettings):
     zabbix_retries: int = Field(
         default=3,
         alias="ZABBIX_RETRIES",
+    )
+
+    # ------------------------------------------------------------------
+    # Rate Limiting
+    # ------------------------------------------------------------------
+
+    rate_limit_per_minute: int = Field(
+        default=60,
+        description="Max requests per minute per IP",
+    )
+
+    rate_limit_auth_per_minute: int = Field(
+        default=5,
+        description="Max login attempts per minute per IP",
     )
 
     # ------------------------------------------------------------------

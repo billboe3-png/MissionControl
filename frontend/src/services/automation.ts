@@ -1,3 +1,4 @@
+import { apiClient } from "../utils/apiClient";
 import type {
     PlaybookCreateInput,
     PlaybookUpdateInput,
@@ -19,6 +20,7 @@ import type {
     RollbackInput,
     RollbackData,
     ExecutionLogListData,
+    ExecutionLogData,
     ApprovalWorkflowCreateInput,
     ApprovalWorkflowListData,
     ApprovalWorkflowData,
@@ -57,6 +59,7 @@ export type {
     RollbackInput,
     RollbackData,
     ExecutionLogListData,
+    ExecutionLogData,
     ApprovalWorkflowCreateInput,
     ApprovalWorkflowListData,
     ApprovalWorkflowData,
@@ -76,18 +79,6 @@ export type {
 
 const API = "/api/v1/automation";
 
-async function handleResponse<T>(response: Response): Promise<T> {
-    if (!response.ok) {
-        const body = await response.json().catch(() => null);
-        const detail = body?.detail;
-        throw new Error(detail ?? `Request failed (${response.status})`);
-    }
-    if (response.status === 204) {
-        return undefined as T;
-    }
-    return response.json();
-}
-
 // ------------------------------------------------------------------ //
 // API Client                                                            //
 // ------------------------------------------------------------------ //
@@ -95,8 +86,7 @@ async function handleResponse<T>(response: Response): Promise<T> {
 export const automationApi = {
     // -- Dashboard --
     async getSummary(): Promise<AutomationSummaryData> {
-        const response = await fetch(`${API}/dashboard`);
-        return handleResponse(response);
+        return apiClient<AutomationSummaryData>(`${API}/dashboard`);
     },
 
     // -- Playbooks --
@@ -108,137 +98,118 @@ export const automationApi = {
         if (search) params.set("search", search);
         if (category) params.set("category", category);
         const qs = params.toString();
-        const response = await fetch(
+        return apiClient<PlaybookListData>(
             `${API}/playbooks${qs ? `?${qs}` : ""}`
         );
-        return handleResponse(response);
     },
 
     async getPlaybook(id: number): Promise<PlaybookData> {
-        const response = await fetch(`${API}/playbooks/${id}`);
-        return handleResponse(response);
+        return apiClient<PlaybookData>(`${API}/playbooks/${id}`);
     },
 
     async createPlaybook(
         data: PlaybookCreateInput,
     ): Promise<PlaybookData> {
-        const response = await fetch(`${API}/playbooks`, {
+        return apiClient<PlaybookData>(`${API}/playbooks`, {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(data),
+            json: data,
         });
-        return handleResponse(response);
     },
 
     async updatePlaybook(
         id: number,
         data: PlaybookUpdateInput,
     ): Promise<PlaybookData> {
-        const response = await fetch(`${API}/playbooks/${id}`, {
+        return apiClient<PlaybookData>(`${API}/playbooks/${id}`, {
             method: "PUT",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(data),
+            json: data,
         });
-        return handleResponse(response);
     },
 
     async deletePlaybook(id: number): Promise<void> {
-        const response = await fetch(`${API}/playbooks/${id}`, {
+        return apiClient<void>(`${API}/playbooks/${id}`, {
             method: "DELETE",
         });
-        return handleResponse(response);
     },
 
     // -- Steps --
     async listSteps(
         playbookId: number,
     ): Promise<PlaybookStepListData> {
-        const response = await fetch(
+        return apiClient<PlaybookStepListData>(
             `${API}/playbooks/${playbookId}/steps`
         );
-        return handleResponse(response);
     },
 
     async createStep(
         playbookId: number,
         data: PlaybookStepCreateInput,
     ): Promise<PlaybookStepListData> {
-        const response = await fetch(
+        return apiClient<PlaybookStepListData>(
             `${API}/playbooks/${playbookId}/steps`,
             {
                 method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(data),
+                json: data,
             }
         );
-        return handleResponse(response);
     },
 
     async updateStep(
         stepId: number,
         data: PlaybookStepUpdateInput,
     ): Promise<PlaybookStepListData> {
-        const response = await fetch(`${API}/steps/${stepId}`, {
+        return apiClient<PlaybookStepListData>(`${API}/steps/${stepId}`, {
             method: "PUT",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(data),
+            json: data,
         });
-        return handleResponse(response);
     },
 
     async deleteStep(stepId: number): Promise<void> {
-        const response = await fetch(`${API}/steps/${stepId}`, {
+        return apiClient<void>(`${API}/steps/${stepId}`, {
             method: "DELETE",
         });
-        return handleResponse(response);
     },
 
     // -- Variables --
     async listVariables(
         playbookId: number,
     ): Promise<PlaybookVariableListData> {
-        const response = await fetch(
+        return apiClient<PlaybookVariableListData>(
             `${API}/playbooks/${playbookId}/variables`
         );
-        return handleResponse(response);
     },
 
     async createVariable(
         playbookId: number,
         data: PlaybookVariableCreateInput,
     ): Promise<PlaybookVariableListData> {
-        const response = await fetch(
+        return apiClient<PlaybookVariableListData>(
             `${API}/playbooks/${playbookId}/variables`,
             {
                 method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(data),
+                json: data,
             }
         );
-        return handleResponse(response);
     },
 
     async updateVariable(
         variableId: number,
         data: PlaybookVariableUpdateInput,
     ): Promise<PlaybookVariableListData> {
-        const response = await fetch(
+        return apiClient<PlaybookVariableListData>(
             `${API}/variables/${variableId}`,
             {
                 method: "PUT",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(data),
+                json: data,
             }
         );
-        return handleResponse(response);
     },
 
     async deleteVariable(variableId: number): Promise<void> {
-        const response = await fetch(
+        return apiClient<void>(
             `${API}/variables/${variableId}`,
             { method: "DELETE" }
         );
-        return handleResponse(response);
     },
 
     // -- Executions --
@@ -250,150 +221,131 @@ export const automationApi = {
         if (playbookId) params.set("playbook_id", String(playbookId));
         if (statusFilter) params.set("status", statusFilter);
         const qs = params.toString();
-        const response = await fetch(
+        return apiClient<PlaybookExecutionListData>(
             `${API}/executions${qs ? `?${qs}` : ""}`
         );
-        return handleResponse(response);
     },
 
     async getExecution(
         id: number,
     ): Promise<PlaybookExecutionData> {
-        const response = await fetch(`${API}/executions/${id}`);
-        return handleResponse(response);
+        return apiClient<PlaybookExecutionData>(`${API}/executions/${id}`);
     },
 
     async executePlaybook(
         playbookId: number,
         data: PlaybookExecuteInput,
     ): Promise<PlaybookExecutionData> {
-        const response = await fetch(
+        return apiClient<PlaybookExecutionData>(
             `${API}/playbooks/${playbookId}/execute`,
             {
                 method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(data),
+                json: data,
             }
         );
-        return handleResponse(response);
     },
 
     async dryRun(
         playbookId: number,
         data: DryRunInput,
     ): Promise<DryRunData> {
-        const response = await fetch(
+        return apiClient<DryRunData>(
             `${API}/playbooks/${playbookId}/dry-run`,
             {
                 method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(data),
+                json: data,
             }
         );
-        return handleResponse(response);
     },
 
     async rollback(
         executionId: number,
         data: RollbackInput,
     ): Promise<RollbackData> {
-        const response = await fetch(
+        return apiClient<RollbackData>(
             `${API}/executions/${executionId}/rollback`,
             {
                 method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(data),
+                json: data,
             }
         );
-        return handleResponse(response);
     },
 
     // -- Execution Logs --
     async listExecutionLogs(
         executionId: number,
     ): Promise<ExecutionLogListData> {
-        const response = await fetch(
+        return apiClient<ExecutionLogListData>(
             `${API}/executions/${executionId}/logs`
         );
-        return handleResponse(response);
     },
 
     // -- Approval Workflows --
     async listWorkflows(
         playbookId: number,
     ): Promise<ApprovalWorkflowListData> {
-        const response = await fetch(
+        return apiClient<ApprovalWorkflowListData>(
             `${API}/playbooks/${playbookId}/workflows`
         );
-        return handleResponse(response);
     },
 
     async createWorkflow(
         playbookId: number,
         data: ApprovalWorkflowCreateInput,
     ): Promise<ApprovalWorkflowListData> {
-        const response = await fetch(
+        return apiClient<ApprovalWorkflowListData>(
             `${API}/playbooks/${playbookId}/workflows`,
             {
                 method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(data),
+                json: data,
             }
         );
-        return handleResponse(response);
     },
 
     async deleteWorkflow(workflowId: number): Promise<void> {
-        const response = await fetch(
+        return apiClient<void>(
             `${API}/workflows/${workflowId}`,
             { method: "DELETE" }
         );
-        return handleResponse(response);
     },
 
     // -- Approval Requests --
     async listPendingApprovals(): Promise<ApprovalRequestListData> {
-        const response = await fetch(`${API}/approvals/pending`);
-        return handleResponse(response);
+        return apiClient<ApprovalRequestListData>(`${API}/approvals/pending`);
     },
 
     async listExecutionApprovals(
         executionId: number,
     ): Promise<ApprovalRequestListData> {
-        const response = await fetch(
+        return apiClient<ApprovalRequestListData>(
             `${API}/executions/${executionId}/approvals`
         );
-        return handleResponse(response);
     },
 
     async approveRequest(
         requestId: number,
         data: ApprovalActionInput,
     ): Promise<ApprovalRequestData> {
-        const response = await fetch(
+        return apiClient<ApprovalRequestData>(
             `${API}/approvals/${requestId}/approve`,
             {
                 method: "PUT",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(data),
+                json: data,
             }
         );
-        return handleResponse(response);
     },
 
     async rejectRequest(
         requestId: number,
         data: ApprovalActionInput,
     ): Promise<ApprovalRequestData> {
-        const response = await fetch(
+        return apiClient<ApprovalRequestData>(
             `${API}/approvals/${requestId}/reject`,
             {
                 method: "PUT",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(data),
+                json: data,
             }
         );
-        return handleResponse(response);
     },
 
     // -- Audit Trail --
@@ -405,10 +357,9 @@ export const automationApi = {
         if (entityType) params.set("entity_type", entityType);
         if (action) params.set("action", action);
         const qs = params.toString();
-        const response = await fetch(
+        return apiClient<AuditTrailListData>(
             `${API}/audit${qs ? `?${qs}` : ""}`
         );
-        return handleResponse(response);
     },
 
     // -- Schedules --
@@ -418,33 +369,29 @@ export const automationApi = {
         const params = new URLSearchParams();
         if (playbookId) params.set("playbook_id", String(playbookId));
         const qs = params.toString();
-        const response = await fetch(
+        return apiClient<PlaybookScheduleListData>(
             `${API}/schedules${qs ? `?${qs}` : ""}`
         );
-        return handleResponse(response);
     },
 
     async createSchedule(
         playbookId: number,
         data: PlaybookScheduleCreateInput,
     ): Promise<PlaybookScheduleData> {
-        const response = await fetch(
+        return apiClient<PlaybookScheduleData>(
             `${API}/playbooks/${playbookId}/schedules`,
             {
                 method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(data),
+                json: data,
             }
         );
-        return handleResponse(response);
     },
 
     async deleteSchedule(scheduleId: number): Promise<void> {
-        const response = await fetch(
+        return apiClient<void>(
             `${API}/schedules/${scheduleId}`,
             { method: "DELETE" }
         );
-        return handleResponse(response);
     },
 
     // -- Event Triggers --
@@ -454,33 +401,29 @@ export const automationApi = {
         const params = new URLSearchParams();
         if (playbookId) params.set("playbook_id", String(playbookId));
         const qs = params.toString();
-        const response = await fetch(
+        return apiClient<EventTriggerListData>(
             `${API}/triggers${qs ? `?${qs}` : ""}`
         );
-        return handleResponse(response);
     },
 
     async createTrigger(
         playbookId: number,
         data: EventTriggerCreateInput,
     ): Promise<EventTriggerData> {
-        const response = await fetch(
+        return apiClient<EventTriggerData>(
             `${API}/playbooks/${playbookId}/triggers`,
             {
                 method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(data),
+                json: data,
             }
         );
-        return handleResponse(response);
     },
 
     async deleteTrigger(triggerId: number): Promise<void> {
-        const response = await fetch(
+        return apiClient<void>(
             `${API}/triggers/${triggerId}`,
             { method: "DELETE" }
         );
-        return handleResponse(response);
     },
 
     // -- Clone / Export / Import --
@@ -491,33 +434,29 @@ export const automationApi = {
         const params = new URLSearchParams();
         if (name) params.set("name", name);
         const qs = params.toString();
-        const response = await fetch(
+        return apiClient<PlaybookData>(
             `${API}/playbooks/${playbookId}/clone${qs ? `?${qs}` : ""}`,
             { method: "POST" }
         );
-        return handleResponse(response);
     },
 
     async exportPlaybook(
         playbookId: number,
     ): Promise<{ playbook: unknown; steps: unknown[]; variables: unknown[] }> {
-        const response = await fetch(
+        return apiClient(
             `${API}/playbooks/${playbookId}/export`
         );
-        return handleResponse(response);
     },
 
     async importPlaybook(
         data: { playbook: unknown; steps: unknown[]; variables: unknown[] },
     ): Promise<PlaybookData> {
-        const response = await fetch(
+        return apiClient<PlaybookData>(
             `${API}/playbooks/import`,
             {
                 method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(data),
+                json: data,
             }
         );
-        return handleResponse(response);
     },
 };

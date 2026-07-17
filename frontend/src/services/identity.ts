@@ -1,4 +1,4 @@
-import { api } from "./api";
+import { apiClient } from "../utils/apiClient";
 
 const API_BASE = "/api/v1/identity";
 
@@ -201,57 +201,58 @@ export interface M365HealthResponse {
     error: string | null;
 }
 
-async function get<T>(path: string): Promise<T> {
-    const response = await fetch(`${API_BASE}${path}`);
-    if (!response.ok) {
-        throw new Error(`Identity API error: ${response.status}`);
-    }
-    return response.json();
-}
-
-async function post<T>(path: string, body: unknown): Promise<T> {
-    const response = await fetch(`${API_BASE}${path}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-    });
-    if (!response.ok) {
-        throw new Error(`Identity API error: ${response.status}`);
-    }
-    return response.json();
-}
-
 export const identityApi = {
-    getOverview: () => get<IdentityOverview>("/overview"),
+    getOverview: () => apiClient<IdentityOverview>(`${API_BASE}/overview`),
 
-    testAD: () => get<ConnectionTestResult>("/ad/test"),
-    getADSummary: () => get<ADSummary>("/ad/summary"),
-    getADUsers: () => get<ADUsersResponse>("/ad/users"),
-    getADGroups: () => get<ADGroupsResponse>("/ad/groups"),
-    getADDevices: () => get<ADDevicesResponse>("/ad/devices"),
-    getADHealth: () => get<ADHealthResponse>("/ad/health"),
+    testAD: () => apiClient<ConnectionTestResult>(`${API_BASE}/ad/test`),
+    getADSummary: () => apiClient<ADSummary>(`${API_BASE}/ad/summary`),
+    getADUsers: () => apiClient<ADUsersResponse>(`${API_BASE}/ad/users`),
+    getADGroups: () => apiClient<ADGroupsResponse>(`${API_BASE}/ad/groups`),
+    getADDevices: () => apiClient<ADDevicesResponse>(`${API_BASE}/ad/devices`),
+    getADHealth: () => apiClient<ADHealthResponse>(`${API_BASE}/ad/health`),
 
     resetPassword: (sam_account_name: string, new_password: string) =>
-        post<ADActionResponse>("/ad/users/reset-password", { sam_account_name, new_password }),
+        apiClient<ADActionResponse>(`${API_BASE}/ad/users/reset-password`, {
+            method: "POST",
+            json: { sam_account_name, new_password },
+        }),
     unlockAccount: (sam_account_name: string) =>
-        post<ADActionResponse>("/ad/users/unlock", { sam_account_name }),
+        apiClient<ADActionResponse>(`${API_BASE}/ad/users/unlock`, {
+            method: "POST",
+            json: { sam_account_name },
+        }),
     enableAccount: (sam_account_name: string) =>
-        post<ADActionResponse>("/ad/users/enable", { sam_account_name }),
+        apiClient<ADActionResponse>(`${API_BASE}/ad/users/enable`, {
+            method: "POST",
+            json: { sam_account_name },
+        }),
     disableAccount: (sam_account_name: string) =>
-        post<ADActionResponse>("/ad/users/disable", { sam_account_name }),
+        apiClient<ADActionResponse>(`${API_BASE}/ad/users/disable`, {
+            method: "POST",
+            json: { sam_account_name },
+        }),
     renameUser: (sam_account_name: string, display_name: string, first_name?: string, last_name?: string) =>
-        post<ADActionResponse>("/ad/users/rename", { sam_account_name, display_name, first_name, last_name }),
+        apiClient<ADActionResponse>(`${API_BASE}/ad/users/rename`, {
+            method: "POST",
+            json: { sam_account_name, display_name, first_name, last_name },
+        }),
     getUserGroups: (sam_account_name: string) =>
-        get<ADUserGroupsResponse>(`/ad/users/${encodeURIComponent(sam_account_name)}/groups`),
+        apiClient<ADUserGroupsResponse>(`${API_BASE}/ad/users/${encodeURIComponent(sam_account_name)}/groups`),
     addToGroup: (sam_account_name: string, group_name: string) =>
-        post<ADActionResponse>("/ad/users/add-to-group", { sam_account_name, group_name }),
+        apiClient<ADActionResponse>(`${API_BASE}/ad/users/add-to-group`, {
+            method: "POST",
+            json: { sam_account_name, group_name },
+        }),
     removeFromGroup: (sam_account_name: string, group_name: string) =>
-        post<ADActionResponse>("/ad/users/remove-from-group", { sam_account_name, group_name }),
+        apiClient<ADActionResponse>(`${API_BASE}/ad/users/remove-from-group`, {
+            method: "POST",
+            json: { sam_account_name, group_name },
+        }),
 
-    testM365: () => get<ConnectionTestResult>("/m365/test"),
-    getM365Summary: () => get<M365Summary>("/m365/summary"),
-    getM365Users: () => get<M365UsersResponse>("/m365/users"),
-    getM365Groups: () => get<M365GroupsResponse>("/m365/groups"),
-    getM365Devices: () => get<M365DevicesResponse>("/m365/devices"),
-    getM365Health: () => get<M365HealthResponse>("/m365/health"),
+    testM365: () => apiClient<ConnectionTestResult>(`${API_BASE}/m365/test`),
+    getM365Summary: () => apiClient<M365Summary>(`${API_BASE}/m365/summary`),
+    getM365Users: () => apiClient<M365UsersResponse>(`${API_BASE}/m365/users`),
+    getM365Groups: () => apiClient<M365GroupsResponse>(`${API_BASE}/m365/groups`),
+    getM365Devices: () => apiClient<M365DevicesResponse>(`${API_BASE}/m365/devices`),
+    getM365Health: () => apiClient<M365HealthResponse>(`${API_BASE}/m365/health`),
 };

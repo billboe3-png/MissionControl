@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, Query, status
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
+from app.core.auth_dependency import get_current_user
 from app.db import get_db
 from app.schemas.bulk_command import (
     BulkExecuteRequest,
@@ -56,7 +57,11 @@ from app.schemas.scheduled_command import (
 )
 from app.services.remote_service import RemoteService, remote_service
 
-router = APIRouter(prefix="/remote", tags=["Remote Operations"])
+router = APIRouter(
+    prefix="/remote",
+    tags=["Remote Operations"],
+    dependencies=[Depends(get_current_user)],
+)
 
 
 def get_remote_service() -> RemoteService:
@@ -432,13 +437,13 @@ async def get_metrics(
 import asyncio
 import json
 import logging
-import time
 
 from fastapi import WebSocket, WebSocketDisconnect
-from app.repositories.remote_host_repository import RemoteHostRepository
-from app.repositories.credential_profile_repository import CredentialProfileRepository
-from app.services.remote_service import _decrypt_credential
+
 from app.providers.remote.ssh_provider import SSHProvider
+from app.repositories.credential_profile_repository import CredentialProfileRepository
+from app.repositories.remote_host_repository import RemoteHostRepository
+from app.services.remote_service import _decrypt_credential
 
 logger = logging.getLogger(__name__)
 

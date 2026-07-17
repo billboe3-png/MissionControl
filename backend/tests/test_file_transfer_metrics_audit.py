@@ -6,10 +6,6 @@ Sprint 2.1.8 - Remote Operations Finalization.
 
 from unittest.mock import AsyncMock, patch
 
-import pytest
-from fastapi.testclient import TestClient
-
-
 MOCK_UPLOAD_RESULT = {
     "success": True,
     "message": "File uploaded",

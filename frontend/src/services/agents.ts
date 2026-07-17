@@ -1,3 +1,5 @@
+import { apiClient } from "../utils/apiClient";
+
 const API = "/api/v1/agents";
 
 export interface Agent {
@@ -89,93 +91,68 @@ export interface AgentDispatchCommand {
 
 export const agentsApi = {
     async list(): Promise<AgentListResponse> {
-        const response = await fetch(API);
-        if (!response.ok) throw new Error("Failed to load agents");
-        return response.json();
+        return apiClient<AgentListResponse>(API);
     },
 
     async get(id: number): Promise<Agent> {
-        const response = await fetch(`${API}/${id}`);
-        if (!response.ok) throw new Error("Failed to load agent");
-        return response.json();
+        return apiClient<Agent>(`${API}/${id}`);
     },
 
     async update(id: number, data: AgentUpdate): Promise<Agent> {
-        const response = await fetch(`${API}/${id}`, {
+        return apiClient<Agent>(`${API}/${id}`, {
             method: "PUT",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(data),
+            json: data,
         });
-        if (!response.ok) throw new Error("Failed to update agent");
-        return response.json();
     },
 
     async remove(id: number): Promise<void> {
-        const response = await fetch(`${API}/${id}`, {
+        return apiClient<void>(`${API}/${id}`, {
             method: "DELETE",
         });
-        if (!response.ok) throw new Error("Failed to delete agent");
     },
 
     async enable(id: number): Promise<Agent> {
-        const response = await fetch(`${API}/${id}/enable`, {
+        return apiClient<Agent>(`${API}/${id}/enable`, {
             method: "POST",
         });
-        if (!response.ok) throw new Error("Failed to enable agent");
-        return response.json();
     },
 
     async disable(id: number): Promise<Agent> {
-        const response = await fetch(`${API}/${id}/disable`, {
+        return apiClient<Agent>(`${API}/${id}/disable`, {
             method: "POST",
         });
-        if (!response.ok) throw new Error("Failed to disable agent");
-        return response.json();
     },
 
     async execute(
         agentId: number,
         command: AgentDispatchCommand
     ): Promise<AgentCommand> {
-        const response = await fetch(`${API}/${agentId}/execute`, {
+        return apiClient<AgentCommand>(`${API}/${agentId}/execute`, {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(command),
+            json: command,
         });
-        if (!response.ok)
-            throw new Error("Failed to dispatch command");
-        return response.json();
     },
 
     async getCommands(
         agentId: number,
         limit: number = 50
     ): Promise<AgentCommandListResponse> {
-        const response = await fetch(
+        return apiClient<AgentCommandListResponse>(
             `${API}/${agentId}/commands?limit=${limit}`
         );
-        if (!response.ok)
-            throw new Error("Failed to load commands");
-        return response.json();
     },
 
     async getAllCommands(
         limit: number = 100
     ): Promise<AgentCommandListResponse> {
-        const response = await fetch(
+        return apiClient<AgentCommandListResponse>(
             `${API}/commands/all?limit=${limit}`
         );
-        if (!response.ok)
-            throw new Error("Failed to load commands");
-        return response.json();
     },
 
     async getInventory(agentId: number): Promise<AgentInventory> {
-        const response = await fetch(
+        return apiClient<AgentInventory>(
             `${API}/${agentId}/inventory`
         );
-        if (!response.ok)
-            throw new Error("Failed to load inventory");
-        return response.json();
     },
 };

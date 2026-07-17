@@ -58,7 +58,7 @@ export default function HyperVCard() {
     }, []);
 
     const handleHostClick = (hostId: number) => {
-        localStorage.setItem("hyperv-selected-host-id", String(hostId));
+        localStorage.setItem("hyperv_selected_host_id", String(hostId));
         navigate("/hyperv/vms");
     };
 

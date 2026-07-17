@@ -19,8 +19,8 @@ _default_provider: HyperVProvider | None = None
 
 def _build_provider(profile) -> HyperVProvider:
     """Create a production provider from an IntegrationProfile."""
-    from app.core.security import CredentialCipher
     from app.core.config import get_settings
+    from app.core.security import CredentialCipher
 
     settings = get_settings()
     cipher = CredentialCipher(settings.missioncontrol_secret_key)

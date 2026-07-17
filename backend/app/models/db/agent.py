@@ -33,6 +33,18 @@ class Agent(Base):
         index=True,
     )
 
+    company_id: Mapped[int | None] = mapped_column(
+        Integer,
+        nullable=True,
+        index=True,
+    )
+
+    site_id: Mapped[int | None] = mapped_column(
+        Integer,
+        nullable=True,
+        index=True,
+    )
+
     name: Mapped[str] = mapped_column(
         String(200),
         nullable=False,

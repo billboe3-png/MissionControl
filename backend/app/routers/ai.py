@@ -9,14 +9,23 @@ No endpoint executes infrastructure changes.
 Sprint 2.6.0 - AI Operations Engine.
 """
 
+import logging
+
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
 from app.ai.ai_service import ai_service
+from app.core.auth_dependency import get_current_user
 from app.db import get_db
 from app.schemas.ai import AISearchRequest
 
-router = APIRouter(prefix="/ai", tags=["AI Operations"])
+logger = logging.getLogger(__name__)
+
+router = APIRouter(
+    prefix="/ai",
+    tags=["AI Operations"],
+    dependencies=[Depends(get_current_user)],
+)
 
 
 @router.get("/overview", summary="AI Operations Overview")

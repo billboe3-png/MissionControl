@@ -4,8 +4,7 @@ Mission Control Audit Trail Repository
 All database access for AuditTrail entities.
 """
 
-from sqlalchemy import func
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.models.db.audit_trail import AuditTrail

@@ -7,7 +7,6 @@ installed on remote hosts.
 Sprint 2.8 - Automation & Playbooks.
 """
 
-import json
 import logging
 import time
 

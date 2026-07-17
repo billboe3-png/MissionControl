@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { Link } from "react-router-dom";
 import PageHeader from "../../components/common/PageHeader";
 import StatusBadge from "../../components/common/StatusBadge";
 import EmptyState from "../../components/common/EmptyState";
@@ -121,9 +122,11 @@ export default function AgentsOverviewPage() {
             ) : (
                 <div className="agent-grid">
                     {agents.map((agent) => (
-                        <div
+                        <Link
                             key={agent.id}
+                            to={`/agents/${agent.id}`}
                             className={`agent-card ${agent.status}`}
+                            style={{ textDecoration: "none", color: "inherit" }}
                         >
                             <div className="agent-card-header">
                                 <div className="agent-card-title">
@@ -192,7 +195,7 @@ export default function AgentsOverviewPage() {
                                     </span>
                                 )}
                             </div>
-                        </div>
+                        </Link>
                     ))}
                 </div>
             )}

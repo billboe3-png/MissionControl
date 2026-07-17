@@ -2,11 +2,8 @@
 Remote Host Repository Tests
 """
 
-from app.models.db.credential_profile import CredentialProfile
-from app.models.db.remote_host import RemoteHost
 from app.repositories.remote_host_repository import RemoteHostRepository
-from app.schemas.remote_host import RemoteHostCreate
-from app.schemas.remote_host import RemoteHostUpdate
+from app.schemas.remote_host import RemoteHostCreate, RemoteHostUpdate
 
 
 def test_create_remote_host(db_session, sample_credential):

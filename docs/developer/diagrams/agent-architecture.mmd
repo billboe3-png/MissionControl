@@ -1,0 +1,26 @@
+```mermaid
+graph TB
+    subgraph AgentArchitecture["Agent Architecture"]
+        MC["Mission Control Server"]
+        Token["Registration Token"]
+        Agent1["Agent 1 (Server A)"]
+        Agent2["Agent 2 (Server B)"]
+        Agent3["Agent 3 (Workstation)"]
+    end
+
+    Token -->|Register| Agent1
+    Token -->|Register| Agent2
+    Token -->|Register| Agent3
+
+    Agent1 -->|Heartbeat| MC
+    Agent2 -->|Heartbeat| MC
+    Agent3 -->|Heartbeat| MC
+
+    MC -->|Dispatch Command| Agent1
+    MC -->|Dispatch Command| Agent2
+    MC -->|Dispatch Command| Agent3
+
+    Agent1 -->|Result| MC
+    Agent2 -->|Result| MC
+    Agent3 -->|Result| MC
+```

@@ -1,0 +1,48 @@
+```mermaid
+graph TB
+    subgraph AutomationEngine["Automation Engine"]
+        Trigger["Trigger (Manual/Cron/Event)"]
+        Playbook["Playbook Definition"]
+        Approval{"Approval Required?"}
+        Request["Approval Request"]
+        Exec["Playbook Execution"]
+        Step["Step Execution"]
+        Provider["Automation Provider"]
+        Log["Execution Log"]
+        Rollback{"Auto Rollback?"}
+        RB["Rollback Execution"]
+    end
+
+    Trigger --> Playbook
+    Playbook --> Approval
+    Approval -->|Yes| Request
+    Request -->|Approved| Exec
+    Approval -->|No| Exec
+    Exec --> Step
+    Step --> Provider
+    Provider --> Log
+    Log -->|Failed| Rollback
+    Rollback -->|Yes| RB
+    Rollback -->|No| Exec
+    RB --> Exec
+
+    subgraph Providers["Available Providers"]
+        Bash["Bash"]
+        PowerShell["PowerShell"]
+        SSH["SSH"]
+        WinRM["WinRM"]
+        HTTP["HTTP"]
+        Agent["Agent"]
+        HyperV["Hyper-V"]
+        Proxmox["Proxmox"]
+    end
+
+    Provider --> Bash
+    Provider --> PowerShell
+    Provider --> SSH
+    Provider --> WinRM
+    Provider --> HTTP
+    Provider --> Agent
+    Provider --> HyperV
+    Provider --> Proxmox
+```

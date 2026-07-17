@@ -4,7 +4,6 @@ Tests for Scheduled Command CRUD API.
 Sprint 2.1.8 - Remote Operations Finalization.
 """
 
-import pytest
 from fastapi.testclient import TestClient
 
 

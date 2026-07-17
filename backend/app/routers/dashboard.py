@@ -5,14 +5,21 @@ Sprint:
     0.1.1 - Dashboard Foundation
 """
 
-from fastapi import APIRouter
-from fastapi import Depends
+import logging
+
+from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
+from app.core.auth_dependency import get_current_user
 from app.db import get_db
 from app.services.dashboard_service import dashboard_service
 
-router = APIRouter(tags=["Dashboard"])
+logger = logging.getLogger(__name__)
+
+router = APIRouter(
+    tags=["Dashboard"],
+    dependencies=[Depends(get_current_user)],
+)
 
 
 @router.get(

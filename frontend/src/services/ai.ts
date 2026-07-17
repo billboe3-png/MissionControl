@@ -1,3 +1,5 @@
+import { apiClient } from "../utils/apiClient";
+
 const API = "/api/v1/ai";
 
 export interface AIHealthScore {
@@ -128,9 +130,7 @@ export interface AIProviderStatus {
 
 export const aiApi = {
     async getOverview(): Promise<AIOverview> {
-        const response = await fetch(`${API}/overview`);
-        if (!response.ok) throw new Error("Failed to load AI overview");
-        return response.json();
+        return apiClient<AIOverview>(`${API}/overview`);
     },
 
     async getIncidents(): Promise<{
@@ -138,9 +138,7 @@ export const aiApi = {
         summary: AISummary;
         top_risks: AIRisk[];
     }> {
-        const response = await fetch(`${API}/incidents`);
-        if (!response.ok) throw new Error("Failed to load incidents");
-        return response.json();
+        return apiClient(`${API}/incidents`);
     },
 
     async getRecommendations(): Promise<{
@@ -149,37 +147,26 @@ export const aiApi = {
         by_risk: Record<string, number>;
         timestamp: string;
     }> {
-        const response = await fetch(`${API}/recommendations`);
-        if (!response.ok) throw new Error("Failed to load recommendations");
-        return response.json();
+        return apiClient(`${API}/recommendations`);
     },
 
     async getCorrelations(): Promise<AICorrelationResult> {
-        const response = await fetch(`${API}/correlations`);
-        if (!response.ok) throw new Error("Failed to load correlations");
-        return response.json();
+        return apiClient<AICorrelationResult>(`${API}/correlations`);
     },
 
     async getHealthScore(): Promise<AIHealthScore> {
-        const response = await fetch(`${API}/health-score`);
-        if (!response.ok) throw new Error("Failed to load health score");
-        return response.json();
+        return apiClient<AIHealthScore>(`${API}/health-score`);
     },
 
     async search(query: string): Promise<AISearchResult> {
-        const response = await fetch(`${API}/search`, {
+        return apiClient<AISearchResult>(`${API}/search`, {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ query }),
+            json: { query },
         });
-        if (!response.ok) throw new Error("Search failed");
-        return response.json();
     },
 
     async getProviderStatus(): Promise<AIProviderStatus> {
-        const response = await fetch(`${API}/provider/status`);
-        if (!response.ok) throw new Error("Failed to get provider status");
-        return response.json();
+        return apiClient<AIProviderStatus>(`${API}/provider/status`);
     },
 
     async testProvider(): Promise<{
@@ -188,10 +175,8 @@ export const aiApi = {
         error: string | null;
         provider: AIProviderInfo | null;
     }> {
-        const response = await fetch(`${API}/provider/test`, {
+        return apiClient(`${API}/provider/test`, {
             method: "POST",
         });
-        if (!response.ok) throw new Error("Provider test failed");
-        return response.json();
     },
 };

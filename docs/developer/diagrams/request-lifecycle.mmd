@@ -1,0 +1,33 @@
+```mermaid
+graph TB
+    subgraph RequestLifecycle["Request Lifecycle"]
+        Client["HTTP Client"]
+        Nginx["Nginx Reverse Proxy"]
+        FastAPI["FastAPI Application"]
+        Router["Router Layer"]
+        Service["Service Layer"]
+        Repository["Repository Layer"]
+        ORM["SQLAlchemy ORM"]
+        DB["PostgreSQL"]
+    end
+
+    Client -->|GET /api/v1/tasks| Nginx
+    Nginx -->|Proxy| FastAPI
+    FastAPI -->|Route matching| Router
+    Router -->|Depends注入| Service
+    Service -->|Business logic| Repository
+    Repository -->|SQL queries| ORM
+    ORM -->|Execute| DB
+    DB -->|Results| ORM
+    ORM -->|ORM objects| Repository
+    Repository -->|Entities| Service
+    Service -->|Pydantic models| Router
+    Router -->|JSON response| FastAPI
+    FastAPI -->|HTTP 200| Nginx
+    Nginx -->|Response| Client
+
+    style Client fill:#3d1f1f,stroke:#ef4444,color:#fff
+    style Nginx fill:#1a332e,stroke:#22c55e,color:#fff
+    style FastAPI fill:#1e3a5f,stroke:#3b82f6,color:#fff
+    style DB fill:#3d2b1f,stroke:#f59e0b,color:#fff
+```

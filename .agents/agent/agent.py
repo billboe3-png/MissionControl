@@ -1,7 +1,6 @@
 """Mission Control Agent - Main agent orchestrator."""
 
 import asyncio
-import json
 import logging
 import platform
 import socket
@@ -10,11 +9,10 @@ import time
 from agent import __version__
 from agent.client import AgentClient
 from agent.command_queue import CommandQueue
-from agent.config import AgentSettings, load_config
+from agent.config import AgentSettings
 from agent.executor import CommandExecutor
 from agent.heartbeat import HeartbeatManager
 from agent.inventory import InventoryCollector
-from agent.logger import setup_logging
 from agent.plugin import PluginManager
 from agent.registration import RegistrationManager
 from agent.updater import AgentUpdater
@@ -51,6 +49,7 @@ class MissionControlAgent:
         self._running = False
         self._agent_id: int | None = config.agent_id
         self._last_inventory_time: float = 0
+        self._last_update_check: float = 0
 
     async def start(self) -> None:
         """Start the agent."""
@@ -148,6 +147,17 @@ class MissionControlAgent:
                 pending_commands = response.get("commands") or []
                 for cmd in pending_commands:
                     await self._execute_command(cmd)
+
+                now = time.monotonic()
+                if now - self._last_update_check > 3600:
+                    self._last_update_check = now
+                    update = await self.updater.check_for_update()
+                    if update.get("update_available"):
+                        logger.info(
+                            "Update available: %s -> %s",
+                            update["current_version"],
+                            update["latest_version"],
+                        )
 
             except Exception as e:
                 logger.warning("Heartbeat cycle failed: %s", e)

@@ -4,7 +4,6 @@ Tests for Site API endpoints.
 Sprint 2.9 - Multi-Site Management.
 """
 
-import pytest
 
 
 # ------------------------------------------------------------------ #

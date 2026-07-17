@@ -7,7 +7,7 @@ Sprint:
     1.0.3 - Dashboard Service Refactor
 """
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 
 class ApplicationService:
@@ -19,13 +19,13 @@ class ApplicationService:
         return {
             "name": "Mission Control",
             "tagline": "The Daily Workspace for IT Operations",
-            "version": "1.0.3",
+            "version": "3.0.0",
         }
 
     async def generated(self) -> str:
         """Return dashboard generation timestamp."""
 
-        return datetime.now(timezone.utc).isoformat()
+        return datetime.now(UTC).isoformat()
 
 
 application_service = ApplicationService()

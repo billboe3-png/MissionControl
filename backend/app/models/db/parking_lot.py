@@ -4,16 +4,10 @@ Mission Control Parking Lot ORM Model
 Sprint 2.0 - Extended with backlog fields.
 """
 
-from datetime import UTC
-from datetime import datetime
+from datetime import UTC, datetime
 
-from sqlalchemy import Boolean
-from sqlalchemy import DateTime
-from sqlalchemy import Integer
-from sqlalchemy import String
-from sqlalchemy import Text
-from sqlalchemy.orm import Mapped
-from sqlalchemy.orm import mapped_column
+from sqlalchemy import Boolean, DateTime, Integer, String, Text
+from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.database import Base
 
@@ -32,6 +26,18 @@ class ParkingLot(Base):
         index=True,
     )
 
+    company_id: Mapped[int | None] = mapped_column(
+        Integer,
+        nullable=True,
+        index=True,
+    )
+
+    site_id: Mapped[int | None] = mapped_column(
+        Integer,
+        nullable=True,
+        index=True,
+    )
+
     title: Mapped[str] = mapped_column(
         String(200),
         nullable=False,
@@ -46,22 +52,26 @@ class ParkingLot(Base):
         String(50),
         nullable=False,
         default="medium",
+        index=True,
     )
 
     status: Mapped[str] = mapped_column(
         String(50),
         nullable=False,
         default="parked",
+        index=True,
     )
 
     owner: Mapped[str | None] = mapped_column(
         String(200),
         nullable=True,
+        index=True,
     )
 
     category: Mapped[str | None] = mapped_column(
         String(100),
         nullable=True,
+        index=True,
     )
 
     labels: Mapped[str | None] = mapped_column(

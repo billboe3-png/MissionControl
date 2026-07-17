@@ -8,8 +8,7 @@ Sprint 2.1.0 - Remote Operations Framework.
 
 import logging
 
-from sqlalchemy import func
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.models.db.command_history import CommandHistory
@@ -66,7 +65,7 @@ class RemoteProvider:
                     for cmd in recent_commands
                 ],
             }
-        except Exception as e:
+        except Exception:
             logger.exception("Failed to fetch remote dashboard data")
             return {
                 "totalHosts": 0,

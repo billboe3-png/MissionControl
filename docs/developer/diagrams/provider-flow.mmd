@@ -1,0 +1,28 @@
+```mermaid
+graph LR
+    subgraph ProviderHierarchy["Provider Pattern Hierarchy"]
+        ABC["Abstract Base Class"]
+        Concrete["Concrete Provider"]
+        Mock["Mock Provider"]
+        Factory["Factory Function"]
+        Singleton["Cached Singleton"]
+    end
+
+    ABC -->|implements| Concrete
+    ABC -->|implements| Mock
+    Factory -->|creates| Concrete
+    Factory -->|creates| Mock
+    Factory -->|caches| Singleton
+
+    subgraph Example["Example: Identity Providers"]
+        IBase["ActiveDirectoryProvider (ABC)"]
+        ILDAP["LDAPActiveDirectoryProvider"]
+        IMock["MockActiveDirectoryProvider"]
+        IFactory["get_active_directory_provider()"]
+    end
+
+    IBase --> ILDAP
+    IBase --> IMock
+    IFactory --> ILDAP
+    IFactory --> IMock
+```

@@ -22,43 +22,45 @@ class TestIdentityServiceAD:
         return IdentityService()
 
     @pytest.mark.anyio()
-    async def test_ad_test_connection(self, service: IdentityService) -> None:
-        result = await service.ad_test_connection()
+    async def test_ad_test_connection(
+        self, service: IdentityService, db_session
+    ) -> None:
+        result = await service.ad_test_connection(db_session)
         assert "connected" in result
         assert result["connected"] is True
 
     @pytest.mark.anyio()
-    async def test_ad_get_summary(self, service: IdentityService) -> None:
-        result = await service.ad_get_summary()
+    async def test_ad_get_summary(self, service: IdentityService, db_session) -> None:
+        result = await service.ad_get_summary(db_session)
         assert "connected" in result
         assert result["connected"] is True
         assert "domain" in result
 
     @pytest.mark.anyio()
-    async def test_ad_get_users(self, service: IdentityService) -> None:
-        result = await service.ad_get_users()
+    async def test_ad_get_users(self, service: IdentityService, db_session) -> None:
+        result = await service.ad_get_users(db_session)
         assert "connected" in result
         assert result["connected"] is True
         assert "users" in result
         assert "total_count" in result
 
     @pytest.mark.anyio()
-    async def test_ad_get_groups(self, service: IdentityService) -> None:
-        result = await service.ad_get_groups()
+    async def test_ad_get_groups(self, service: IdentityService, db_session) -> None:
+        result = await service.ad_get_groups(db_session)
         assert "connected" in result
         assert result["connected"] is True
         assert "groups" in result
 
     @pytest.mark.anyio()
-    async def test_ad_get_devices(self, service: IdentityService) -> None:
-        result = await service.ad_get_devices()
+    async def test_ad_get_devices(self, service: IdentityService, db_session) -> None:
+        result = await service.ad_get_devices(db_session)
         assert "connected" in result
         assert result["connected"] is True
         assert "devices" in result
 
     @pytest.mark.anyio()
-    async def test_ad_get_health(self, service: IdentityService) -> None:
-        result = await service.ad_get_health()
+    async def test_ad_get_health(self, service: IdentityService, db_session) -> None:
+        result = await service.ad_get_health(db_session)
         assert "connected" in result
         assert result["connected"] is True
         assert "status" in result
@@ -123,30 +125,40 @@ class TestIdentityServiceOverview:
         return IdentityService()
 
     @pytest.mark.anyio()
-    async def test_overview_returns_success(self, service: IdentityService) -> None:
-        result = await service.get_overview()
+    async def test_overview_returns_success(
+        self, service: IdentityService, db_session
+    ) -> None:
+        result = await service.get_overview(db_session)
         assert result["success"] is True
 
     @pytest.mark.anyio()
-    async def test_overview_has_ad_section(self, service: IdentityService) -> None:
-        result = await service.get_overview()
+    async def test_overview_has_ad_section(
+        self, service: IdentityService, db_session
+    ) -> None:
+        result = await service.get_overview(db_session)
         overview = result["overview"]
         assert "ad" in overview
 
     @pytest.mark.anyio()
-    async def test_overview_has_m365_section(self, service: IdentityService) -> None:
-        result = await service.get_overview()
+    async def test_overview_has_m365_section(
+        self, service: IdentityService, db_session
+    ) -> None:
+        result = await service.get_overview(db_session)
         overview = result["overview"]
         assert "m365" in overview
 
     @pytest.mark.anyio()
-    async def test_overview_ad_has_connected(self, service: IdentityService) -> None:
-        result = await service.get_overview()
+    async def test_overview_ad_has_connected(
+        self, service: IdentityService, db_session
+    ) -> None:
+        result = await service.get_overview(db_session)
         ad = result["overview"]["ad"]
         assert "connected" in ad
 
     @pytest.mark.anyio()
-    async def test_overview_m365_has_connected(self, service: IdentityService) -> None:
-        result = await service.get_overview()
+    async def test_overview_m365_has_connected(
+        self, service: IdentityService, db_session
+    ) -> None:
+        result = await service.get_overview(db_session)
         m365 = result["overview"]["m365"]
         assert "connected" in m365

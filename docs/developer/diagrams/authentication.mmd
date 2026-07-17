@@ -1,0 +1,33 @@
+```mermaid
+graph TB
+    subgraph AuthFlow["Authentication Flow"]
+        Login["Login Request"]
+        Validate["Validate Credentials"]
+        Hash["PBKDF2-SHA256 Verify"]
+        Token["Create HMAC Token"]
+        Store["Store in localStorage"]
+        Request["Attach Bearer Header"]
+        FastAPI["FastAPI Dependency"]
+        Decode["Decode & Verify Token"]
+        User["Load User from DB"]
+    end
+
+    Login --> Validate
+    Validate --> Hash
+    Hash --> Token
+    Token --> Store
+    Store --> Request
+    Request --> FastAPI
+    FastAPI --> Decode
+    Decode --> User
+
+    subgraph Roles["Role Hierarchy"]
+        GA["global_admin (5)"]
+        CA["company_admin (4)"]
+        SA["site_admin (3)"]
+        OP["operator (2)"]
+        RO["readonly (1)"]
+    end
+
+    GA --> CA --> SA --> OP --> RO
+```

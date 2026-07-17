@@ -11,11 +11,9 @@ Covers:
 - Command result reporting
 """
 
-import pytest
-from unittest.mock import patch, AsyncMock
 
-from app.models.db.agent import Agent
-from app.models.db.agent_command import AgentCommand
+import pytest
+
 from app.repositories.agent_repository import (
     AgentCommandRepository,
     AgentRepository,
@@ -23,12 +21,10 @@ from app.repositories.agent_repository import (
 from app.schemas.agent import (
     AgentCommandDispatchRequest,
     AgentCommandResultRequest,
-    AgentCreate,
     AgentHeartbeatRequest,
     AgentRegisterRequest,
     AgentUpdate,
 )
-
 
 # ------------------------------------------------------------------ #
 # Fixtures                                                            #
@@ -263,6 +259,7 @@ class TestAgentService:
     @pytest.mark.asyncio
     async def test_get_agent_not_found(self, db_session):
         from fastapi import HTTPException
+
         from app.services.agent_service import AgentService
 
         service = AgentService()
@@ -306,6 +303,7 @@ class TestAgentService:
     @pytest.mark.asyncio
     async def test_delete_not_found(self, db_session):
         from fastapi import HTTPException
+
         from app.services.agent_service import AgentService
 
         service = AgentService()
@@ -333,6 +331,7 @@ class TestAgentService:
     @pytest.mark.asyncio
     async def test_heartbeat_wrong_key(self, db_session, sample_agent):
         from fastapi import HTTPException
+
         from app.services.agent_service import AgentService
 
         service = AgentService()
@@ -363,6 +362,7 @@ class TestAgentService:
         self, db_session, sample_offline_agent
     ):
         from fastapi import HTTPException
+
         from app.services.agent_service import AgentService
 
         service = AgentService()
@@ -597,3 +597,112 @@ class TestAgentAPI:
         resp = client.get(f"/api/v1/agents/{agent_id}/inventory")
         assert resp.status_code == 200
         assert resp.json()["agent_id"] == agent_id
+
+    def test_version_endpoint(self, client):
+        resp = client.get("/api/v1/agents/version")
+        assert resp.status_code == 200
+        assert "version" in resp.json()
+
+    def test_command_result_reporting(self, client):
+        reg_resp = client.post(
+            "/api/v1/agents/register",
+            json={
+                "name": "Result Agent",
+                "hostname": "result.agent.local",
+            },
+        )
+        data = reg_resp.json()
+        agent_id = data["agent_id"]
+        api_key = data["api_key"]
+
+        exec_resp = client.post(
+            f"/api/v1/agents/{agent_id}/execute",
+            json={
+                "command_type": "execute",
+                "command": "echo test",
+                "timeout": 10,
+            },
+        )
+        cmd_id = exec_resp.json()["id"]
+
+        resp = client.post(
+            f"/api/v1/agents/{agent_id}/command-result",
+            json={
+                "command_id": cmd_id,
+                "exit_code": 0,
+                "stdout": "test\n",
+                "stderr": "",
+                "success": True,
+                "duration_ms": 100,
+            },
+            headers={"X-Agent-API-Key": api_key},
+        )
+        assert resp.status_code == 200
+        assert resp.json()["received"] is True
+
+    def test_inventory_update(self, client):
+        reg_resp = client.post(
+            "/api/v1/agents/register",
+            json={
+                "name": "InvPush Agent",
+                "hostname": "invpush.agent.local",
+            },
+        )
+        data = reg_resp.json()
+        agent_id = data["agent_id"]
+        api_key = data["api_key"]
+
+        resp = client.post(
+            f"/api/v1/agents/{agent_id}/inventory",
+            json={"system": {"hostname": "test"}, "cpu": {"cores": 4}},
+            headers={"X-Agent-API-Key": api_key},
+        )
+        assert resp.status_code == 200
+        assert resp.json()["received"] is True
+
+    @pytest.mark.asyncio
+    async def test_mark_stale_agents_offline(self, db_session):
+        from datetime import UTC, datetime, timedelta
+
+        from app.services.agent_service import AgentService
+
+        agent = AgentRepository.create(
+            db_session,
+            name="Stale Agent",
+            hostname="stale.agent.local",
+            api_key="mc_agent_stalekey1234567890abcdef",
+            status="online",
+        )
+        agent.last_heartbeat = datetime.now(UTC) - timedelta(seconds=200)
+        db_session.commit()
+
+        service = AgentService()
+        await service.mark_stale_agents_offline(db_session)
+
+        db_session.refresh(agent)
+        assert agent.status == "offline"
+
+    def test_get_commands_with_status_filter(self, client):
+        reg_resp = client.post(
+            "/api/v1/agents/register",
+            json={
+                "name": "Filter Agent",
+                "hostname": "filter.agent.local",
+            },
+        )
+        agent_id = reg_resp.json()["agent_id"]
+
+        client.post(
+            f"/api/v1/agents/{agent_id}/execute",
+            json={
+                "command_type": "execute",
+                "command": "echo filter",
+                "timeout": 10,
+            },
+        )
+
+        resp = client.get(
+            "/api/v1/agents/commands/all?status=pending"
+        )
+        assert resp.status_code == 200
+        assert "items" in resp.json()

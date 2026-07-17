@@ -214,7 +214,6 @@ class LDAPActiveDirectoryProvider(ActiveDirectoryProvider):
             return {"connected": False, "error": "LDAP connection failed"}
 
         try:
-            from ldap3 import BASE, SUBTREE
 
             config = self._get_config()
             base = config["base_dn"]
@@ -447,7 +446,6 @@ class LDAPActiveDirectoryProvider(ActiveDirectoryProvider):
             return {"success": False, "error": f"User '{sam_account_name}' not found"}
 
         try:
-            from ldap3 import CORE_SCHEMA
             self._connection.modify(
                 dn,
                 {"lockoutTime": [("Replace", [0])]},

@@ -6,9 +6,7 @@ Pydantic models for Project CRUD endpoints.
 
 from datetime import datetime
 
-from pydantic import BaseModel
-from pydantic import ConfigDict
-from pydantic import Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class ProjectCreate(BaseModel):

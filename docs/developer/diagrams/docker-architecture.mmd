@@ -1,0 +1,37 @@
+```mermaid
+graph TB
+    subgraph DockerCompose["Docker Compose Stack"]
+        Browser["Browser :80"]
+        Nginx["nginx:1.27-alpine :80"]
+        Frontend["frontend (Node→Nginx) :3000"]
+        Backend["backend (Python 3.12) :8000"]
+        PostgreSQL["postgres:16-alpine :5432"]
+        Redis["redis:7.2-alpine :6379"]
+    end
+
+    Browser --> Nginx
+    Nginx -->|/ static| Frontend
+    Nginx -->|/api/* proxy| Backend
+    Backend --> PostgreSQL
+    Backend --> Redis
+
+    subgraph Volumes["Persistent Volumes"]
+        PGData["postgres_data"]
+        RedisData["redis_data"]
+    end
+
+    PostgreSQL -.-> PGData
+    Redis -.-> RedisData
+
+    subgraph HealthChecks["Health Checks"]
+        HC1["backend: HTTP /api/v1/health/live"]
+        HC2["postgres: pg_isready"]
+        HC3["redis: redis-cli ping"]
+        HC4["nginx: wget --spider"]
+    end
+
+    Backend -.-> HC1
+    PostgreSQL -.-> HC2
+    Redis -.-> HC3
+    Nginx -.-> HC4
+```

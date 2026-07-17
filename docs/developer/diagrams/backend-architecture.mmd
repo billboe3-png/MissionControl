@@ -1,0 +1,51 @@
+```mermaid
+graph TB
+    subgraph Frontend["React Frontend"]
+        Pages["Pages (65+)"]
+        Components["Components"]
+        APIServices["API Services (14)"]
+        Contexts["Contexts (3)"]
+    end
+
+    subgraph Backend["FastAPI Backend"]
+        Routers["Routers (26)"]
+        Services["Services (27)"]
+        Repositories["Repositories (24)"]
+        Providers["Providers (12+ domains)"]
+        Models["ORM Models (27)"]
+        Schemas["Pydantic Schemas (33)"]
+    end
+
+    subgraph Data["Data Layer"]
+        PostgreSQL["PostgreSQL 16"]
+        Redis["Redis 7.2"]
+    end
+
+    subgraph External["External Systems"]
+        SSH["SSH Hosts"]
+        WinRM["WinRM Hosts"]
+        Docker["Docker Engine"]
+        Zabbix["Zabbix"]
+        HyperV["Hyper-V"]
+        Proxmox["Proxmox VE"]
+        AD["Active Directory"]
+        M365["Microsoft 365"]
+        LLM["LLM Providers"]
+    end
+
+    Pages --> APIServices
+    APIServices -->|HTTP| Nginx
+    Nginx --> Routers
+    Routers --> Services
+    Services --> Repositories
+    Services --> Providers
+    Repositories --> Models
+    Models --> PostgreSQL
+    Providers --> External
+    Redis -.-> Backend
+
+    style Frontend fill:#1e3a5f,stroke:#3b82f6,color:#fff
+    style Backend fill:#1a332e,stroke:#22c55e,color:#fff
+    style Data fill:#3d2b1f,stroke:#f59e0b,color:#fff
+    style External fill:#3d1f1f,stroke:#ef4444,color:#fff
+```

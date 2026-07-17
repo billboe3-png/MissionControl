@@ -5,22 +5,22 @@ Sprint:
     1.2.2 - Task API Foundation
 """
 
-from fastapi import APIRouter
-from fastapi import Depends
-from fastapi import status
+import logging
+
+from fastapi import APIRouter, Depends, status
 from sqlalchemy.orm import Session
 
+from app.core.auth_dependency import get_current_user
 from app.db import get_db
-from app.schemas.task import TaskCreate
-from app.schemas.task import TaskListResponse
-from app.schemas.task import TaskResponse
-from app.schemas.task import TaskUpdate
-from app.services.task_service import TaskService
-from app.services.task_service import task_service
+from app.schemas.task import TaskCreate, TaskListResponse, TaskResponse, TaskUpdate
+from app.services.task_service import TaskService, task_service
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(
     prefix="/tasks",
     tags=["Tasks"],
+    dependencies=[Depends(get_current_user)],
 )
 
 

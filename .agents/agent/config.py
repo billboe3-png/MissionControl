@@ -1,12 +1,10 @@
 """Mission Control Agent Configuration."""
 
-import os
 from pathlib import Path
 
 import yaml
-from pydantic import BaseModel, Field
+from pydantic import Field
 from pydantic_settings import BaseSettings
-
 
 DEFAULT_CONFIG_DIR = Path.home() / ".config" / "mission-control-agent"
 DEFAULT_DATA_DIR = Path.home() / ".local" / "share" / "mission-control-agent"
@@ -105,7 +103,11 @@ class AgentSettings(BaseSettings):
         alias="MC_OFFLINE_BUFFER_MAX",
     )
 
-    model_config = {"env_prefix": "", "extra": "ignore"}
+    model_config = {
+        "env_prefix": "",
+        "extra": "ignore",
+        "populate_by_name": True,
+    }
 
 
 def load_config(config_path: str | Path | None = None) -> AgentSettings:

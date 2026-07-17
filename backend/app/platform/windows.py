@@ -1,9 +1,8 @@
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from app.core.config import get_settings
 from app.db.postgres import check_postgres
 from app.db.redis import check_redis
-
 from app.infrastructure.docker import get_docker_provider
 
 from .base import PlatformBase
@@ -24,7 +23,7 @@ class WindowsPlatform(PlatformBase):
             "backend": "online",
             "database": "connected" if postgres else "disconnected",
             "redis": "connected" if redis else "disconnected",
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
         }
 
     async def doctor(self):
@@ -52,7 +51,7 @@ class WindowsPlatform(PlatformBase):
 
         return {
             "overall": "healthy" if postgres and redis else "degraded",
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
             "checks": checks,
         }
 

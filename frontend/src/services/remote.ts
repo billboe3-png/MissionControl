@@ -1,16 +1,6 @@
-const API = "/api/v1/remote";
+import { apiClient } from "../utils/apiClient";
 
-async function handleResponse<T>(response: Response): Promise<T> {
-    if (!response.ok) {
-        const body = await response.json().catch(() => null);
-        const detail = body?.detail;
-        throw new Error(detail ?? `Request failed (${response.status})`);
-    }
-    if (response.status === 204) {
-        return undefined as T;
-    }
-    return response.json();
-}
+const API = "/api/v1/remote";
 
 // ------------------------------------------------------------------ //
 // Host Types                                                          //
@@ -160,95 +150,77 @@ export interface HistoryListData {
 export const hostsApi = {
     async list(search?: string): Promise<HostListData> {
         const params = search ? `?search=${encodeURIComponent(search)}` : "";
-        const response = await fetch(`${API}/hosts${params}`);
-        return handleResponse<HostListData>(response);
+        return apiClient<HostListData>(`${API}/hosts${params}`);
     },
 
     async get(id: number): Promise<HostData> {
-        const response = await fetch(`${API}/hosts/${id}`);
-        return handleResponse<HostData>(response);
+        return apiClient<HostData>(`${API}/hosts/${id}`);
     },
 
     async create(data: HostCreateInput): Promise<HostData> {
-        const response = await fetch(`${API}/hosts`, {
+        return apiClient<HostData>(`${API}/hosts`, {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(data),
+            json: data,
         });
-        return handleResponse<HostData>(response);
     },
 
     async update(id: number, data: HostUpdateInput): Promise<HostData> {
-        const response = await fetch(`${API}/hosts/${id}`, {
+        return apiClient<HostData>(`${API}/hosts/${id}`, {
             method: "PUT",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(data),
+            json: data,
         });
-        return handleResponse<HostData>(response);
     },
 
     async remove(id: number): Promise<void> {
-        const response = await fetch(`${API}/hosts/${id}`, {
+        return apiClient<void>(`${API}/hosts/${id}`, {
             method: "DELETE",
         });
-        await handleResponse<undefined>(response);
     },
 };
 
 export const credentialsApi = {
     async list(): Promise<CredentialListData> {
-        const response = await fetch(`${API}/credentials`);
-        return handleResponse<CredentialListData>(response);
+        return apiClient<CredentialListData>(`${API}/credentials`);
     },
 
     async get(id: number): Promise<CredentialData> {
-        const response = await fetch(`${API}/credentials/${id}`);
-        return handleResponse<CredentialData>(response);
+        return apiClient<CredentialData>(`${API}/credentials/${id}`);
     },
 
     async create(data: CredentialCreateInput): Promise<CredentialData> {
-        const response = await fetch(`${API}/credentials`, {
+        return apiClient<CredentialData>(`${API}/credentials`, {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(data),
+            json: data,
         });
-        return handleResponse<CredentialData>(response);
     },
 
     async update(id: number, data: CredentialUpdateInput): Promise<CredentialData> {
-        const response = await fetch(`${API}/credentials/${id}`, {
+        return apiClient<CredentialData>(`${API}/credentials/${id}`, {
             method: "PUT",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(data),
+            json: data,
         });
-        return handleResponse<CredentialData>(response);
     },
 
     async remove(id: number): Promise<void> {
-        const response = await fetch(`${API}/credentials/${id}`, {
+        return apiClient<void>(`${API}/credentials/${id}`, {
             method: "DELETE",
         });
-        await handleResponse<undefined>(response);
     },
 };
 
 export const remoteApi = {
     async testConnection(data: TestConnectionRequest): Promise<TestConnectionResponse> {
-        const response = await fetch(`${API}/test`, {
+        return apiClient<TestConnectionResponse>(`${API}/test`, {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(data),
+            json: data,
         });
-        return handleResponse<TestConnectionResponse>(response);
     },
 
     async executeCommand(data: ExecuteCommandRequest): Promise<ExecuteCommandResponse> {
-        const response = await fetch(`${API}/execute`, {
+        return apiClient<ExecuteCommandResponse>(`${API}/execute`, {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(data),
+            json: data,
         });
-        return handleResponse<ExecuteCommandResponse>(response);
     },
 
     async *executeCommandStream(
@@ -294,7 +266,6 @@ export const remoteApi = {
         if (success !== undefined) params.set("success", String(success));
         if (limit !== undefined) params.set("limit", String(limit));
         const qs = params.toString();
-        const response = await fetch(`${API}/history${qs ? `?${qs}` : ""}`);
-        return handleResponse<HistoryListData>(response);
+        return apiClient<HistoryListData>(`${API}/history${qs ? `?${qs}` : ""}`);
     },
 };

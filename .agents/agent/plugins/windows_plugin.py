@@ -77,7 +77,10 @@ class WindowsPlugin(AgentPlugin):
             proc = await asyncio.create_subprocess_exec(
                 "powershell",
                 "-Command",
-                "Get-ScheduledTask | Where-Object {$_.State -ne 'Disabled'} | Select-Object TaskName, TaskPath, State | ConvertTo-Json",
+                "Get-ScheduledTask"
+                " | Where-Object {$_.State -ne 'Disabled'}"
+                " | Select-Object TaskName, TaskPath, State"
+                " | ConvertTo-Json",
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.DEVNULL,
             )
@@ -105,7 +108,10 @@ class WindowsPlugin(AgentPlugin):
             proc = await asyncio.create_subprocess_exec(
                 "powershell",
                 "-Command",
-                "Get-Service | Where-Object {$_.Status -eq 'Running'} | Select-Object Name, DisplayName | ConvertTo-Json",
+                "Get-Service"
+                " | Where-Object {$_.Status -eq 'Running'}"
+                " | Select-Object Name, DisplayName"
+                " | ConvertTo-Json",
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.DEVNULL,
             )
@@ -134,7 +140,9 @@ class WindowsPlugin(AgentPlugin):
         proc = await asyncio.create_subprocess_exec(
             "powershell",
             "-Command",
-            f"Get-Service '{service}' | Select-Object Name, Status, StartType | ConvertTo-Json",
+            f"Get-Service '{service}'"
+            " | Select-Object Name, Status, StartType"
+            " | ConvertTo-Json",
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
@@ -177,7 +185,10 @@ class WindowsPlugin(AgentPlugin):
         proc = await asyncio.create_subprocess_exec(
             "powershell",
             "-Command",
-            f"Get-EventLog -LogName '{log_name}' -Newest {entries} | Select-Object TimeGenerated, EntryType, Source, Message | ConvertTo-Json",
+            f"Get-EventLog -LogName '{log_name}'"
+            f" -Newest {entries}"
+            " | Select-Object TimeGenerated, EntryType,"
+            " Source, Message | ConvertTo-Json",
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
