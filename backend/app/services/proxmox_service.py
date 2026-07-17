@@ -84,5 +84,17 @@ class ProxmoxService:
     async def stop_lxc(self, vm_id: str, db: Session | None = None) -> dict:
         return await self._get_provider(db).stop_lxc(vm_id)
 
+    async def get_lxc_templates(self, node: str | None = None, db: Session | None = None) -> dict:
+        return await self._get_provider(db).get_lxc_templates(node)
+
+    async def create_lxc(self, config: dict, db: Session | None = None) -> dict:
+        return await self._get_provider(db).create_lxc(config)
+
+    async def delete_lxc(self, vm_id: str, purge: bool = False, db: Session | None = None) -> dict:
+        return await self._get_provider(db).delete_lxc(vm_id, purge)
+
+    async def clone_lxc(self, vm_id: str, new_vmid: str | None = None, hostname: str | None = None, db: Session | None = None) -> dict:
+        return await self._get_provider(db).clone_lxc(vm_id, new_vmid, hostname)
+
 
 proxmox_service = ProxmoxService()

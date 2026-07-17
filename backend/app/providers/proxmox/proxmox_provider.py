@@ -519,3 +519,124 @@ class ProxmoxRESTProvider(ProxmoxProvider):
                     },
                 }
         return {"connected": False, "error": f"LXC container not found: {vm_id}"}
+
+    async def get_lxc_templates(self, node: str | None = None) -> dict:
+        target_node = node
+        if not target_node:
+            nodes_r = await self._get("/nodes")
+            if nodes_r["success"] and nodes_r["data"]:
+                target_node = nodes_r["data"][0]["node"]
+        if not target_node:
+            return {"connected": False, "error": "No nodes available", "count": 0, "items": []}
+        storage_r = await self._get(f"/nodes/{target_node}/storage")
+        if not storage_r["success"]:
+            return {"connected": False, "error": storage_r["error"], "count": 0, "items": []}
+        all_items = []
+        for storage in storage_r["data"] or []:
+            content_r = await self._get(
+                f"/nodes/{target_node}/storage/{storage['storage']}/content",
+                content="vztmpl",
+            )
+            if content_r["success"]:
+                for tmpl in content_r["data"] or []:
+                    all_items.append({
+                        "id": tmpl.get("volid", ""),
+                        "name": tmpl.get("volid", "").split("/")[-1],
+                        "file": tmpl.get("volid", ""),
+                        "node": target_node,
+                        "size_bytes": tmpl.get("size", 0) or 0,
+                        "os": tmpl.get("format", ""),
+                        "description": tmpl.get("info", {}).get("description", "") if isinstance(tmpl.get("info"), dict) else "",
+                        "version": tmpl.get("info", {}).get("version", "") if isinstance(tmpl.get("info"), dict) else "",
+                        "arch": tmpl.get("info", {}).get("arch", "") if isinstance(tmpl.get("info"), dict) else "",
+                    })
+        return {"connected": True, "count": len(all_items), "items": all_items}
+
+    async def create_lxc(self, config: dict) -> dict:
+        node = config.get("node", "")
+        if not node:
+            nodes_r = await self._get("/nodes")
+            if nodes_r["success"] and nodes_r["data"]:
+                node = nodes_r["data"][0]["node"]
+        if not node:
+            return {"success": False, "error": "No Proxmox node specified"}
+        vmid = config.get("vmid")
+        if not vmid:
+            maxid_r = await self._get(f"/nodes/{node}/maxid")
+            if maxid_r["success"] and maxid_r["data"]:
+                vmid = str(maxid_r["data"].get("next", 100))
+            else:
+                vmid = "100"
+        params: dict = {
+            "vmid": vmid,
+            "ostemplate": config["ostemplate"],
+            "hostname": config.get("hostname", "mission-control"),
+            "cores": config.get("cores", 2),
+            "memory": config.get("memory", 4096),
+            "rootfs": f"{config.get('storage', 'local-lvm')}:rootfs={config.get('disk', 8)}",
+        }
+        if config.get("swap"):
+            params["swap"] = config["swap"]
+        if config.get("password"):
+            params["password"] = config["password"]
+        if config.get("unprivileged") is False:
+            params["unprivileged"] = 0
+        else:
+            params["unprivileged"] = 1
+        net_name = config.get("net_name", "eth0")
+        net_bridge = config.get("net_bridge", "vmbr0")
+        net_ip = config.get("net_ip", "dhcp")
+        params["net0"] = f"name={net_name},bridge={net_bridge},hwaddr=auto,ip={net_ip},type=veth"
+        if config.get("nameserver"):
+            params["nameserver"] = config["nameserver"]
+        if config.get("searchdomain"):
+            params["searchdomain"] = config["searchdomain"]
+        if config.get("description"):
+            params["description"] = config["description"]
+        if config.get("nesting"):
+            params["features"] = "nesting=1,fuse=1"
+        result = await self._post(f"/nodes/{node}/lxc", **params)
+        if not result["success"]:
+            return {"success": False, "error": result.get("error", "Failed to create container"), "node": node}
+        return {"success": True, "vmid": vmid, "node": node, "message": f"Container {vmid} created on {node}"}
+
+    async def delete_lxc(self, vm_id: str, purge: bool = False) -> dict:
+        res_r = await self._get("/cluster/resources", type="vm")
+        if not res_r["success"]:
+            return {"connected": False, "error": res_r["error"]}
+        target = next((c for c in (res_r["data"] or []) if str(c.get("vmid")) == vm_id and c.get("type") == "lxc"), None)
+        if not target:
+            return {"success": False, "error": f"LXC container not found: {vm_id}"}
+        node = target.get("node", "")
+        if target.get("status") == "running":
+            return {"success": False, "error": f"Container {vm_id} must be stopped before deletion"}
+        params: dict = {}
+        if purge:
+            params["purge"] = 1
+        result = await self._delete(f"/nodes/{node}/lxc/{vm_id}", **params)
+        if not result["success"]:
+            return {"success": False, "error": result.get("error", "Failed to delete container")}
+        return {"success": True, "message": f"Container {vm_id} deleted from {node}"}
+
+    async def clone_lxc(self, vm_id: str, new_vmid: str | None = None, hostname: str | None = None) -> dict:
+        res_r = await self._get("/cluster/resources", type="vm")
+        if not res_r["success"]:
+            return {"success": False, "error": res_r["error"]}
+        target = next((c for c in (res_r["data"] or []) if str(c.get("vmid")) == vm_id and c.get("type") == "lxc"), None)
+        if not target:
+            return {"success": False, "error": f"LXC container not found: {vm_id}"}
+        node = target.get("node", "")
+        params: dict = {}
+        if new_vmid:
+            params["newid"] = new_vmid
+        else:
+            maxid_r = await self._get(f"/nodes/{node}/maxid")
+            if maxid_r["success"] and maxid_r["data"]:
+                params["newid"] = str(maxid_r["data"].get("next", 100))
+        if hostname:
+            params["hostname"] = hostname
+        result = await self._post(f"/nodes/{node}/lxc/{vm_id}/clone", **params)
+        if not result["success"]:
+            return {"success": False, "error": result.get("error", "Failed to clone container")}
+        cloned_vmid = params.get("newid", "")
+        return {"success": True, "vmid": cloned_vmid, "node": node, "message": f"Container {vm_id} cloned to {cloned_vmid}"}

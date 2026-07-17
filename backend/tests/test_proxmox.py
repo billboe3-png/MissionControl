@@ -344,6 +344,82 @@ class TestMockProxmoxProvider:
         assert (await provider.start_lxc(fake_id))["success"] is False
         assert (await provider.stop_lxc(fake_id))["success"] is False
 
+    @pytest.mark.asyncio
+    async def test_get_lxc_templates(self) -> None:
+        provider = MockProxmoxProvider()
+        result = await provider.get_lxc_templates()
+        assert result["connected"] is True
+        assert result["count"] == 3
+        names = [t["name"] for t in result["items"]]
+        assert any("mission-control" in n for n in names)
+
+    @pytest.mark.asyncio
+    async def test_get_lxc_templates_offline(self) -> None:
+        set_mock_mode("offline")
+        provider = MockProxmoxProvider()
+        result = await provider.get_lxc_templates()
+        assert result["connected"] is False
+
+    @pytest.mark.asyncio
+    async def test_create_lxc(self) -> None:
+        provider = MockProxmoxProvider()
+        result = await provider.create_lxc({
+            "node": "pve-node01",
+            "ostemplate": "local:vztmpl/mission-control-v3.0.0-amd64.tar.zst",
+            "hostname": "mc-test",
+            "cores": 4,
+            "memory": 8192,
+        })
+        assert result["success"] is True
+        assert "vmid" in result
+        assert result["node"] == "pve-node01"
+
+    @pytest.mark.asyncio
+    async def test_create_lxc_offline(self) -> None:
+        set_mock_mode("offline")
+        provider = MockProxmoxProvider()
+        result = await provider.create_lxc({
+            "node": "pve-node01",
+            "ostemplate": "local:vztmpl/debian-12.tar.zst",
+            "hostname": "test",
+        })
+        assert result["success"] is False
+        assert "Host unreachable" in result["error"]
+
+    @pytest.mark.asyncio
+    async def test_delete_lxc(self) -> None:
+        provider = MockProxmoxProvider()
+        create_result = await provider.create_lxc({
+            "node": "pve-node01",
+            "ostemplate": "local:vztmpl/debian-12.tar.zst",
+            "hostname": "to-delete",
+        })
+        assert create_result["success"] is True
+        vmid = create_result["vmid"]
+        result = await provider.delete_lxc(vmid)
+        assert result["success"] is True
+
+    @pytest.mark.asyncio
+    async def test_delete_lxc_not_found(self) -> None:
+        provider = MockProxmoxProvider()
+        result = await provider.delete_lxc("999")
+        assert result["success"] is False
+        assert "not found" in result["error"]
+
+    @pytest.mark.asyncio
+    async def test_clone_lxc(self) -> None:
+        provider = MockProxmoxProvider()
+        result = await provider.clone_lxc("200", new_vmid="250", hostname="dns-clone")
+        assert result["success"] is True
+        assert result["vmid"] == "250"
+
+    @pytest.mark.asyncio
+    async def test_clone_lxc_not_found(self) -> None:
+        provider = MockProxmoxProvider()
+        result = await provider.clone_lxc("999")
+        assert result["success"] is False
+        assert "not found" in result["error"]
+
 
 # ------------------------------------------------------------------ #
 # Provider Factory Tests                                              #
@@ -650,6 +726,79 @@ class TestProxmoxRouter:
         response = client.delete("/api/v1/proxmox/vms/100/snapshots/snap-1719000000")
         assert response.status_code == 200
         assert response.json()["success"] is True
+
+    def test_list_lxc_templates(self, client) -> None:
+        response = client.get("/api/v1/proxmox/lxc/templates")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["count"] == 3
+        assert any("mission-control" in t["name"] for t in data["items"])
+
+    def test_list_lxc_templates_filtered(self, client) -> None:
+        response = client.get("/api/v1/proxmox/lxc/templates?node=pve-node01")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["count"] == 3
+
+    def test_create_lxc(self, client) -> None:
+        response = client.post("/api/v1/proxmox/lxc", json={
+            "node": "pve-node01",
+            "ostemplate": "local:vztmpl/mission-control-v3.0.0-amd64.tar.zst",
+            "hostname": "mc-test",
+            "cores": 2,
+            "memory": 4096,
+            "disk": 8,
+        })
+        assert response.status_code == 200
+        data = response.json()
+        assert data["success"] is True
+        assert data["vmid"] is not None
+        assert data["node"] == "pve-node01"
+
+    def test_create_lxc_minimal(self, client) -> None:
+        response = client.post("/api/v1/proxmox/lxc", json={
+            "node": "pve-node01",
+            "ostemplate": "local:vztmpl/debian-12.tar.zst",
+        })
+        assert response.status_code == 200
+        assert response.json()["success"] is True
+
+    def test_create_lxc_missing_template(self, client) -> None:
+        response = client.post("/api/v1/proxmox/lxc", json={
+            "node": "pve-node01",
+        })
+        assert response.status_code == 422
+
+    def test_clone_lxc(self, client) -> None:
+        response = client.post("/api/v1/proxmox/lxc/200/clone", json={
+            "new_vmid": "250",
+            "hostname": "dns-clone",
+        })
+        assert response.status_code == 200
+        data = response.json()
+        assert data["success"] is True
+        assert data["vmid"] == "250"
+
+    def test_clone_lxc_not_found(self, client) -> None:
+        response = client.post("/api/v1/proxmox/lxc/999/clone")
+        assert response.status_code == 200
+        assert response.json()["success"] is False
+
+    def test_delete_lxc(self, client) -> None:
+        create_resp = client.post("/api/v1/proxmox/lxc", json={
+            "node": "pve-node01",
+            "ostemplate": "local:vztmpl/debian-12.tar.zst",
+            "hostname": "to-delete",
+        })
+        vmid = create_resp.json()["vmid"]
+        response = client.delete(f"/api/v1/proxmox/lxc/{vmid}")
+        assert response.status_code == 200
+        assert response.json()["success"] is True
+
+    def test_delete_lxc_not_found(self, client) -> None:
+        response = client.delete("/api/v1/proxmox/lxc/999")
+        assert response.status_code == 200
+        assert response.json()["success"] is False
 
 
 # ------------------------------------------------------------------ #

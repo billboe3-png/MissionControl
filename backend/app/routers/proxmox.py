@@ -16,8 +16,13 @@ from app.schemas.proxmox import (
     ProxmoxConnectionTestResponse,
     ProxmoxHealthResponse,
     ProxmoxLxcActionResponse,
+    ProxmoxLxcCloneRequest,
+    ProxmoxLxcCreateRequest,
+    ProxmoxLxcCreateResponse,
+    ProxmoxLxcDeleteResponse,
     ProxmoxLxcDetailResponse,
     ProxmoxLxcListResponse,
+    ProxmoxLxcTemplateListResponse,
     ProxmoxNetworkListResponse,
     ProxmoxNodeListResponse,
     ProxmoxSnapshotActionResponse,
@@ -176,6 +181,27 @@ async def list_lxc(
     return ProxmoxLxcListResponse(**data)
 
 
+@router.get("/lxc/templates", response_model=ProxmoxLxcTemplateListResponse)
+async def list_lxc_templates(
+    node: str | None = Query(None),
+    db: Session = Depends(get_db),
+) -> ProxmoxLxcTemplateListResponse:
+    """List available LXC templates on storage."""
+    data = await proxmox_service.get_lxc_templates(node, db)
+    return ProxmoxLxcTemplateListResponse(**data)
+
+
+@router.post("/lxc", response_model=ProxmoxLxcCreateResponse)
+async def create_lxc(
+    payload: ProxmoxLxcCreateRequest,
+    db: Session = Depends(get_db),
+) -> ProxmoxLxcCreateResponse:
+    """Create a new LXC container from a template."""
+    config = payload.model_dump(exclude_none=True)
+    data = await proxmox_service.create_lxc(config, db)
+    return ProxmoxLxcCreateResponse(**data)
+
+
 @router.get("/lxc/{vm_id}", response_model=ProxmoxLxcDetailResponse)
 async def get_lxc(
     vm_id: str,
@@ -204,6 +230,30 @@ async def stop_lxc(
     """Stop an LXC container."""
     data = await proxmox_service.stop_lxc(vm_id, db)
     return ProxmoxLxcActionResponse(**data)
+
+
+@router.post("/lxc/{vm_id}/clone", response_model=ProxmoxLxcCreateResponse)
+async def clone_lxc(
+    vm_id: str,
+    payload: ProxmoxLxcCloneRequest | None = None,
+    db: Session = Depends(get_db),
+) -> ProxmoxLxcCreateResponse:
+    """Clone an existing LXC container."""
+    new_vmid = payload.new_vmid if payload else None
+    hostname = payload.hostname if payload else None
+    data = await proxmox_service.clone_lxc(vm_id, new_vmid, hostname, db)
+    return ProxmoxLxcCreateResponse(**data)
+
+
+@router.delete("/lxc/{vm_id}", response_model=ProxmoxLxcDeleteResponse)
+async def delete_lxc(
+    vm_id: str,
+    purge: bool = Query(False),
+    db: Session = Depends(get_db),
+) -> ProxmoxLxcDeleteResponse:
+    """Delete an LXC container (must be stopped)."""
+    data = await proxmox_service.delete_lxc(vm_id, purge, db)
+    return ProxmoxLxcDeleteResponse(**data)
 
 
 # ------------------------------------------------------------------ #

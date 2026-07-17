@@ -155,6 +155,26 @@ export interface ProxmoxActionResponse {
     vm_name: string | null;
 }
 
+export interface ProxmoxLxcTemplate {
+    id: string;
+    name: string;
+    file: string;
+    node: string;
+    size_bytes: number;
+    os: string;
+    description: string;
+    version: string;
+    arch: string;
+}
+
+export interface ProxmoxLxcCreateResponse {
+    success: boolean;
+    vmid: string | null;
+    node: string | null;
+    message: string | null;
+    error: string | null;
+}
+
 export const proxmoxApi = {
     async getSummary(): Promise<ProxmoxSummary> {
         return apiClient<ProxmoxSummary>(`${API}/overview`);
@@ -219,6 +239,44 @@ export const proxmoxApi = {
 
     async stopLxc(vmId: string): Promise<ProxmoxActionResponse> {
         return apiClient<ProxmoxActionResponse>(`${API}/lxc/${vmId}/stop`, { method: "POST" });
+    },
+
+    async listLxcTemplates(node?: string): Promise<ProxmoxLxcTemplate[]> {
+        const url = node ? `${API}/lxc/templates?node=${node}` : `${API}/lxc/templates`;
+        const data = await apiClient<{ items: ProxmoxLxcTemplate[] }>(url);
+        return data.items ?? [];
+    },
+
+    async createLxc(config: {
+        node: string;
+        ostemplate: string;
+        hostname?: string;
+        cores?: number;
+        memory?: number;
+        disk?: number;
+        storage?: string;
+        password?: string;
+        unprivileged?: boolean;
+        nesting?: boolean;
+        net_bridge?: string;
+        net_ip?: string;
+        vmid?: string;
+    }): Promise<ProxmoxLxcCreateResponse> {
+        return apiClient<ProxmoxLxcCreateResponse>(`${API}/lxc`, {
+            method: "POST",
+            json: config,
+        });
+    },
+
+    async cloneLxc(vmId: string, newVmid?: string, hostname?: string): Promise<ProxmoxLxcCreateResponse> {
+        return apiClient<ProxmoxLxcCreateResponse>(`${API}/lxc/${vmId}/clone`, {
+            method: "POST",
+            json: { new_vmid: newVmid, hostname },
+        });
+    },
+
+    async deleteLxc(vmId: string, purge = false): Promise<{ success: boolean; message: string | null; error: string | null }> {
+        return apiClient(`${API}/lxc/${vmId}?purge=${purge}`, { method: "DELETE" });
     },
 
     async listNetworks(): Promise<ProxmoxNetwork[]> {

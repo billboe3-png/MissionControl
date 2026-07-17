@@ -11,6 +11,9 @@ from .base_provider import ProxmoxProvider
 
 MOCK_MODE = "healthy"
 
+_mock_lxc_created: list[dict] = []
+_mock_lxc_deleted: set[str] = set()
+
 
 def set_mock_mode(mode: str) -> None:
     global MOCK_MODE
@@ -735,3 +738,69 @@ class MockProxmoxProvider(ProxmoxProvider):
                     return {"success": False, "error": "Container is already stopped", "vm_name": c["name"]}
                 return {"success": True, "message": f"Container '{c['name']}' stopped", "vm_name": c["name"]}
         return {"success": False, "error": f"LXC container not found: {vm_id}"}
+
+    async def get_lxc_templates(self, node: str | None = None) -> dict:
+        if MOCK_MODE == "offline":
+            return {"connected": False, "error": "Host unreachable", "count": 0, "items": []}
+        items = [
+            {
+                "id": "local:vztmpl/debian-12-standard_12.7-1_amd64.tar.zst",
+                "name": "debian-12-standard_12.7-1_amd64.tar.zst",
+                "file": "local:vztmpl/debian-12-standard_12.7-1_amd64.tar.zst",
+                "node": "pve-node01",
+                "size_bytes": 127_000_000,
+                "os": "debian",
+                "description": "Debian 12 (Bookworm) Standard",
+                "version": "12.7",
+                "arch": "amd64",
+            },
+            {
+                "id": "local:vztmpl/mission-control-v3.0.0-amd64.tar.zst",
+                "name": "mission-control-v3.0.0-amd64.tar.zst",
+                "file": "local:vztmpl/mission-control-v3.0.0-amd64.tar.zst",
+                "node": "pve-node01",
+                "size_bytes": 890_000_000,
+                "os": "debian",
+                "description": "Mission Control v3.0 — IT Operations Dashboard",
+                "version": "3.0.0",
+                "arch": "amd64",
+            },
+            {
+                "id": "local:vztmpl/ubuntu-24.04-standard_24.04-2_amd64.tar.zst",
+                "name": "ubuntu-24.04-standard_24.04-2_amd64.tar.zst",
+                "file": "local:vztmpl/ubuntu-24.04-standard_24.04-2_amd64.tar.zst",
+                "node": "pve-node01",
+                "size_bytes": 118_000_000,
+                "os": "ubuntu",
+                "description": "Ubuntu 24.04 LTS (Noble) Standard",
+                "version": "24.04",
+                "arch": "amd64",
+            },
+        ]
+        return {"connected": True, "count": len(items), "items": items}
+
+    async def create_lxc(self, config: dict) -> dict:
+        if MOCK_MODE == "offline":
+            return {"success": False, "error": "Host unreachable"}
+        vmid = config.get("vmid", str(200 + len(MOCK_LXC)))
+        hostname = config.get("hostname", "new-container")
+        return {"success": True, "vmid": vmid, "node": config.get("node", "pve-node01"), "message": f"Container {vmid} created ({hostname})"}
+
+    async def delete_lxc(self, vm_id: str, purge: bool = False) -> dict:
+        if MOCK_MODE == "offline":
+            return {"success": False, "error": "Host unreachable"}
+        source = next((c for c in MOCK_LXC if c["id"] == vm_id), None)
+        if not source:
+            return {"success": False, "error": f"LXC container not found: {vm_id}"}
+        if source["state"] == "running":
+            return {"success": False, "error": f"Container {vm_id} must be stopped before deletion"}
+        return {"success": True, "message": f"Container {vm_id} deleted"}
+
+    async def clone_lxc(self, vm_id: str, new_vmid: str | None = None, hostname: str | None = None) -> dict:
+        if MOCK_MODE == "offline":
+            return {"success": False, "error": "Host unreachable"}
+        source = next((c for c in MOCK_LXC if c["id"] == vm_id), None)
+        if not source:
+            return {"success": False, "error": f"LXC container not found: {vm_id}"}
+        cloned_id = new_vmid or str(200 + len(MOCK_LXC))
+        return {"success": True, "vmid": cloned_id, "node": source["host_server"], "message": f"Container {vm_id} cloned to {cloned_id}"}

@@ -90,6 +90,62 @@ class ProxmoxLxcActionResponse(BaseModel):
     vm_name: str | None = None
 
 
+class ProxmoxLxcTemplateResponse(BaseModel):
+    id: str
+    name: str
+    file: str
+    node: str
+    size_bytes: int = 0
+    os: str = ""
+    description: str = ""
+    version: str = ""
+    arch: str = ""
+
+
+class ProxmoxLxcTemplateListResponse(BaseModel):
+    count: int
+    items: list[ProxmoxLxcTemplateResponse]
+
+
+class ProxmoxLxcCreateRequest(BaseModel):
+    node: str
+    vmid: str | None = None
+    ostemplate: str
+    hostname: str = "mission-control"
+    cores: int = 2
+    memory: int = 4096
+    swap: int = 0
+    disk: int = 8
+    storage: str = "local-lvm"
+    password: str | None = None
+    unprivileged: bool = True
+    nesting: bool = True
+    net_bridge: str = "vmbr0"
+    net_ip: str = "dhcp"
+    nameserver: str | None = None
+    searchdomain: str | None = None
+    description: str | None = None
+
+
+class ProxmoxLxcCreateResponse(BaseModel):
+    success: bool
+    vmid: str | None = None
+    node: str | None = None
+    message: str | None = None
+    error: str | None = None
+
+
+class ProxmoxLxcCloneRequest(BaseModel):
+    new_vmid: str | None = None
+    hostname: str | None = None
+
+
+class ProxmoxLxcDeleteResponse(BaseModel):
+    success: bool
+    message: str | None = None
+    error: str | None = None
+
+
 # ------------------------------------------------------------------ #
 # Node                                                                #
 # ------------------------------------------------------------------ #
