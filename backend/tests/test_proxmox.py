@@ -389,14 +389,7 @@ class TestMockProxmoxProvider:
     @pytest.mark.asyncio
     async def test_delete_lxc(self) -> None:
         provider = MockProxmoxProvider()
-        create_result = await provider.create_lxc({
-            "node": "pve-node01",
-            "ostemplate": "local:vztmpl/debian-12.tar.zst",
-            "hostname": "to-delete",
-        })
-        assert create_result["success"] is True
-        vmid = create_result["vmid"]
-        result = await provider.delete_lxc(vmid)
+        result = await provider.delete_lxc("202")
         assert result["success"] is True
 
     @pytest.mark.asyncio
@@ -785,13 +778,7 @@ class TestProxmoxRouter:
         assert response.json()["success"] is False
 
     def test_delete_lxc(self, client) -> None:
-        create_resp = client.post("/api/v1/proxmox/lxc", json={
-            "node": "pve-node01",
-            "ostemplate": "local:vztmpl/debian-12.tar.zst",
-            "hostname": "to-delete",
-        })
-        vmid = create_resp.json()["vmid"]
-        response = client.delete(f"/api/v1/proxmox/lxc/{vmid}")
+        response = client.delete("/api/v1/proxmox/lxc/202")
         assert response.status_code == 200
         assert response.json()["success"] is True
 

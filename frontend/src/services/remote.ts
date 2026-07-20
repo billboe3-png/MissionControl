@@ -225,11 +225,16 @@ export const remoteApi = {
 
     async *executeCommandStream(
         data: ExecuteCommandRequest,
+        signal?: AbortSignal,
     ): AsyncGenerator<{ type: string; data?: string; message?: string; exit_code?: number }> {
+        const token = localStorage.getItem("mc_token");
+        const headers: Record<string, string> = { "Content-Type": "application/json" };
+        if (token) headers["Authorization"] = `Bearer ${token}`;
         const response = await fetch(`${API}/execute/stream`, {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers,
             body: JSON.stringify(data),
+            signal,
         });
         if (!response.ok) {
             const body = await response.json().catch(() => null);
@@ -238,19 +243,27 @@ export const remoteApi = {
         const reader = response.body!.getReader();
         const decoder = new TextDecoder();
         let buffer = "";
-        while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
-            buffer += decoder.decode(value, { stream: true });
-            const lines = buffer.split("\n");
-            buffer = lines.pop()!;
-            for (const line of lines) {
-                if (line.startsWith("data: ")) {
-                    try {
-                        yield JSON.parse(line.slice(6));
-                    } catch { /* skip malformed */ }
+        try {
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+                buffer += decoder.decode(value, { stream: true });
+                const lines = buffer.split("\n");
+                buffer = lines.pop()!;
+                for (const line of lines) {
+                    if (line.startsWith("data: ")) {
+                        try {
+                            yield JSON.parse(line.slice(6));
+                        } catch { /* skip malformed */ }
+                    }
                 }
             }
+        } catch (e: unknown) {
+            if (e instanceof DOMException && e.name === "AbortError") {
+                yield { type: "exit", exit_code: 130, message: "Cancelled" };
+                return;
+            }
+            throw e;
         }
     },
 

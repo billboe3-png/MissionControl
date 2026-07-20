@@ -131,48 +131,56 @@ class AIService:
         alert_id = 0
 
         zabbix = context.get("zabbix", {})
-        if isinstance(zabbix, dict) and zabbix.get("connected") is not False:
-            problem_count = zabbix.get("problem_count", 0)
-            if problem_count > 0:
-                critical = zabbix.get("critical_count", 0)
-                warning = zabbix.get("warning_count", 0)
-                for _ in range(min(critical, 5)):
+        if isinstance(zabbix, dict) and zabbix.get("connected") is not False and not zabbix.get("_mock"):
+            problems = zabbix.get("problems", [])
+            triggers = zabbix.get("triggers", [])
+            problem_triggers = [t for t in triggers if t.get("value") == "PROBLEM"]
+            if problem_triggers:
+                severity_map = {"disaster": "critical", "high": "critical", "average": "warning", "warning": "warning", "info": "info", "not_classified": "warning"}
+                for t in problem_triggers[:5]:
                     alert_id += 1
+                    hosts = t.get("hosts", [])
+                    host_name = hosts[0] if hosts else "Monitored Host"
+                    severity = severity_map.get(t.get("priority", "warning"), "warning")
+                    message = t.get("description", "Zabbix problem detected")
                     alerts.append(
                         {
                             "id": f"zbx_{alert_id}",
                             "source": "zabbix",
-                            "severity": "critical",
-                            "message": "Zabbix critical problem detected",
-                            "host_name": "Monitored Host",
+                            "severity": severity,
+                            "message": message,
+                            "host_name": host_name,
                             "timestamp": datetime.now(UTC).isoformat(),
                             "tags": ["zabbix", "monitoring"],
                             "affected_systems": ["monitoring"],
                             "host_importance": "zabbix_server",
-                            "alert_frequency": critical,
+                            "alert_frequency": 1,
                             "historical_failures": 0,
                         }
                     )
-                for _ in range(min(warning, 5)):
+            elif problems:
+                for p in problems[:5]:
                     alert_id += 1
+                    host = p.get("host", "Monitored Host")
                     alerts.append(
                         {
                             "id": f"zbx_{alert_id}",
                             "source": "zabbix",
-                            "severity": "warning",
-                            "message": "Zabbix warning detected",
-                            "host_name": "Monitored Host",
-                            "timestamp": datetime.now(UTC).isoformat(),
+                            "severity": p.get("severity", "warning"),
+                            "message": p.get("name", "Zabbix problem detected"),
+                            "host_name": host,
+                            "timestamp": p.get("timestamp", datetime.now(UTC).isoformat()),
                             "tags": ["zabbix", "monitoring"],
                             "affected_systems": ["monitoring"],
-                            "host_importance": "unknown",
-                            "alert_frequency": warning,
+                            "host_importance": "zabbix_server",
+                            "alert_frequency": 1,
                             "historical_failures": 0,
                         }
                     )
 
         hyperv = context.get("hyperv", {})
-        if isinstance(hyperv, dict) and hyperv.get("connected") is not False:
+        if isinstance(hyperv, dict) and hyperv.get("connected") is not False and not hyperv.get("_mock"):
+            hyperv_hostname = hyperv.get("hostname", "Hyper-V Host")
             stopped = hyperv.get("stopped", 0)
             if stopped > 0:
                 alert_id += 1
@@ -181,8 +189,8 @@ class AIService:
                         "id": f"hv_{alert_id}",
                         "source": "hyperv",
                         "severity": "warning",
-                        "message": f"{stopped} virtual machine(s) stopped",
-                        "host_name": "Hyper-V Host",
+                        "message": f"{stopped} virtual machine(s) stopped on {hyperv_hostname}",
+                        "host_name": hyperv_hostname,
                         "timestamp": datetime.now(UTC).isoformat(),
                         "tags": ["hyperv", "virtualization"],
                         "affected_systems": ["virtualization"],
@@ -224,9 +232,22 @@ class AIService:
     async def _get_zabbix(self) -> dict:
         try:
             from app.providers.zabbix.provider_factory import get_zabbix_provider
+            from app.providers.zabbix.mock_provider import MockZabbixProvider
 
             provider = get_zabbix_provider()
-            return await provider.get_summary()
+            data = await provider.get_summary()
+            data["_mock"] = isinstance(provider, MockZabbixProvider)
+            try:
+                problems = await provider.get_problems()
+                data["problems"] = problems.get("problems", [])
+            except Exception:
+                data.setdefault("problems", [])
+            try:
+                triggers = await provider.get_triggers()
+                data["triggers"] = triggers.get("triggers", [])
+            except Exception:
+                data.setdefault("triggers", [])
+            return data
         except Exception as e:
             logger.debug("AI: zabbix data failed: %s", e)
             return {}
@@ -236,8 +257,16 @@ class AIService:
             from app.providers.hyperv_dashboard import (
                 virtualization_dashboard_provider,
             )
+            from app.providers.hyperv.provider_factory import get_hyperv_provider
+            from app.providers.hyperv.mock_provider import MockHyperVProvider
 
-            return await virtualization_dashboard_provider.get_virtualization_data(db)
+            data = await virtualization_dashboard_provider.get_virtualization_data(db)
+            try:
+                provider = get_hyperv_provider(db)
+                data["_mock"] = isinstance(provider, MockHyperVProvider)
+            except Exception:
+                data["_mock"] = True
+            return data
         except Exception as e:
             logger.debug("AI: hyperv data failed: %s", e)
             return {}

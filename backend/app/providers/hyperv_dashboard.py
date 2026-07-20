@@ -36,6 +36,7 @@ class VirtualizationDashboardProvider:
 
             return {
                 "connected": True,
+                "hostname": summary.get("hostname", ""),
                 "total_vms": summary.get("total_vms", 0),
                 "running": summary.get("running", 0),
                 "stopped": summary.get("stopped", 0),

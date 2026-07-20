@@ -764,11 +764,13 @@ class SSHProvider(RemoteBaseProvider):
         """Execute a command and yield output chunks in real-time."""
         import asyncio
         import queue
+        import threading
         target = ip_address if ip_address else hostname
         timeouts = _get_timeouts()
         command_timeout = min(timeouts["command"], _get_max_command_timeout())
 
         q: queue.Queue = queue.Queue()
+        cancel_event = threading.Event()
 
         def _reader():
             import time
@@ -784,7 +786,7 @@ class SSHProvider(RemoteBaseProvider):
                 chan.send(command + "\n")
 
                 sudo_handled = False
-                while True:
+                while not cancel_event.is_set():
                     if chan.recv_ready():
                         data = chan.recv(4096).decode("utf-8", errors="replace")
 
@@ -809,6 +811,15 @@ class SSHProvider(RemoteBaseProvider):
 
                     time.sleep(0.1)
 
+                if cancel_event.is_set():
+                    try:
+                        chan.send_exit_status(130)
+                        chan.close()
+                    except Exception:
+                        pass
+                    q.put(("exit", 130))
+                    return
+
                 exit_code = chan.recv_exit_status()
                 q.put(("exit", exit_code))
             except Exception as e:
@@ -821,17 +832,21 @@ class SSHProvider(RemoteBaseProvider):
         loop = asyncio.get_event_loop()
         loop.run_in_executor(None, _reader)
 
-        while True:
-            item = await asyncio.get_event_loop().run_in_executor(None, q.get)
-            if item is None:
-                break
-            kind, value = item
-            if kind == "exit":
-                yield {"type": "exit", "exit_code": value}
-            elif kind == "error":
-                yield {"type": "error", "message": value}
-            else:
-                yield {"type": kind, "data": value}
+        try:
+            while True:
+                item = await asyncio.get_event_loop().run_in_executor(None, q.get)
+                if item is None:
+                    break
+                kind, value = item
+                if kind == "exit":
+                    yield {"type": "exit", "exit_code": value}
+                elif kind == "error":
+                    yield {"type": "error", "message": value}
+                else:
+                    yield {"type": kind, "data": value}
+        except asyncio.CancelledError:
+            cancel_event.set()
+            yield {"type": "error", "message": "Command cancelled"}
 
     # ------------------------------------------------------------------ #
     # File Transfer                                                       #

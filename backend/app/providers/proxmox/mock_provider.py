@@ -11,9 +11,6 @@ from .base_provider import ProxmoxProvider
 
 MOCK_MODE = "healthy"
 
-_mock_lxc_created: list[dict] = []
-_mock_lxc_deleted: set[str] = set()
-
 
 def set_mock_mode(mode: str) -> None:
     global MOCK_MODE

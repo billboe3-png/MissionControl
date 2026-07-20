@@ -211,8 +211,15 @@ async def execute_command_stream(
 ) -> StreamingResponse:
     async def event_generator():
         import json
-        async for chunk in service.execute_command_stream(db, payload):
-            yield f"data: {json.dumps(chunk)}\n\n"
+        import logging
+        from starlette.requests import Request
+        logger = logging.getLogger("missioncontrol")
+        try:
+            async for chunk in service.execute_command_stream(db, payload):
+                yield f"data: {json.dumps(chunk)}\n\n"
+        except Exception:
+            logger.info("Stream client disconnected, command may still be running on remote host")
+            yield f'data: {json.dumps({"type": "error", "message": "Connection lost"})}\n\n'
 
     return StreamingResponse(event_generator(), media_type="text/event-stream")
 

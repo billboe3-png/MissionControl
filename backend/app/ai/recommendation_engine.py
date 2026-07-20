@@ -166,6 +166,8 @@ class RecommendationEngine:
                     "id": f"rec_{host_name}_{template_key}_{idx}",
                     "action": template["action"],
                     "template_key": template_key,
+                    "host_name": host_name,
+                    "source": source,
                     "category": template["category"],
                     "confidence": confidence,
                     "risk": template["risk"],

@@ -10,13 +10,16 @@ Sprint 2.6.0 - AI Operations Engine.
 """
 
 import logging
+from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.ai.ai_service import ai_service
 from app.core.auth_dependency import get_current_user
 from app.db import get_db
+from app.models.db.user import User
 from app.schemas.ai import AISearchRequest
 
 logger = logging.getLogger(__name__)
@@ -26,6 +29,18 @@ router = APIRouter(
     tags=["AI Operations"],
     dependencies=[Depends(get_current_user)],
 )
+
+# In-memory store for recommendation approval status.
+# Recommendations are ephemeral (regenerated from alerts each request),
+# so we only track which ones the user has acted on.
+_recommendation_status: dict[str, dict] = {}
+
+
+class RecommendationStatusResponse(BaseModel):
+    id: str
+    status: str
+    action_by: str | None = None
+    action_at: str | None = None
 
 
 @router.get("/overview", summary="AI Operations Overview")
@@ -49,7 +64,57 @@ async def get_incidents(db: Session = Depends(get_db)):
 @router.get("/recommendations", summary="AI Recommendations")
 async def get_recommendations(db: Session = Depends(get_db)):
     """Get current AI recommendations."""
-    return await ai_service.get_recommendations(db)
+    result = await ai_service.get_recommendations(db)
+    for rec in result.get("recommendations", []):
+        status_info = _recommendation_status.get(rec["id"])
+        if status_info:
+            rec["status"] = status_info["status"]
+        else:
+            rec["status"] = "pending"
+    return result
+
+
+@router.post("/recommendations/{rec_id}/approve", summary="Approve Recommendation")
+async def approve_recommendation(
+    rec_id: str,
+    current_user: User = Depends(get_current_user),
+):
+    """Approve an AI recommendation for execution."""
+    _recommendation_status[rec_id] = {
+        "status": "approved",
+        "action_by": current_user.email,
+        "action_at": datetime.now(UTC).isoformat(),
+    }
+    logger.info("Recommendation %s approved by %s", rec_id, current_user.email)
+    return {"success": True, "status": "approved"}
+
+
+@router.post("/recommendations/{rec_id}/reject", summary="Reject Recommendation")
+async def reject_recommendation(
+    rec_id: str,
+    current_user: User = Depends(get_current_user),
+):
+    """Reject an AI recommendation."""
+    _recommendation_status[rec_id] = {
+        "status": "rejected",
+        "action_by": current_user.email,
+        "action_at": datetime.now(UTC).isoformat(),
+    }
+    logger.info("Recommendation %s rejected by %s", rec_id, current_user.email)
+    return {"success": True, "status": "rejected"}
+
+
+@router.get(
+    "/recommendations/{rec_id}/status",
+    response_model=RecommendationStatusResponse,
+    summary="Recommendation Status",
+)
+async def get_recommendation_status(rec_id: str):
+    """Get the approval status of a recommendation."""
+    info = _recommendation_status.get(rec_id)
+    if info:
+        return RecommendationStatusResponse(id=rec_id, **info)
+    return RecommendationStatusResponse(id=rec_id, status="pending")
 
 
 @router.get("/correlations", summary="Alert Correlations")

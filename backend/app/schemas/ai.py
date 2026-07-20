@@ -43,6 +43,9 @@ class AIIncidentResponse(BaseModel):
 class AIRecommendationResponse(BaseModel):
     id: str
     action: str
+    template_key: str
+    host_name: str
+    source: str
     category: str
     confidence: dict
     risk: str
@@ -50,6 +53,7 @@ class AIRecommendationResponse(BaseModel):
     estimated_impact: str
     explanation: str
     requires_approval: bool
+    status: str = "pending"
 
 
 class AIHealthScoreResponse(BaseModel):

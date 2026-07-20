@@ -39,6 +39,8 @@ export interface AIRecommendation {
     id: string;
     action: string;
     template_key: string;
+    host_name: string;
+    source: string;
     category: string;
     confidence: AIConfidence;
     risk: string;
@@ -46,6 +48,7 @@ export interface AIRecommendation {
     estimated_impact: string;
     explanation: string;
     requires_approval: boolean;
+    status: "pending" | "approved" | "rejected";
 }
 
 export interface AICorrelationGroup {
@@ -167,6 +170,18 @@ export const aiApi = {
 
     async getProviderStatus(): Promise<AIProviderStatus> {
         return apiClient<AIProviderStatus>(`${API}/provider/status`);
+    },
+
+    async approveRecommendation(id: string): Promise<{ success: boolean; status: string }> {
+        return apiClient<{ success: boolean; status: string }>(`${API}/recommendations/${id}/approve`, {
+            method: "POST",
+        });
+    },
+
+    async rejectRecommendation(id: string): Promise<{ success: boolean; status: string }> {
+        return apiClient<{ success: boolean; status: string }>(`${API}/recommendations/${id}/reject`, {
+            method: "POST",
+        });
     },
 
     async testProvider(): Promise<{

@@ -2073,6 +2073,17 @@ select.form-input {
     border-left: 3px solid var(--danger);
 }
 
+.stat-card-gray {
+    border-left: 3px solid var(--text-muted);
+}
+
+.empty-text {
+    color: var(--text-muted);
+    font-size: 0.88rem;
+    text-align: center;
+    padding: 20px;
+}
+
 .dashboard-row {
     display: grid;
     grid-template-columns: 1fr 1fr;
@@ -3319,6 +3330,51 @@ select.form-input {
     border-top: 1px solid var(--border);
 }
 
+/* Proxmox Table Pages */
+.proxmox-networks-table,
+.proxmox-nodes-table,
+.proxmox-snapshots-table,
+.proxmox-storage-table,
+.proxmox-tasks-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.85rem;
+}
+
+.proxmox-networks-table th,
+.proxmox-nodes-table th,
+.proxmox-snapshots-table th,
+.proxmox-storage-table th,
+.proxmox-tasks-table th {
+    text-align: left;
+    padding: 10px 12px;
+    background: var(--bg-secondary);
+    color: var(--text-muted);
+    font-weight: 600;
+    font-size: 0.78rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    border-bottom: 2px solid var(--border);
+}
+
+.proxmox-networks-table td,
+.proxmox-nodes-table td,
+.proxmox-snapshots-table td,
+.proxmox-storage-table td,
+.proxmox-tasks-table td {
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--border);
+    color: var(--text);
+}
+
+.proxmox-networks-table tr:hover,
+.proxmox-nodes-table tr:hover,
+.proxmox-snapshots-table tr:hover,
+.proxmox-storage-table tr:hover,
+.proxmox-tasks-table tr:hover {
+    background: var(--bg-secondary);
+}
+
 /* ==========================================================================
    Agents — Sprint 2.7
    ========================================================================== */
@@ -3379,6 +3435,24 @@ select.form-input {
     gap: 8px;
     font-size: 0.82rem;
     color: var(--text-muted);
+}
+
+.agent-heartbeat {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.82rem;
+    color: var(--text-muted);
+}
+
+.agent-heartbeat::before {
+    content: "";
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--success);
+    flex-shrink: 0;
 }
 
 .agent-meta-item {
@@ -3940,6 +4014,55 @@ select.form-input {
     padding: 2px 8px;
 }
 
+/* Identity Overview */
+.identity-overview-section {
+    margin-bottom: 20px;
+}
+
+.identity-overview-section h3 {
+    margin-bottom: 12px;
+    color: var(--text);
+}
+
+/* AD Overview */
+.ad-overview {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.ad-info-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: 12px;
+}
+
+.ad-info-card {
+    padding: 14px 16px;
+    background: var(--background);
+    border-radius: 8px;
+    border: 1px solid var(--border);
+}
+
+.ad-info-card h4 {
+    margin: 0 0 8px;
+    font-size: 0.88rem;
+    color: var(--text);
+}
+
+.ad-info-card p {
+    margin: 0;
+    font-size: 0.82rem;
+    color: var(--text-muted);
+}
+
+/* Microsoft 365 Overview */
+.m365-overview {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: 12px;
+}
+
 /* ---- Hyper-V Replication ---- */
 
 .hyperv-repl-card {
@@ -4118,7 +4241,8 @@ select.form-input {
 }
 
 .ai-health-bar-available,
-.ai-health-bar-connected {
+.ai-health-bar-connected,
+.ai-health-bar-healthy {
     background: var(--success);
 }
 
@@ -4127,7 +4251,9 @@ select.form-input {
 }
 
 .ai-health-bar-disconnected,
-.ai-health-bar-degraded {
+.ai-health-bar-degraded,
+.ai-health-bar-unhealthy,
+.ai-health-bar-unavailable {
     background: var(--danger);
 }
 
@@ -4287,6 +4413,298 @@ select.form-input {
 
 .ai-link:hover {
     text-decoration: underline;
+}
+
+/* AI Overview - Health Breakdown */
+.ai-health-breakdown {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.ai-health-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 12px;
+    background: var(--background);
+    border-radius: 6px;
+    font-size: 0.85rem;
+}
+
+.ai-health-source {
+    font-weight: 600;
+    color: var(--text);
+}
+
+.ai-health-status {
+    font-size: 0.8rem;
+    padding: 2px 8px;
+    border-radius: 10px;
+    text-transform: capitalize;
+}
+
+/* AI Overview - Risk List */
+.ai-risk-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.ai-risk-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 14px;
+    background: var(--background);
+    border-radius: 6px;
+    border-left: 3px solid var(--border);
+    font-size: 0.85rem;
+}
+
+.ai-risk-critical { border-left-color: var(--danger); }
+.ai-risk-high { border-left-color: var(--warning); }
+.ai-risk-medium { border-left-color: var(--primary); }
+.ai-risk-low { border-left-color: var(--success); }
+
+.ai-risk-source {
+    font-weight: 600;
+    color: var(--primary);
+    min-width: 70px;
+    text-transform: capitalize;
+}
+
+.ai-risk-host {
+    font-weight: 500;
+    color: var(--text);
+    min-width: 120px;
+}
+
+.ai-risk-priority {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    min-width: 40px;
+}
+
+.ai-risk-message {
+    color: var(--text-muted);
+    flex: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* AI Correlations */
+.ai-corr-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.ai-corr-item {
+    padding: 12px 16px;
+    background: var(--background);
+    border-radius: 6px;
+    border-left: 3px solid var(--border);
+}
+
+.ai-corr-item.ai-risk-critical { border-left-color: var(--danger); }
+.ai-corr-item.ai-risk-high { border-left-color: var(--warning); }
+.ai-corr-item.ai-risk-medium { border-left-color: var(--primary); }
+.ai-corr-item.ai-risk-low { border-left-color: var(--success); }
+
+.ai-corr-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.ai-corr-id {
+    font-weight: 700;
+    color: var(--text);
+    font-size: 0.88rem;
+}
+
+.ai-corr-host {
+    font-weight: 500;
+    color: var(--primary);
+}
+
+.ai-corr-count {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    background: var(--bg-secondary);
+    padding: 2px 8px;
+    border-radius: 10px;
+}
+
+.ai-corr-type {
+    font-size: 0.78rem;
+    color: var(--text-muted);
+    font-style: italic;
+}
+
+.ai-corr-sources {
+    margin-top: 6px;
+    font-size: 0.8rem;
+    color: var(--text-muted);
+}
+
+/* AI Severity Distribution */
+.ai-severity-dist {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-bottom: 16px;
+}
+
+.ai-severity-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 12px;
+    background: var(--background);
+    border-radius: 6px;
+}
+
+.ai-severity-label {
+    font-size: 0.85rem;
+    font-weight: 500;
+    color: var(--text);
+    text-transform: capitalize;
+}
+
+.ai-severity-count {
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: var(--primary);
+}
+
+/* AI Source Badges */
+.ai-source-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.ai-source-badge {
+    display: inline-block;
+    padding: 4px 12px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    font-size: 0.8rem;
+    font-weight: 500;
+    color: var(--text);
+    text-transform: capitalize;
+}
+
+/* AI Search (HistoryPage) */
+.ai-search-container {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    margin-bottom: 12px;
+}
+
+.ai-example-queries {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    align-items: center;
+    margin-bottom: 16px;
+}
+
+.ai-examples-label {
+    font-size: 0.82rem;
+    color: var(--text-muted);
+}
+
+.ai-example-btn {
+    padding: 4px 12px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    font-size: 0.78rem;
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s;
+}
+
+.ai-example-btn:hover {
+    background: var(--primary);
+    color: #fff;
+    border-color: var(--primary);
+}
+
+.ai-search-result {
+    margin-top: 16px;
+    padding: 16px;
+    background: var(--background);
+    border-radius: 8px;
+    border: 1px solid var(--border);
+}
+
+.ai-search-result h4 {
+    margin: 0 0 10px;
+    color: var(--text);
+}
+
+.ai-answer-text {
+    font-size: 0.92rem;
+    color: var(--text);
+    line-height: 1.6;
+    margin-bottom: 10px;
+}
+
+.ai-answer-meta {
+    display: flex;
+    gap: 16px;
+    font-size: 0.82rem;
+    color: var(--text-muted);
+}
+
+.ai-answer-confidence {
+    font-weight: 600;
+}
+
+.ai-answer-sources {
+    font-style: italic;
+}
+
+/* AI Search History */
+.ai-history-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.ai-history-item {
+    padding: 12px 16px;
+    background: var(--background);
+    border-radius: 6px;
+    border: 1px solid var(--border);
+}
+
+.ai-history-query {
+    font-weight: 600;
+    color: var(--text);
+    font-size: 0.88rem;
+    margin-bottom: 4px;
+}
+
+.ai-history-answer {
+    font-size: 0.82rem;
+    color: var(--text-muted);
+    line-height: 1.5;
+    margin-bottom: 4px;
+}
+
+.ai-history-meta {
+    font-size: 0.78rem;
+    color: var(--primary);
+    font-weight: 500;
 }
 
 /* ==========================================================================
@@ -4569,4 +4987,679 @@ select.form-input {
 
 .btn-link:hover {
     text-decoration: underline;
+}
+
+/* ==========================================================================
+   AI Recommendations – Card Layout
+   ========================================================================== */
+
+.ai-rec-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(420px, 1fr));
+    gap: 16px;
+}
+
+.ai-rec-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-top: 3px solid var(--primary);
+    border-radius: var(--radius);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.ai-rec-card:hover {
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+}
+
+.ai-rec-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    padding: 16px 16px 0;
+    gap: 12px;
+}
+
+.ai-rec-card-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--text);
+    line-height: 1.3;
+}
+
+.ai-rec-card-icon {
+    font-size: 1.1rem;
+    flex-shrink: 0;
+}
+
+.ai-rec-card-badges {
+    display: flex;
+    gap: 6px;
+    flex-shrink: 0;
+}
+
+.ai-rec-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    border: 1px solid transparent;
+    white-space: nowrap;
+}
+
+.ai-rec-badge-category {
+    background: var(--surface-hover);
+    color: var(--text-muted);
+    border-color: var(--border);
+}
+
+.ai-rec-card-body {
+    padding: 14px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    flex: 1;
+}
+
+.ai-rec-card-row {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+}
+
+.ai-rec-card-label {
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-muted);
+}
+
+.ai-rec-card-text {
+    font-size: 0.85rem;
+    color: var(--text);
+    line-height: 1.45;
+}
+
+.ai-rec-card-value-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.ai-rec-confidence-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: 1;
+}
+
+.ai-rec-confidence-track {
+    flex: 1;
+    height: 6px;
+    background: var(--border);
+    border-radius: 3px;
+    overflow: hidden;
+}
+
+.ai-rec-confidence-fill {
+    height: 100%;
+    border-radius: 3px;
+    transition: width 0.3s ease;
+}
+
+.ai-rec-confidence-text {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--text);
+    min-width: 36px;
+    text-align: right;
+}
+
+.ai-rec-conf-level {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+}
+
+.ai-rec-card-footer {
+    padding: 10px 16px;
+    border-top: 1px solid var(--border);
+    background: rgba(245, 158, 11, 0.04);
+}
+
+.ai-rec-approval-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.78rem;
+    color: var(--warning);
+    font-weight: 500;
+}
+
+.ai-rec-approval-icon {
+    font-size: 0.85rem;
+}
+
+@media (max-width: 900px) {
+    .ai-rec-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+.ai-rec-card-resolved {
+    opacity: 0.65;
+}
+
+.ai-rec-card-row-host {
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--border);
+}
+
+.ai-rec-card-host {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.88rem;
+    font-weight: 600;
+    color: var(--text);
+}
+
+.ai-rec-host-icon {
+    font-size: 0.9rem;
+}
+
+.ai-rec-host-source {
+    font-weight: 400;
+    color: var(--text-muted);
+    font-size: 0.78rem;
+}
+
+.ai-rec-badge-approved {
+    background: rgba(34, 197, 94, 0.15);
+    color: var(--success);
+    border-color: var(--success);
+}
+
+.ai-rec-badge-rejected {
+    background: rgba(239, 68, 68, 0.15);
+    color: var(--danger);
+    border-color: var(--danger);
+}
+
+.ai-rec-card-actions {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.ai-rec-approval-hint {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.78rem;
+    color: var(--text-muted);
+}
+
+.ai-rec-approval-icon {
+    font-size: 0.85rem;
+}
+
+.ai-rec-action-buttons {
+    display: flex;
+    gap: 8px;
+}
+
+.ai-rec-btn-approve {
+    background: var(--success);
+    color: #fff;
+    border: none;
+    padding: 5px 14px;
+    border-radius: var(--radius-sm);
+    font-size: 0.78rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: opacity 0.15s;
+}
+
+.ai-rec-btn-approve:hover {
+    opacity: 0.85;
+}
+
+.ai-rec-btn-reject {
+    background: transparent;
+    color: var(--danger);
+    border: 1px solid var(--danger);
+    padding: 5px 14px;
+    border-radius: var(--radius-sm);
+    font-size: 0.78rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.15s;
+}
+
+.ai-rec-btn-reject:hover {
+    background: rgba(239, 68, 68, 0.1);
+}
+
+.ai-rec-resolved-text {
+    font-size: 0.78rem;
+    font-weight: 500;
+    color: var(--text-muted);
+}
+
+.ai-incident-actions-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.ai-incident-action-item {
+    font-size: 0.82rem;
+    color: var(--text);
+    padding: 4px 10px;
+    background: var(--bg-secondary);
+    border-radius: var(--radius-sm);
+    border-left: 3px solid var(--primary);
+}
+
+/* ==========================================================================
+   AI Overview - Health Breakdown & Risks
+   ========================================================================== */
+
+.ai-health-breakdown {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.ai-health-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 12px;
+    background: var(--background);
+    border-radius: 6px;
+}
+
+.ai-health-source {
+    font-weight: 600;
+    color: var(--text);
+    font-size: 0.85rem;
+}
+
+.ai-health-status {
+    font-size: 0.8rem;
+    padding: 2px 8px;
+    border-radius: 10px;
+    text-transform: capitalize;
+}
+
+.ai-risk-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.ai-risk-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 12px;
+    background: var(--background);
+    border-radius: 6px;
+    font-size: 0.85rem;
+}
+
+.ai-risk-item.ai-risk-critical { border-left: 3px solid var(--danger); }
+.ai-risk-item.ai-risk-high { border-left: 3px solid var(--warning); }
+.ai-risk-item.ai-risk-medium { border-left: 3px solid var(--primary); }
+.ai-risk-item.ai-risk-low { border-left: 3px solid var(--success); }
+
+.ai-risk-source {
+    color: var(--text-muted);
+    font-size: 0.78rem;
+    min-width: 60px;
+    text-transform: capitalize;
+}
+
+.ai-risk-host {
+    font-weight: 600;
+    color: var(--text);
+    min-width: 100px;
+}
+
+.ai-risk-priority {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+}
+
+.ai-risk-message {
+    color: var(--text);
+    flex: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* ==========================================================================
+   AI Correlations Page
+   ========================================================================== */
+
+.ai-corr-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.ai-corr-item {
+    padding: 12px 16px;
+    background: var(--background);
+    border-radius: 6px;
+    border-left: 3px solid var(--border);
+}
+
+.ai-corr-item.ai-risk-critical { border-left-color: var(--danger); }
+.ai-corr-item.ai-risk-high { border-left-color: var(--warning); }
+.ai-corr-item.ai-risk-medium { border-left-color: var(--primary); }
+.ai-corr-item.ai-risk-low { border-left-color: var(--success); }
+
+.ai-corr-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.ai-corr-id {
+    font-weight: 700;
+    color: var(--text);
+    font-size: 0.82rem;
+}
+
+.ai-corr-host {
+    font-weight: 600;
+    color: var(--primary);
+    font-size: 0.85rem;
+}
+
+.ai-corr-count {
+    font-size: 0.78rem;
+    color: var(--text-muted);
+    background: var(--bg-secondary);
+    padding: 2px 8px;
+    border-radius: 10px;
+}
+
+.ai-corr-type {
+    font-size: 0.78rem;
+    color: var(--text-muted);
+    font-style: italic;
+}
+
+.ai-corr-sources {
+    margin-top: 6px;
+    font-size: 0.82rem;
+    color: var(--text-muted);
+}
+
+.ai-severity-dist {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.ai-severity-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 12px;
+    background: var(--background);
+    border-radius: 6px;
+}
+
+.ai-severity-label {
+    font-size: 0.85rem;
+    font-weight: 500;
+    color: var(--text);
+    text-transform: capitalize;
+}
+
+.ai-severity-count {
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: var(--primary);
+}
+
+.ai-source-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 8px;
+}
+
+.ai-source-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 4px 10px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    font-size: 0.78rem;
+    font-weight: 500;
+    color: var(--text);
+}
+
+/* ==========================================================================
+   AI History / Search Page
+   ========================================================================== */
+
+.ai-search-container {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 12px;
+}
+
+.ai-example-queries {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: 16px;
+}
+
+.ai-examples-label {
+    font-size: 0.82rem;
+    color: var(--text-muted);
+    margin-right: 4px;
+}
+
+.ai-example-btn {
+    padding: 4px 12px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    font-size: 0.78rem;
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: all 0.15s;
+}
+
+.ai-example-btn:hover {
+    background: var(--primary);
+    color: #fff;
+    border-color: var(--primary);
+}
+
+.ai-search-result {
+    margin-top: 16px;
+    padding: 16px;
+    background: var(--background);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+}
+
+.ai-search-result h4 {
+    margin: 0 0 8px;
+    font-size: 0.95rem;
+    color: var(--text);
+}
+
+.ai-answer-text {
+    font-size: 0.88rem;
+    line-height: 1.6;
+    color: var(--text);
+    margin-bottom: 10px;
+}
+
+.ai-answer-meta {
+    display: flex;
+    gap: 16px;
+    font-size: 0.82rem;
+    color: var(--text-muted);
+    padding-top: 8px;
+    border-top: 1px solid var(--border);
+}
+
+.ai-answer-confidence {
+    font-weight: 600;
+}
+
+.ai-answer-sources {
+    font-style: italic;
+}
+
+.ai-history-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.ai-history-item {
+    padding: 12px 16px;
+    background: var(--background);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+}
+
+.ai-history-query {
+    font-weight: 600;
+    color: var(--text);
+    font-size: 0.88rem;
+    margin-bottom: 4px;
+}
+
+.ai-history-answer {
+    font-size: 0.82rem;
+    color: var(--text-muted);
+    line-height: 1.5;
+}
+
+.ai-history-meta {
+    font-size: 0.78rem;
+    color: var(--primary);
+    margin-top: 4px;
+}
+
+/* ==========================================================================
+   Identity / Active Directory / M365
+   ========================================================================== */
+
+.identity-overview-section {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 18px;
+    margin-bottom: 16px;
+}
+
+.ad-overview {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.ad-info-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 12px;
+}
+
+.ad-info-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px;
+}
+
+.ad-info-card h4 {
+    margin: 0 0 8px;
+    font-size: 0.95rem;
+    color: var(--text);
+}
+
+.m365-overview {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 12px;
+}
+
+/* ==========================================================================
+   Agents — Heartbeat
+   ========================================================================== */
+
+.agent-heartbeat {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 0.78rem;
+    color: var(--text-muted);
+}
+
+/* ==========================================================================
+   Proxmox Table Pages
+   ========================================================================== */
+
+.proxmox-nodes-table,
+.proxmox-storage-table,
+.proxmox-networks-table,
+.proxmox-snapshots-table,
+.proxmox-tasks-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.proxmox-nodes-table th,
+.proxmox-storage-table th,
+.proxmox-networks-table th,
+.proxmox-snapshots-table th,
+.proxmox-tasks-table th {
+    text-align: left;
+    padding: 8px 12px;
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    border-bottom: 2px solid var(--border);
+}
+
+.proxmox-nodes-table td,
+.proxmox-storage-table td,
+.proxmox-networks-table td,
+.proxmox-snapshots-table td,
+.proxmox-tasks-table td {
+    padding: 8px 12px;
+    font-size: 0.85rem;
+    color: var(--text);
+    border-bottom: 1px solid var(--border);
 }

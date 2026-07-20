@@ -467,20 +467,25 @@ class RemoteService:
 
         import time
         start_time = time.monotonic()
-        async for chunk in provider.execute_command_stream(
-            hostname=host.hostname,
-            port=host.port,
-            username=username or "unknown",
-            password=password,
-            ssh_key=ssh_key,
-            command=request.command,
-            shell=request.shell,
-            ip_address=host.ip_address,
-        ):
-            yield chunk
+        last_chunk = {}
+        try:
+            async for chunk in provider.execute_command_stream(
+                hostname=host.hostname,
+                port=host.port,
+                username=username or "unknown",
+                password=password,
+                ssh_key=ssh_key,
+                command=request.command,
+                shell=request.shell,
+                ip_address=host.ip_address,
+            ):
+                last_chunk = chunk
+                yield chunk
+        except Exception:
+            return
 
         duration_ms = int((time.monotonic() - start_time) * 1000)
-        exit_code = chunk.get("exit_code", -1) if chunk.get("type") == "exit" else -1
+        exit_code = last_chunk.get("exit_code", -1) if last_chunk.get("type") == "exit" else -1
         success = exit_code == 0
 
         CommandHistoryRepository.create(

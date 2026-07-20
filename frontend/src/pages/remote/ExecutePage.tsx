@@ -62,7 +62,7 @@ export default function ExecutePage() {
                 host_id: selectedHostId,
                 command: command.trim(),
                 shell: shell || undefined,
-            });
+            }, abort.signal);
 
             for await (const chunk of stream) {
                 if (abort.signal.aborted) break;
@@ -76,16 +76,26 @@ export default function ExecutePage() {
                     const code = chunk.exit_code ?? -1;
                     setExitCode(code);
                     setSuccess(code === 0);
-                    showToast(code === 0 ? "Command completed" : `Command failed (exit ${code})`, code === 0 ? undefined : "error");
+                    if (code === 130) {
+                        showToast("Command cancelled", undefined);
+                    } else {
+                        showToast(code === 0 ? "Command completed" : `Command failed (exit ${code})`, code === 0 ? undefined : "error");
+                    }
                 } else if (chunk.type === "error") {
                     setError(chunk.message ?? "Unknown error");
                     showToast(chunk.message ?? "Unknown error", "error");
                 }
             }
         } catch (e: unknown) {
-            const msg = e instanceof Error ? e.message : "Execution failed";
-            setError(msg);
-            showToast(msg, "error");
+            if (e instanceof DOMException && e.name === "AbortError") {
+                setExitCode(130);
+                setSuccess(false);
+                showToast("Command cancelled", undefined);
+            } else {
+                const msg = e instanceof Error ? e.message : "Execution failed";
+                setError(msg);
+                showToast(msg, "error");
+            }
         } finally {
             setRunning(false);
             abortRef.current = null;
