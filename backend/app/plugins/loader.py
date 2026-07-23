@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import Any
 
 from app.plugins.base import PluginSDK
+from app.plugins.server import ServerPluginSDK
 from app.schemas.plugin import PluginManifest
 
 logger = logging.getLogger(__name__)
@@ -94,14 +95,15 @@ class PluginLoader:
         except ImportError as exc:
             raise PluginLoadError(f"Failed to import plugin module '{module_name}': {exc}")
 
-        # Find the PluginSDK subclass
+        # Find the PluginSDK subclass (exclude base + abstract intermediaries)
         plugin_class = None
+        _skip = {PluginSDK, ServerPluginSDK}
         for attr_name in dir(module):
             attr = getattr(module, attr_name)
             if (
                 isinstance(attr, type)
                 and issubclass(attr, PluginSDK)
-                and attr is not PluginSDK
+                and attr not in _skip
             ):
                 plugin_class = attr
                 break

@@ -453,9 +453,13 @@ class TestIntegrationService:
             db_session,
             name="M365Test",
             integration_type="microsoft_365",
+            tenant_id="test-tenant",
+            client_id="test-client",
+            client_secret_encrypted="encrypted-test-secret",
         )
         result = await service.test_connection(db_session, profile.id)
-        assert result.success is True
+        assert result.success is False
+        assert result.error is not None
 
 
 # ------------------------------------------------------------------ #

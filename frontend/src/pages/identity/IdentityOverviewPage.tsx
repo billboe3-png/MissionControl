@@ -17,7 +17,7 @@ export default function IdentityOverviewPage() {
     if (error) return <div className="error-banner">{error}</div>;
     if (!data) return <div className="loading-bar" />;
 
-    const ad = data.overview.ad;
+    const adEntries = data.overview.ad;
     const m365 = data.overview.m365;
 
     return (
@@ -26,62 +26,76 @@ export default function IdentityOverviewPage() {
                 title="Identity & Access"
                 subtitle="Active Directory and Microsoft 365 overview"
             />
-            <div className="identity-overview-section">
-                <h3>Active Directory</h3>
-                <div className="infra-overview-grid">
-                    <div className="infra-overview-card">
-                        <div className="infra-card-header">
-                            <span className="infra-card-label">Status</span>
-                            <StatusBadge
-                                status={ad.connected ? "healthy" : "error"}
-                                label={ad.connected ? "Connected" : "Disconnected"}
-                            />
-                        </div>
-                    </div>
-                    <div className="infra-overview-card">
-                        <div className="infra-card-header">
-                            <span className="infra-card-label">Domain</span>
-                            <StatusBadge status="info" label={ad.domain} />
-                        </div>
-                    </div>
-                    <div className="infra-overview-card">
-                        <div className="infra-card-header">
-                            <span className="infra-card-label">Users</span>
-                            <StatusBadge
-                                status={ad.user_count > 0 ? "healthy" : "neutral"}
-                                label={String(ad.user_count)}
-                            />
-                        </div>
-                    </div>
-                    <div className="infra-overview-card">
-                        <div className="infra-card-header">
-                            <span className="infra-card-label">Groups</span>
-                            <StatusBadge
-                                status={ad.group_count > 0 ? "healthy" : "neutral"}
-                                label={String(ad.group_count)}
-                            />
-                        </div>
-                    </div>
-                    <div className="infra-overview-card">
-                        <div className="infra-card-header">
-                            <span className="infra-card-label">Computers</span>
-                            <StatusBadge
-                                status={ad.computer_count > 0 ? "healthy" : "neutral"}
-                                label={String(ad.computer_count)}
-                            />
-                        </div>
-                    </div>
-                    <div className="infra-overview-card">
-                        <div className="infra-card-header">
-                            <span className="infra-card-label">Health</span>
-                            <StatusBadge
-                                status={ad.health === "healthy" ? "healthy" : ad.health === "degraded" ? "warning" : "neutral"}
-                                label={ad.health}
-                            />
-                        </div>
-                    </div>
+            {adEntries.length === 0 ? (
+                <div className="identity-overview-section">
+                    <h3>Active Directory</h3>
+                    <p className="empty-text">No Active Directory domains configured.</p>
                 </div>
-            </div>
+            ) : (
+                adEntries.map((ad) => (
+                    <div key={ad.profile_id} className="identity-overview-section">
+                        <h3>
+                            Active Directory
+                            {adEntries.length > 1 && (
+                                <span className="ad-domain-title"> — {ad.domain}</span>
+                            )}
+                        </h3>
+                        <div className="infra-overview-grid">
+                            <div className="infra-overview-card">
+                                <div className="infra-card-header">
+                                    <span className="infra-card-label">Status</span>
+                                    <StatusBadge
+                                        status={ad.connected ? "healthy" : "error"}
+                                        label={ad.connected ? "Connected" : "Disconnected"}
+                                    />
+                                </div>
+                            </div>
+                            <div className="infra-overview-card">
+                                <div className="infra-card-header">
+                                    <span className="infra-card-label">Domain</span>
+                                    <StatusBadge status="info" label={ad.domain} />
+                                </div>
+                            </div>
+                            <div className="infra-overview-card">
+                                <div className="infra-card-header">
+                                    <span className="infra-card-label">Users</span>
+                                    <StatusBadge
+                                        status={ad.user_count > 0 ? "healthy" : "neutral"}
+                                        label={String(ad.user_count)}
+                                    />
+                                </div>
+                            </div>
+                            <div className="infra-overview-card">
+                                <div className="infra-card-header">
+                                    <span className="infra-card-label">Groups</span>
+                                    <StatusBadge
+                                        status={ad.group_count > 0 ? "healthy" : "neutral"}
+                                        label={String(ad.group_count)}
+                                    />
+                                </div>
+                            </div>
+                            <div className="infra-overview-card">
+                                <div className="infra-card-header">
+                                    <span className="infra-card-label">Computers</span>
+                                    <StatusBadge
+                                        status={ad.computer_count > 0 ? "healthy" : "neutral"}
+                                        label={String(ad.computer_count)}
+                                    />
+                                </div>
+                            </div>
+                            <div className="infra-overview-card">
+                                <div className="infra-card-header">
+                                    <span className="infra-card-label">Health</span>
+                                    <StatusBadge
+                                        status={ad.health === "healthy" ? "healthy" : ad.health === "degraded" ? "warning" : "neutral"}
+                                        label={ad.health}
+                                    />
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                ))
+            )}
             <div className="identity-overview-section">
                 <h3>Microsoft 365</h3>
                 <div className="infra-overview-grid">

@@ -53,12 +53,13 @@ class GraphMicrosoft365Provider(Microsoft365Provider):
 
     GRAPH_BASE = "https://graph.microsoft.com/v1.0"
 
-    def __init__(self) -> None:
+    def __init__(self, config: dict | None = None) -> None:
         self._token: str | None = None
+        self._config_override = config
 
     def _is_configured(self) -> bool:
         """Check if M365 is configured."""
-        config = _get_m365_config()
+        config = self._config_override or _get_m365_config()
         return bool(config["tenant_id"] and config["client_id"])
 
     def _get_token(self) -> str | None:
@@ -66,7 +67,7 @@ class GraphMicrosoft365Provider(Microsoft365Provider):
         if self._token:
             return self._token
 
-        config = _get_m365_config()
+        config = self._config_override or _get_m365_config()
 
         try:
             import msal

@@ -16,6 +16,11 @@ export interface IntegrationProfile {
     domain: string | null;
     base_dn: string | null;
     use_ssl: boolean;
+    ssh_host: string | null;
+    ssh_port: number;
+    ssh_username: string | null;
+    has_ssh_password: boolean;
+    data_source: string;
     verify_ssl: boolean;
     timeout: number;
     poll_interval: number;
@@ -41,6 +46,11 @@ export interface IntegrationProfileCreate {
     domain?: string;
     base_dn?: string;
     use_ssl?: boolean;
+    ssh_host?: string;
+    ssh_port?: number;
+    ssh_username?: string;
+    ssh_password?: string;
+    data_source?: string;
     verify_ssl?: boolean;
     timeout?: number;
     poll_interval?: number;

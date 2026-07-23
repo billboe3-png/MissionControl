@@ -12,8 +12,9 @@ import ADConfigModal from "../../components/modals/ADConfigModal";
 import M365ConfigModal from "../../components/modals/M365ConfigModal";
 import HypervConfigModal from "../../components/modals/HypervConfigModal";
 import ProxmoxConfigModal from "../../components/modals/ProxmoxConfigModal";
+import VeeamConfigModal from "../../components/modals/VeeamConfigModal";
 
-type ConfigModalType = "zabbix" | "active_directory" | "microsoft_365" | "hyperv" | "proxmox" | null;
+type ConfigModalType = "zabbix" | "active_directory" | "microsoft_365" | "hyperv" | "proxmox" | "veeam" | null;
 
 const INTEGRATION_DEFS: {
     type: ConfigModalType;
@@ -51,6 +52,12 @@ const INTEGRATION_DEFS: {
         icon: "🐧",
         description: "Proxmox Virtual Environment — nodes, VMs, LXC containers, storage and networks.",
     },
+    {
+        type: "veeam",
+        label: "Veeam Backup",
+        icon: "💾",
+        description: "Veeam B&R — backup jobs, repositories, sessions, restore points and server health.",
+    },
 ];
 
 export default function IntegrationsPage() {
@@ -65,11 +72,19 @@ export default function IntegrationsPage() {
         success: boolean;
         message: string;
     } | null>(null);
+    const [expandedTypes, setExpandedTypes] = useState<Set<string>>(new Set());
 
     const load = async () => {
         try {
             const items = await integrationsApi.list();
             setProfiles(items);
+            // Auto-expand types that have profiles
+            const types = new Set(items.map((p) => p.integration_type));
+            setExpandedTypes((prev) => {
+                const next = new Set(prev);
+                types.forEach((t) => next.add(t));
+                return next;
+            });
         } catch (e) {
             setError(e instanceof Error ? e.message : "Failed to load");
         } finally {
@@ -83,6 +98,18 @@ export default function IntegrationsPage() {
 
     const getProfiles = (type: string) =>
         profiles.filter((p) => p.integration_type === type);
+
+    const toggleExpand = (type: string) => {
+        setExpandedTypes((prev) => {
+            const next = new Set(prev);
+            if (next.has(type)) {
+                next.delete(type);
+            } else {
+                next.add(type);
+            }
+            return next;
+        });
+    };
 
     const handleToggle = async (profile: IntegrationProfile) => {
         try {
@@ -165,147 +192,148 @@ export default function IntegrationsPage() {
                 />
             )}
 
-            <div className="integrations-grid">
+            <div className="integrations-type-groups">
                 {INTEGRATION_DEFS.map((def) => {
                     const typeProfiles = def.type ? getProfiles(def.type) : [];
-                    return typeProfiles.length > 0 ? (
-                        typeProfiles.map((profile) => {
-                            const connected =
-                                profile.enabled &&
-                                profile.last_success !== null &&
-                                profile.last_error === null;
-                            return (
-                                <div
-                                    key={profile.id}
-                                    className={`integration-card ${profile.enabled ? "enabled" : ""}`}
-                                >
-                                    <div className="integration-card-header">
-                                        <span className="integration-card-icon">{def.icon}</span>
-                                        <div className="integration-card-title">
-                                            <h3>{def.label} — {profile.name}</h3>
+                    const isExpanded = expandedTypes.has(def.type ?? "");
+                    const connectedCount = typeProfiles.filter(
+                        (p) => p.enabled && p.last_success !== null && p.last_error === null
+                    ).length;
+                    const hasProfiles = typeProfiles.length > 0;
+
+                    return (
+                        <div key={def.type} className={`integrations-type-group ${isExpanded ? "expanded" : ""}`}>
+                            <div
+                                className="integrations-type-header"
+                                onClick={() => toggleExpand(def.type ?? "")}
+                            >
+                                <div className="integrations-type-left">
+                                    <span className="integrations-type-chevron">{isExpanded ? "\u25BC" : "\u25B6"}</span>
+                                    <span className="integrations-type-icon">{def.icon}</span>
+                                    <span className="integrations-type-label">{def.label}</span>
+                                    <span className="integrations-type-count">
+                                        {typeProfiles.length > 0
+                                            ? `${typeProfiles.length} connection${typeProfiles.length !== 1 ? "s" : ""}`
+                                            : "Not configured"}
+                                    </span>
+                                </div>
+                                <div className="integrations-type-right">
+                                    {hasProfiles && (
+                                        <span className={`integrations-type-badge ${connectedCount === typeProfiles.length ? "all-connected" : connectedCount > 0 ? "some-connected" : ""}`}>
+                                            {connectedCount}/{typeProfiles.length} connected
+                                        </span>
+                                    )}
+                                    <button
+                                        className="btn btn-primary btn-sm"
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            handleConfigure(def.type);
+                                        }}
+                                    >
+                                        + Add
+                                    </button>
+                                </div>
+                            </div>
+
+                            {isExpanded && (
+                                <div className="integrations-type-body">
+                                    {!hasProfiles ? (
+                                        <div className="integrations-type-empty">
                                             <p>{def.description}</p>
-                                        </div>
-                                    </div>
-
-                                    <div className="integration-card-status">
-                                        {!profile.enabled ? (
-                                            <StatusBadge status="neutral" label="Disabled" />
-                                        ) : connected ? (
-                                            <StatusBadge status="healthy" label="Connected" />
-                                        ) : profile.last_error ? (
-                                            <StatusBadge status="error" label="Error" />
-                                        ) : (
-                                            <StatusBadge status="warning" label="Enabled (untested)" />
-                                        )}
-
-                                        {testResult && testResult.id === profile.id && (
-                                            <span
-                                                className={`integration-test-result ${testResult.success ? "success" : "error"}`}
+                                            <button
+                                                className="btn btn-primary btn-sm"
+                                                onClick={() => handleConfigure(def.type)}
                                             >
-                                                {testResult.message}
-                                            </span>
-                                        )}
-                                    </div>
-
-                                    <div className="integration-card-meta">
-                                        {profile.username && (
-                                            <span>{profile.username}</span>
-                                        )}
-                                        {profile.base_url && (
-                                            <span className="integration-meta-url">
-                                                {profile.base_url}
-                                            </span>
-                                        )}
-                                        {profile.last_test && (
-                                            <span>
-                                                Last tested:{" "}
-                                                {new Date(profile.last_test).toLocaleString()}
-                                            </span>
-                                        )}
-                                    </div>
-
-                                    <div className="integration-card-actions">
-                                        <LoadingButton
-                                            loading={testingId === profile.id}
-                                            className="btn btn-secondary btn-sm"
-                                            onClick={() => handleTest(profile)}
-                                        >
-                                            Test
-                                        </LoadingButton>
-                                        <button
-                                            className={`btn btn-sm ${profile.enabled ? "btn-warning" : "btn-primary"}`}
-                                            onClick={() => handleToggle(profile)}
-                                        >
-                                            {profile.enabled ? "Disable" : "Enable"}
-                                        </button>
-                                        <button
-                                            className="btn btn-secondary btn-sm"
-                                            onClick={() => handleConfigure(def.type, profile)}
-                                        >
-                                            Configure
-                                        </button>
-                                        <button
-                                            className="btn btn-danger btn-sm"
-                                            onClick={() => handleDelete(profile)}
-                                        >
-                                            Remove
-                                        </button>
-                                    </div>
+                                                Configure {def.label}
+                                            </button>
+                                        </div>
+                                    ) : (
+                                        typeProfiles.map((profile) => {
+                                            const connected =
+                                                profile.enabled &&
+                                                profile.last_success !== null &&
+                                                profile.last_error === null;
+                                            return (
+                                                <div
+                                                    key={profile.id}
+                                                    className={`integration-row ${profile.enabled ? "enabled" : ""}`}
+                                                >
+                                                    <div className="integration-row-main">
+                                                        <div className="integration-row-info">
+                                                            <strong>{profile.name}</strong>
+                                                            <div className="integration-row-meta">
+                                                                {profile.username && <span>{profile.username}</span>}
+                                                                {profile.base_url && (
+                                                                    <span className="integration-meta-url">{profile.base_url}</span>
+                                                                )}
+                                                                {profile.ssh_host && (
+                                                                    <span>SSH: {profile.ssh_host}</span>
+                                                                )}
+                                                                {profile.last_test && (
+                                                                    <span>Last tested: {new Date(profile.last_test).toLocaleString()}</span>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                        <div className="integration-row-status">
+                                                            {!profile.enabled ? (
+                                                                <StatusBadge status="neutral" label="Disabled" />
+                                                            ) : connected ? (
+                                                                <StatusBadge status="healthy" label="Connected" />
+                                                            ) : profile.last_error ? (
+                                                                <StatusBadge status="error" label="Error" />
+                                                            ) : (
+                                                                <StatusBadge status="warning" label="Untested" />
+                                                            )}
+                                                            {testResult && testResult.id === profile.id && (
+                                                                <span className={`integration-test-result ${testResult.success ? "success" : "error"}`}>
+                                                                    {testResult.message}
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                    <div className="integration-row-actions">
+                                                        <LoadingButton
+                                                            loading={testingId === profile.id}
+                                                            className="btn btn-secondary btn-sm"
+                                                            onClick={() => handleTest(profile)}
+                                                        >
+                                                            Test
+                                                        </LoadingButton>
+                                                        <button
+                                                            className={`btn btn-sm ${profile.enabled ? "btn-warning" : "btn-primary"}`}
+                                                            onClick={() => handleToggle(profile)}
+                                                        >
+                                                            {profile.enabled ? "Disable" : "Enable"}
+                                                        </button>
+                                                        <button
+                                                            className="btn btn-secondary btn-sm"
+                                                            onClick={() => handleConfigure(def.type, profile)}
+                                                        >
+                                                            Configure
+                                                        </button>
+                                                        <button
+                                                            className="btn btn-danger btn-sm"
+                                                            onClick={() => handleDelete(profile)}
+                                                        >
+                                                            Remove
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            );
+                                        })
+                                    )}
                                 </div>
-                            );
-                        })
-                    ) : (
-                        <div key={def.type} className="integration-card">
-                            <div className="integration-card-header">
-                                <span className="integration-card-icon">{def.icon}</span>
-                                <div className="integration-card-title">
-                                    <h3>{def.label}</h3>
-                                    <p>{def.description}</p>
-                                </div>
-                            </div>
-                            <div className="integration-card-status">
-                                <StatusBadge status="neutral" label="Not configured" />
-                            </div>
-                            <div className="integration-card-actions">
-                                <button
-                                    className="btn btn-primary btn-sm"
-                                    onClick={() => handleConfigure(def.type)}
-                                >
-                                    Configure
-                                </button>
-                            </div>
+                            )}
                         </div>
                     );
                 })}
             </div>
 
-            {INTEGRATION_DEFS.map((def) => {
-                if (!def.type) return null;
-                const typeProfiles = getProfiles(def.type);
-                if (typeProfiles.length === 0) return null;
-                return (
-                    <div key={`add-${def.type}`} style={{ textAlign: "center", marginTop: "-1rem", marginBottom: "1rem" }}>
-                        <button
-                            className="btn btn-secondary btn-sm"
-                            onClick={() => {
-                                setEditingProfile(null);
-                                setModalType(def.type);
-                            }}
-                        >
-                            + Add another {def.label}
-                        </button>
-                    </div>
-                );
-            })}
-
             {modalType === "zabbix" && (
                 <ZabbixConfigModal
                     profile={editingProfile}
                     onSave={handleModalSave}
-                    onCancel={() => {
-                        setModalType(null);
-                        setEditingProfile(null);
-                    }}
+                    onCancel={() => { setModalType(null); setEditingProfile(null); }}
                     onError={(msg) => setError(msg)}
                 />
             )}
@@ -313,10 +341,7 @@ export default function IntegrationsPage() {
                 <ADConfigModal
                     profile={editingProfile}
                     onSave={handleModalSave}
-                    onCancel={() => {
-                        setModalType(null);
-                        setEditingProfile(null);
-                    }}
+                    onCancel={() => { setModalType(null); setEditingProfile(null); }}
                     onError={(msg) => setError(msg)}
                 />
             )}
@@ -324,10 +349,7 @@ export default function IntegrationsPage() {
                 <M365ConfigModal
                     profile={editingProfile}
                     onSave={handleModalSave}
-                    onCancel={() => {
-                        setModalType(null);
-                        setEditingProfile(null);
-                    }}
+                    onCancel={() => { setModalType(null); setEditingProfile(null); }}
                     onError={(msg) => setError(msg)}
                 />
             )}
@@ -335,10 +357,7 @@ export default function IntegrationsPage() {
                 <HypervConfigModal
                     profile={editingProfile}
                     onSave={handleModalSave}
-                    onCancel={() => {
-                        setModalType(null);
-                        setEditingProfile(null);
-                    }}
+                    onCancel={() => { setModalType(null); setEditingProfile(null); }}
                     onError={(msg) => setError(msg)}
                 />
             )}
@@ -346,10 +365,15 @@ export default function IntegrationsPage() {
                 <ProxmoxConfigModal
                     profile={editingProfile}
                     onSave={handleModalSave}
-                    onCancel={() => {
-                        setModalType(null);
-                        setEditingProfile(null);
-                    }}
+                    onCancel={() => { setModalType(null); setEditingProfile(null); }}
+                    onError={(msg) => setError(msg)}
+                />
+            )}
+            {modalType === "veeam" && (
+                <VeeamConfigModal
+                    profile={editingProfile}
+                    onSave={handleModalSave}
+                    onCancel={() => { setModalType(null); setEditingProfile(null); }}
                     onError={(msg) => setError(msg)}
                 />
             )}

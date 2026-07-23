@@ -284,8 +284,10 @@ class ADUserGroupsResponse(BaseModel):
 
 
 class IdentityOverviewAD(BaseModel):
-    """AD section of identity overview."""
+    """AD section of identity overview (one per enabled profile)."""
 
+    profile_id: int
+    profile_name: str
     connected: bool = False
     domain: str = "N/A"
     user_count: int = 0
@@ -311,3 +313,18 @@ class IdentityOverviewResponse(BaseModel):
 
     success: bool
     overview: dict
+
+
+# ------------------------------------------------------------------ #
+# Domain Switching                                                    #
+# ------------------------------------------------------------------ #
+
+
+class ADDomainProfile(BaseModel):
+    """Summary of an AD integration profile for domain switching."""
+
+    id: int
+    name: str
+    domain: str | None = None
+    base_dn: str | None = None
+    enabled: bool

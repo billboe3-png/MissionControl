@@ -35,6 +35,13 @@ class IntegrationProfileCreate(BaseModel):
     base_dn: str | None = None
     use_ssl: bool = True
 
+    ssh_host: str | None = None
+    ssh_port: int = 22
+    ssh_username: str | None = None
+    ssh_password: str | None = None
+
+    data_source: str = "both"
+
     verify_ssl: bool = True
     timeout: int = 30
     poll_interval: int = 60
@@ -59,6 +66,13 @@ class IntegrationProfileUpdate(BaseModel):
     domain: str | None = None
     base_dn: str | None = None
     use_ssl: bool | None = None
+
+    ssh_host: str | None = None
+    ssh_port: int | None = None
+    ssh_username: str | None = None
+    ssh_password: str | None = None
+
+    data_source: str | None = None
 
     verify_ssl: bool | None = None
     timeout: int | None = None
@@ -89,6 +103,13 @@ class IntegrationProfileResponse(BaseModel):
     domain: str | None = None
     base_dn: str | None = None
     use_ssl: bool = True
+
+    ssh_host: str | None = None
+    ssh_port: int = 22
+    ssh_username: str | None = None
+    has_ssh_password: bool = False
+
+    data_source: str = "both"
 
     verify_ssl: bool = True
     timeout: int = 30

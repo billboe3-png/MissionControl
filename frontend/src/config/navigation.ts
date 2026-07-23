@@ -93,6 +93,18 @@ export const navigation: NavGroup[] = [
         ],
     },
     {
+        label: "Veeam Backup",
+        icon: "💾",
+        items: [
+            { label: "Overview", path: "/veeam", icon: "📊" },
+            { label: "Health", path: "/veeam/health", icon: "💓" },
+            { label: "Jobs", path: "/veeam/jobs", icon: "📋" },
+            { label: "Sessions", path: "/veeam/sessions", icon: "📜" },
+            { label: "Repositories", path: "/veeam/repositories", icon: "💾" },
+            { label: "Servers", path: "/veeam/servers", icon: "🖥️" },
+        ],
+    },
+    {
         label: "AI Operations",
         icon: "🧠",
         items: [

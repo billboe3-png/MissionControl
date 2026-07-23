@@ -85,7 +85,7 @@ class IntegrationService:
         self, db: Session, data: IntegrationProfileCreate
     ) -> IntegrationProfileResponse:
         """Create a new integration profile with encrypted secrets."""
-        valid_types = ("zabbix", "active_directory", "microsoft_365", "hyperv", "proxmox")
+        valid_types = ("zabbix", "active_directory", "microsoft_365", "hyperv", "proxmox", "veeam")
         if data.integration_type not in valid_types:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -108,6 +108,11 @@ class IntegrationService:
             "domain": data.domain,
             "base_dn": data.base_dn,
             "use_ssl": data.use_ssl,
+            "ssh_host": data.ssh_host,
+            "ssh_port": data.ssh_port,
+            "ssh_username": data.ssh_username,
+            "ssh_password_encrypted": _encrypt(data.ssh_password),
+            "data_source": data.data_source,
             "verify_ssl": data.verify_ssl,
             "timeout": data.timeout,
             "poll_interval": data.poll_interval,
@@ -122,6 +127,8 @@ class IntegrationService:
             reset_hyperv_provider(profile.id)
         if data.integration_type == "proxmox":
             reset_proxmox_provider()
+        if data.integration_type == "veeam":
+            self._reset_veeam_singleton()
         return self._to_response(profile)
 
     async def update_profile(
@@ -161,6 +168,15 @@ class IntegrationService:
             else:
                 updates["client_secret_encrypted"] = _encrypt(cs)
 
+        if "ssh_password" in updates:
+            sp = updates.pop("ssh_password")
+            if sp == "" or sp is None:
+                updates["ssh_password_encrypted"] = (
+                    existing.ssh_password_encrypted
+                )
+            else:
+                updates["ssh_password_encrypted"] = _encrypt(sp)
+
         profile = IntegrationProfileRepository.update(
             db, profile_id, **updates
         )
@@ -175,6 +191,8 @@ class IntegrationService:
             reset_hyperv_provider(profile.id)
         if profile.integration_type == "proxmox":
             reset_proxmox_provider()
+        if profile.integration_type == "veeam":
+            self._reset_veeam_singleton()
         return self._to_response(profile)
 
     async def delete_profile(
@@ -194,6 +212,8 @@ class IntegrationService:
             reset_hyperv_provider(profile_id)
         if existing and existing.integration_type == "proxmox":
             reset_proxmox_provider()
+        if existing and existing.integration_type == "veeam":
+            self._reset_veeam_singleton()
 
     # ------------------------------------------------------------------ #
     # Actions                                                             #
@@ -217,6 +237,8 @@ class IntegrationService:
             reset_hyperv_provider(profile.id)
         if profile.integration_type == "proxmox":
             reset_proxmox_provider()
+        if profile.integration_type == "veeam":
+            self._reset_veeam_singleton()
         return self._to_response(profile)
 
     async def disable_profile(
@@ -237,6 +259,8 @@ class IntegrationService:
             reset_hyperv_provider(profile.id)
         if profile.integration_type == "proxmox":
             reset_proxmox_provider()
+        if profile.integration_type == "veeam":
+            self._reset_veeam_singleton()
         return self._to_response(profile)
 
     async def test_connection(
@@ -282,9 +306,9 @@ class IntegrationService:
         return IntegrationTestResponse(
             success=result.get("connected", False),
             latency_ms=result.get("latency_ms"),
-            message=result.get("message"),
-            version=result.get("version"),
-            error=result.get("error"),
+            message=str(result.get("message")) if result.get("message") else None,
+            version=str(result.get("version")) if result.get("version") else None,
+            error=str(result.get("error")) if result.get("error") else None,
             details=result,
         )
 
@@ -306,6 +330,8 @@ class IntegrationService:
             return await self._test_hyperv(profile)
         elif profile.integration_type == "proxmox":
             return await self._test_proxmox(profile)
+        elif profile.integration_type == "veeam":
+            return await self._test_veeam(profile)
         else:
             return {
                 "connected": False,
@@ -365,11 +391,22 @@ class IntegrationService:
         self, profile: IntegrationProfile
     ) -> dict:
         """Test Microsoft 365 connection using profile config."""
-        from app.providers.identity.m365_provider import (
-            MockMicrosoft365Provider,
+        from app.providers.identity.graph_m365_provider import (
+            GraphMicrosoft365Provider,
         )
 
-        provider = MockMicrosoft365Provider()
+        if not profile.tenant_id:
+            return {"connected": False, "error": "Tenant ID is required"}
+        if not profile.client_id:
+            return {"connected": False, "error": "Client ID is required"}
+
+        client_secret = _decrypt(profile.client_secret_encrypted) or ""
+        config = {
+            "tenant_id": profile.tenant_id,
+            "client_id": profile.client_id,
+            "client_secret": client_secret,
+        }
+        provider = GraphMicrosoft365Provider(config=config)
         return await provider.test_connection()
 
     async def _test_hyperv(
@@ -419,6 +456,25 @@ class IntegrationService:
         )
         return await provider.test_connection()
 
+    async def _test_veeam(
+        self, profile: IntegrationProfile
+    ) -> dict:
+        """Test Veeam B&R connection using profile config.
+
+        Supports both REST API (Enterprise) and PowerShell (Community Edition).
+        Delegates to provider_factory which handles db_type detection.
+        """
+        from app.core.config import get_settings
+        from app.core.security import CredentialCipher
+        from app.providers.veeam.provider_factory import _create_provider_for_profile
+
+        settings = get_settings()
+        cipher = CredentialCipher(settings.missioncontrol_secret_key)
+        provider = _create_provider_for_profile(profile, settings, cipher)
+        if provider is None:
+            return {"connected": False, "error": "Veeam server URL or SSH connection is required"}
+        return await provider.test_connection()
+
     # ------------------------------------------------------------------ #
     # Helpers                                                             #
     # ------------------------------------------------------------------ #
@@ -432,6 +488,16 @@ class IntegrationService:
 
         reset_zabbix_provider()
         logger.info("Zabbix provider singleton reset after profile change")
+
+    @staticmethod
+    def _reset_veeam_singleton() -> None:
+        """Reset the cached Veeam provider so profile changes take effect."""
+        from app.providers.veeam.provider_factory import (
+            reset_veeam_provider,
+        )
+
+        reset_veeam_provider()
+        logger.info("Veeam provider singleton reset after profile change")
 
     def _to_response(
         self, profile: IntegrationProfile
@@ -451,6 +517,11 @@ class IntegrationService:
             domain=profile.domain,
             base_dn=profile.base_dn,
             use_ssl=profile.use_ssl,
+            ssh_host=profile.ssh_host,
+            ssh_port=profile.ssh_port,
+            ssh_username=profile.ssh_username,
+            has_ssh_password=bool(profile.ssh_password_encrypted),
+            data_source=profile.data_source or "both",
             verify_ssl=profile.verify_ssl,
             timeout=profile.timeout,
             poll_interval=profile.poll_interval,

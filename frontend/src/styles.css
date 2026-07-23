@@ -2517,64 +2517,190 @@ select.form-input {
 
 /* ==========================================================================
    Integrations — Sprint 2.3.1
-   ========================================================================== */
+    ========================================================================== */
 
-.integrations-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
-    gap: 16px;
+.integrations-add-buttons {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 16px;
+    margin-bottom: 8px;
+}
+
+.integrations-type-groups {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
     margin-top: 16px;
 }
 
-.integration-card {
+.integrations-type-group {
     background: var(--surface);
     border: 1px solid var(--border);
     border-radius: var(--radius);
-    padding: 20px;
-    display: flex;
-    flex-direction: column;
-    gap: 14px;
+    overflow: hidden;
     transition: border-color 0.15s;
 }
 
-.integration-card.enabled {
-    border-left: 3px solid var(--success);
+.integrations-type-group.expanded {
+    border-color: var(--primary);
 }
 
-.integration-card-header {
+.integrations-type-header {
     display: flex;
-    align-items: flex-start;
-    gap: 12px;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 20px;
+    cursor: pointer;
+    user-select: none;
+    transition: background 0.1s;
 }
 
-.integration-card-icon {
-    font-size: 1.6rem;
-    line-height: 1;
-    flex-shrink: 0;
+.integrations-type-header:hover {
+    background: var(--surface-hover);
 }
 
-.integration-card-title h3 {
-    margin: 0;
-    font-size: 1rem;
-    font-weight: 600;
-}
-
-.integration-card-title p {
-    margin: 4px 0 0;
-    font-size: 0.82rem;
-    color: var(--text-muted);
-    line-height: 1.4;
-}
-
-.integration-card-status {
+.integrations-type-left {
     display: flex;
     align-items: center;
     gap: 10px;
+}
+
+.integrations-type-chevron {
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    width: 14px;
+    text-align: center;
+    flex-shrink: 0;
+}
+
+.integrations-type-icon {
+    font-size: 1.4rem;
+    flex-shrink: 0;
+}
+
+.integrations-type-label {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--text);
+}
+
+.integrations-type-count {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    margin-left: 4px;
+}
+
+.integrations-type-right {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.integrations-type-badge {
+    font-size: 0.75rem;
+    padding: 2px 10px;
+    border-radius: 10px;
+    font-weight: 500;
+}
+
+.integrations-type-badge.all-connected {
+    background: rgba(34, 197, 94, 0.15);
+    color: var(--success);
+}
+
+.integrations-type-badge.some-connected {
+    background: rgba(245, 158, 11, 0.15);
+    color: var(--warning);
+}
+
+.integrations-type-body {
+    border-top: 1px solid var(--border);
+    padding: 12px 20px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.integrations-type-empty {
+    text-align: center;
+    padding: 20px 0;
+    color: var(--text-muted);
+    font-size: 0.85rem;
+}
+
+.integrations-type-empty p {
+    margin: 0 0 12px;
+}
+
+.integration-row {
+    background: var(--bg-primary);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 12px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    transition: border-color 0.15s;
+}
+
+.integration-row.enabled {
+    border-left: 3px solid var(--success);
+}
+
+.integration-row-main {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
+}
+
+.integration-row-info {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+}
+
+.integration-row-info strong {
+    font-size: 0.9rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.integration-row-meta {
+    display: flex;
     flex-wrap: wrap;
+    gap: 6px 16px;
+    font-size: 0.78rem;
+    color: var(--text-muted);
+}
+
+.integration-row-meta .integration-meta-url {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 280px;
+}
+
+.integration-row-status {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+}
+
+.integration-row-actions {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    padding-top: 8px;
+    border-top: 1px solid var(--border);
 }
 
 .integration-test-result {
-    font-size: 0.78rem;
+    font-size: 0.75rem;
     padding: 2px 8px;
     border-radius: 6px;
 }
@@ -2587,29 +2713,6 @@ select.form-input {
 .integration-test-result.error {
     background: rgba(239, 68, 68, 0.15);
     color: var(--danger);
-}
-
-.integration-card-meta {
-    display: flex;
-    flex-direction: column;
-    gap: 3px;
-    font-size: 0.8rem;
-    color: var(--text-muted);
-}
-
-.integration-meta-url {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    max-width: 100%;
-}
-
-.integration-card-actions {
-    display: flex;
-    gap: 8px;
-    flex-wrap: wrap;
-    padding-top: 6px;
-    border-top: 1px solid var(--border);
 }
 
 /* Dashboard Integrations Card */
@@ -3834,6 +3937,34 @@ select.form-input {
 /* ==========================================================================
    Active Directory Management
    ========================================================================== */
+
+.ad-domain-selector {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 16px;
+    padding: 10px 16px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+}
+
+.ad-domain-selector .form-label {
+    margin: 0;
+    white-space: nowrap;
+    font-weight: 500;
+    color: var(--text-secondary);
+}
+
+.ad-domain-selector .form-select {
+    min-width: 200px;
+}
+
+.ad-domain-title {
+    font-size: 0.85em;
+    font-weight: 400;
+    color: var(--text-secondary);
+}
 
 .ad-actions {
     display: flex;
@@ -5662,4 +5793,165 @@ select.form-input {
     font-size: 0.85rem;
     color: var(--text);
     border-bottom: 1px solid var(--border);
+}
+
+/* ------------------------------------------------------------------ */
+/* Veeam Backup & Replication                                          */
+/* ------------------------------------------------------------------ */
+
+.veeam-connection-status {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 16px;
+    margin-bottom: 16px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+}
+
+.veeam-sessions-controls {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin-bottom: 1rem;
+}
+
+.veeam-sessions-checkbox {
+    color: #8899aa;
+    font-size: 0.85rem;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+}
+
+.veeam-ssh-badge {
+    font-size: 0.8rem;
+    padding: 3px 10px;
+    border-radius: 12px;
+    background: rgba(46, 160, 67, 0.15);
+    color: #3fb950;
+    border: 1px solid rgba(46, 160, 67, 0.3);
+}
+
+.veeam-ssh-badge-off {
+    background: rgba(139, 148, 158, 0.15);
+    color: #8b949e;
+    border-color: rgba(139, 148, 158, 0.3);
+}
+
+/* ── Jobs Matrix View ─────────────────────────────────── */
+
+.jobs-controls {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+    padding: 0.5rem 0;
+}
+
+.jobs-matrix-wrapper {
+    overflow-x: auto;
+    border: 1px solid #30363d;
+    border-radius: 6px;
+}
+
+.jobs-matrix {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.8rem;
+    white-space: nowrap;
+}
+
+.jobs-matrix thead th {
+    position: sticky;
+    top: 0;
+    background: #161b22;
+    border-bottom: 2px solid #30363d;
+    padding: 0.5rem 0.75rem;
+    text-align: center;
+    color: #c9d1d9;
+    font-weight: 600;
+}
+
+.jobs-matrix-name {
+    text-align: left !important;
+    padding-left: 1rem !important;
+    font-weight: 600;
+    color: #c9d1d9;
+    position: sticky;
+    left: 0;
+    background: #0d1117;
+    z-index: 1;
+    min-width: 280px;
+    max-width: 400px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.jobs-matrix thead .jobs-matrix-name {
+    background: #161b22;
+}
+
+.jobs-matrix-dow {
+    font-size: 0.7rem;
+    color: #8b949e;
+    font-weight: 400;
+}
+
+.jobs-matrix td {
+    border-bottom: 1px solid #21262d;
+    padding: 0.4rem 0.75rem;
+    text-align: right;
+    color: #8b949e;
+}
+
+.jobs-matrix tbody tr:hover td {
+    background: #161b22;
+}
+
+.jobs-matrix tbody tr:hover td.jobs-matrix-name {
+    background: #1c2430;
+}
+
+.jobs-matrix-cell {
+    font-variant-numeric: tabular-nums;
+    min-width: 80px;
+}
+
+.jobs-matrix-cell.cell-success {
+    color: #3fb950;
+}
+
+.jobs-matrix-cell.cell-warning {
+    color: #d29922;
+}
+
+.jobs-matrix-cell.cell-failed {
+    color: #f85149;
+    font-weight: 600;
+}
+
+.cell-icon {
+    font-weight: 700;
+    margin-right: 3px;
+}
+
+.cell-no-data {
+    color: #484f58;
+    font-size: 0.85em;
+}
+
+.jobs-matrix-total td {
+    border-top: 2px solid #30363d;
+    font-weight: 700;
+    color: #c9d1d9;
+}
+
+.jobs-matrix-total-cell {
+    color: #c9d1d9 !important;
+    font-weight: 700;
 }

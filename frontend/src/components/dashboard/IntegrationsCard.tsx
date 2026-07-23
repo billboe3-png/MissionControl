@@ -17,6 +17,9 @@ const TYPE_ICONS: Record<string, string> = {
     zabbix: "📡",
     active_directory: "🏢",
     microsoft_365: "☁️",
+    hyperv: "🖥️",
+    proxmox: "🐧",
+    veeam: "💾",
 };
 
 export default function IntegrationsCard({ items }: IntegrationsCardProps) {

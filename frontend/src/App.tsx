@@ -53,6 +53,12 @@ import ProxmoxStoragePage from "./pages/proxmox/StoragePage";
 import ProxmoxNetworksPage from "./pages/proxmox/NetworksPage";
 import ProxmoxTasksPage from "./pages/proxmox/TasksPage";
 import ProxmoxSnapshotsPage from "./pages/proxmox/SnapshotsPage";
+import VeeamOverviewPage from "./pages/veeam/OverviewPage";
+import VeeamHealthPage from "./pages/veeam/HealthPage";
+import VeeamJobsPage from "./pages/veeam/JobsPage";
+import VeeamSessionsPage from "./pages/veeam/SessionsPage";
+import VeeamRepositoriesPage from "./pages/veeam/RepositoriesPage";
+import VeeamServersPage from "./pages/veeam/ServersPage";
 import PlaceholderPage from "./pages/PlaceholderPage";
 import AIOverviewPage from "./pages/ai/OverviewPage";
 import AIRecommendationsPage from "./pages/ai/RecommendationsPage";
@@ -135,6 +141,15 @@ export default function App() {
                             <Route path="/proxmox/networks" element={<ProxmoxNetworksPage />} />
                             <Route path="/proxmox/snapshots" element={<ProxmoxSnapshotsPage />} />
                             <Route path="/proxmox/tasks" element={<ProxmoxTasksPage />} />
+
+                            {/* Veeam */}
+                            <Route path="/veeam" element={<VeeamOverviewPage />} />
+                            <Route path="/veeam/health" element={<VeeamHealthPage />} />
+                            <Route path="/veeam/jobs" element={<VeeamJobsPage />} />
+                            <Route path="/veeam/sessions" element={<VeeamSessionsPage />} />
+                            <Route path="/veeam/repositories" element={<VeeamRepositoriesPage />} />
+
+                            <Route path="/veeam/servers" element={<VeeamServersPage />} />
 
                             <Route path="/settings" element={<GeneralPage />} />
                             <Route path="/settings/users" element={<UsersPage />} />

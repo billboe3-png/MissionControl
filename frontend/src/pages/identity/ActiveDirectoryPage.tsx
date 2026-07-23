@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import PageHeader from "../../components/common/PageHeader";
 import StatusBadge from "../../components/common/StatusBadge";
 import DataTable, { Column } from "../../components/common/DataTable";
@@ -12,6 +12,7 @@ import {
     ADActionResponse,
     ADUserGroup,
     ConnectionTestResult,
+    ADDomainProfile,
 } from "../../services/identity";
 
 type ADTab = "overview" | "users" | "groups" | "devices" | "health";
@@ -26,6 +27,8 @@ type ModalState =
 
 export default function ActiveDirectoryPage() {
     const [tab, setTab] = useState<ADTab>("overview");
+    const [domains, setDomains] = useState<ADDomainProfile[]>([]);
+    const [selectedDomainId, setSelectedDomainId] = useState<number | undefined>(undefined);
     const [summary, setSummary] = useState<ADSummary | null>(null);
     const [users, setUsers] = useState<ADUser[]>([]);
     const [groups, setGroups] = useState<ADGroup[]>([]);
@@ -38,28 +41,55 @@ export default function ActiveDirectoryPage() {
     const [actionResult, setActionResult] = useState<ADActionResponse | null>(null);
     const [userSearch, setUserSearch] = useState("");
 
-    const reloadUsers = () => identityApi.getADUsers().then((r) => setUsers(r.users));
+    const pid = selectedDomainId;
+
+    const loadData = useCallback(async (profileId?: number) => {
+        setLoading(true);
+        setError(null);
+        try {
+            const [testRes, sumRes, uRes, gRes, dRes, hRes] = await Promise.all([
+                identityApi.testAD(profileId),
+                identityApi.getADSummary(profileId),
+                identityApi.getADUsers(profileId),
+                identityApi.getADGroups(profileId),
+                identityApi.getADDevices(profileId),
+                identityApi.getADHealth(profileId),
+            ]);
+            setConnTest(testRes);
+            setSummary(sumRes);
+            setUsers(uRes.users);
+            setGroups(gRes.groups);
+            setDevices(dRes.devices);
+            setHealth(hRes);
+        } catch (e: unknown) {
+            setError(e instanceof Error ? e.message : "Failed to load");
+        } finally {
+            setLoading(false);
+        }
+    }, []);
 
     useEffect(() => {
-        Promise.all([
-            identityApi.testAD(),
-            identityApi.getADSummary(),
-            identityApi.getADUsers(),
-            identityApi.getADGroups(),
-            identityApi.getADDevices(),
-            identityApi.getADHealth(),
-        ])
-            .then(([testRes, sumRes, uRes, gRes, dRes, hRes]) => {
-                setConnTest(testRes);
-                setSummary(sumRes);
-                setUsers(uRes.users);
-                setGroups(gRes.groups);
-                setDevices(dRes.devices);
-                setHealth(hRes);
-            })
-            .catch((e) => setError(e.message))
-            .finally(() => setLoading(false));
+        identityApi.getADDomains().then((d) => {
+            setDomains(d);
+            if (d.length > 0) setSelectedDomainId(d[0].id);
+        }).catch(() => {});
     }, []);
+
+    useEffect(() => {
+        if (selectedDomainId !== undefined) {
+            loadData(selectedDomainId);
+        } else {
+            loadData();
+        }
+    }, [selectedDomainId, loadData]);
+
+    const handleDomainChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+        const val = e.target.value;
+        setSelectedDomainId(val ? Number(val) : undefined);
+    };
+
+    const reloadUsers = () =>
+        identityApi.getADUsers(pid).then((r) => setUsers(r.users));
 
     if (error) return <div className="error-banner">{error}</div>;
     if (loading) return <div className="loading-bar" />;
@@ -72,15 +102,17 @@ export default function ActiveDirectoryPage() {
         { key: "health", label: "Health" },
     ];
 
-    const filteredUsers = users.filter((u) => {
-        if (!userSearch) return true;
-        const q = userSearch.toLowerCase();
-        return (
-            u.sam_account_name.toLowerCase().includes(q) ||
-            u.display_name.toLowerCase().includes(q) ||
-            (u.email && u.email.toLowerCase().includes(q))
-        );
-    });
+    const filteredUsers = users
+        .filter((u) => {
+            if (!userSearch) return true;
+            const q = userSearch.toLowerCase();
+            return (
+                u.sam_account_name.toLowerCase().includes(q) ||
+                u.display_name.toLowerCase().includes(q) ||
+                (u.email && u.email.toLowerCase().includes(q))
+            );
+        })
+        .sort((a, b) => a.display_name.localeCompare(b.display_name));
 
     const userColumns: Column<ADUser>[] = [
         { key: "sam_account_name", header: "Username" },
@@ -110,6 +142,16 @@ export default function ActiveDirectoryPage() {
                     >
                         Reset PW
                     </button>
+                    <button
+                        className="btn btn-sm btn-warning"
+                        onClick={async () => {
+                            const res = await identityApi.unlockAccount(row.sam_account_name, pid);
+                            setActionResult(res);
+                        }}
+                        title="Unlock Account"
+                    >
+                        Unlock
+                    </button>
                     {row.enabled ? (
                         <button
                             className="btn btn-sm btn-warning"
@@ -122,7 +164,7 @@ export default function ActiveDirectoryPage() {
                         <button
                             className="btn btn-sm btn-success"
                             onClick={async () => {
-                                const res = await identityApi.enableAccount(row.sam_account_name);
+                                const res = await identityApi.enableAccount(row.sam_account_name, pid);
                                 setActionResult(res);
                                 if (res.success) reloadUsers();
                             }}
@@ -161,12 +203,32 @@ export default function ActiveDirectoryPage() {
         { key: "os_version", header: "OS" },
     ];
 
+    const selectedDomain = domains.find((d) => d.id === selectedDomainId);
+
     return (
         <>
             <PageHeader
                 title="Active Directory"
-                subtitle={summary?.domain?.name ?? "Active Directory management"}
+                subtitle={summary?.domain?.name ?? selectedDomain?.domain ?? "Active Directory management"}
             />
+
+            {domains.length > 0 && (
+                <div className="ad-domain-selector">
+                    <label className="form-label">Domain</label>
+                    <select
+                        className="form-select"
+                        value={selectedDomainId ?? ""}
+                        onChange={handleDomainChange}
+                    >
+                        {domains.map((d) => (
+                            <option key={d.id} value={d.id}>
+                                {d.name}{d.domain ? ` (${d.domain})` : ""}
+                            </option>
+                        ))}
+                    </select>
+                </div>
+            )}
+
             <div className="tab-bar">
                 {tabs.map((t) => (
                     <button
@@ -279,6 +341,7 @@ export default function ActiveDirectoryPage() {
             {modal?.type === "password" && (
                 <PasswordResetModal
                     user={modal.user}
+                    profileId={pid}
                     onClose={() => setModal(null)}
                     onDone={(res) => {
                         setActionResult(res);
@@ -289,6 +352,7 @@ export default function ActiveDirectoryPage() {
             {modal?.type === "rename" && (
                 <RenameUserModal
                     user={modal.user}
+                    profileId={pid}
                     onClose={() => setModal(null)}
                     onDone={(res) => {
                         setActionResult(res);
@@ -301,6 +365,7 @@ export default function ActiveDirectoryPage() {
                 <GroupMembershipModal
                     user={modal.user}
                     allGroups={groups}
+                    profileId={pid}
                     onClose={() => setModal(null)}
                 />
             )}
@@ -311,7 +376,7 @@ export default function ActiveDirectoryPage() {
                     confirmLabel="Disable"
                     confirmClass="btn-danger"
                     onConfirm={async () => {
-                        const res = await identityApi.disableAccount(modal.user.sam_account_name);
+                        const res = await identityApi.disableAccount(modal.user.sam_account_name, pid);
                         setActionResult(res);
                         if (res.success) reloadUsers();
                         setModal(null);
@@ -325,10 +390,12 @@ export default function ActiveDirectoryPage() {
 
 function PasswordResetModal({
     user,
+    profileId,
     onClose,
     onDone,
 }: {
     user: ADUser;
+    profileId?: number;
     onClose: () => void;
     onDone: (res: ADActionResponse) => void;
 }) {
@@ -349,7 +416,7 @@ function PasswordResetModal({
         setSubmitting(true);
         setError(null);
         try {
-            const res = await identityApi.resetPassword(user.sam_account_name, password);
+            const res = await identityApi.resetPassword(user.sam_account_name, password, profileId);
             onDone(res);
         } catch (e: unknown) {
             setError(e instanceof Error ? e.message : "Failed");
@@ -400,10 +467,12 @@ function PasswordResetModal({
 
 function RenameUserModal({
     user,
+    profileId,
     onClose,
     onDone,
 }: {
     user: ADUser;
+    profileId?: number;
     onClose: () => void;
     onDone: (res: ADActionResponse) => void;
 }) {
@@ -421,6 +490,7 @@ function RenameUserModal({
                 displayName,
                 firstName || undefined,
                 lastName || undefined,
+                profileId,
             );
             onDone(res);
         } catch {
@@ -478,10 +548,12 @@ function RenameUserModal({
 function GroupMembershipModal({
     user,
     allGroups,
+    profileId,
     onClose,
 }: {
     user: ADUser;
     allGroups: ADGroup[];
+    profileId?: number;
     onClose: () => void;
 }) {
     const [userGroups, setUserGroups] = useState<ADUserGroup[]>([]);
@@ -490,11 +562,11 @@ function GroupMembershipModal({
     const [groupSearch, setGroupSearch] = useState("");
 
     useEffect(() => {
-        identityApi.getUserGroups(user.sam_account_name).then((r) => {
+        identityApi.getUserGroups(user.sam_account_name, profileId).then((r) => {
             setUserGroups(r.groups || []);
             setLoading(false);
         });
-    }, [user.sam_account_name]);
+    }, [user.sam_account_name, profileId]);
 
     const memberNames = new Set(userGroups.map((g) => g.name));
     const availableGroups = allGroups.filter(
@@ -502,7 +574,7 @@ function GroupMembershipModal({
     );
 
     const handleAdd = async (groupName: string) => {
-        const res = await identityApi.addToGroup(user.sam_account_name, groupName);
+        const res = await identityApi.addToGroup(user.sam_account_name, groupName, profileId);
         setResult(res);
         if (res.success) {
             setUserGroups([...userGroups, { name: groupName, dn: "" }]);
@@ -510,7 +582,7 @@ function GroupMembershipModal({
     };
 
     const handleRemove = async (groupName: string) => {
-        const res = await identityApi.removeFromGroup(user.sam_account_name, groupName);
+        const res = await identityApi.removeFromGroup(user.sam_account_name, groupName, profileId);
         setResult(res);
         if (res.success) {
             setUserGroups(userGroups.filter((g) => g.name !== groupName));

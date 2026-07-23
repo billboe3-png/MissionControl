@@ -134,6 +134,41 @@ class IntegrationProfile(Base):
     )
 
     # ------------------------------------------------------------------ #
+    # SSH (for PowerShell bridge on Windows servers)                      #
+    # ------------------------------------------------------------------ #
+
+    ssh_host: Mapped[str | None] = mapped_column(
+        String(500),
+        nullable=True,
+    )
+
+    ssh_port: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        default=22,
+    )
+
+    ssh_username: Mapped[str | None] = mapped_column(
+        String(500),
+        nullable=True,
+    )
+
+    ssh_password_encrypted: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
+    )
+
+    # ------------------------------------------------------------------ #
+    # Data source mode (api / ssh / both)                                 #
+    # ------------------------------------------------------------------ #
+
+    data_source: Mapped[str] = mapped_column(
+        String(20),
+        nullable=False,
+        default="both",
+    )
+
+    # ------------------------------------------------------------------ #
     # Settings                                                            #
     # ------------------------------------------------------------------ #
 

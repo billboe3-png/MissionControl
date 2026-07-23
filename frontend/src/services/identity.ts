@@ -9,22 +9,26 @@ export interface ConnectionTestResult {
     error: string | null;
 }
 
+export interface IdentityOverviewADEntry {
+    profile_id: number;
+    profile_name: string;
+    connected: boolean;
+    domain: string;
+    user_count: number;
+    group_count: number;
+    computer_count: number;
+    health: string;
+    replication: {
+        status: string;
+        pending_replications: number;
+        failed_replications: number;
+    };
+}
+
 export interface IdentityOverview {
     success: boolean;
     overview: {
-        ad: {
-            connected: boolean;
-            domain: string;
-            user_count: number;
-            group_count: number;
-            computer_count: number;
-            health: string;
-            replication: {
-                status: string;
-                pending_replications: number;
-                failed_replications: number;
-            };
-        };
+        ad: IdentityOverviewADEntry[];
         m365: {
             connected: boolean;
             tenant: string;
@@ -117,6 +121,14 @@ export interface ADUserGroupsResponse {
     error: string | null;
 }
 
+export interface ADDomainProfile {
+    id: number;
+    name: string;
+    domain: string | null;
+    base_dn: string | null;
+    enabled: boolean;
+}
+
 export interface M365TenantInfo {
     id: string | null;
     display_name: string | null;
@@ -204,55 +216,97 @@ export interface M365HealthResponse {
 export const identityApi = {
     getOverview: () => apiClient<IdentityOverview>(`${API_BASE}/overview`),
 
-    testAD: () => apiClient<ConnectionTestResult>(`${API_BASE}/ad/test`),
-    getADSummary: () => apiClient<ADSummary>(`${API_BASE}/ad/summary`),
-    getADUsers: () => apiClient<ADUsersResponse>(`${API_BASE}/ad/users`),
-    getADGroups: () => apiClient<ADGroupsResponse>(`${API_BASE}/ad/groups`),
-    getADDevices: () => apiClient<ADDevicesResponse>(`${API_BASE}/ad/devices`),
-    getADHealth: () => apiClient<ADHealthResponse>(`${API_BASE}/ad/health`),
+    getADDomains: () => apiClient<ADDomainProfile[]>(`${API_BASE}/ad/domains`),
 
-    resetPassword: (sam_account_name: string, new_password: string) =>
-        apiClient<ADActionResponse>(`${API_BASE}/ad/users/reset-password`, {
-            method: "POST",
-            json: { sam_account_name, new_password },
-        }),
-    unlockAccount: (sam_account_name: string) =>
-        apiClient<ADActionResponse>(`${API_BASE}/ad/users/unlock`, {
-            method: "POST",
-            json: { sam_account_name },
-        }),
-    enableAccount: (sam_account_name: string) =>
-        apiClient<ADActionResponse>(`${API_BASE}/ad/users/enable`, {
-            method: "POST",
-            json: { sam_account_name },
-        }),
-    disableAccount: (sam_account_name: string) =>
-        apiClient<ADActionResponse>(`${API_BASE}/ad/users/disable`, {
-            method: "POST",
-            json: { sam_account_name },
-        }),
-    renameUser: (sam_account_name: string, display_name: string, first_name?: string, last_name?: string) =>
-        apiClient<ADActionResponse>(`${API_BASE}/ad/users/rename`, {
-            method: "POST",
-            json: { sam_account_name, display_name, first_name, last_name },
-        }),
-    getUserGroups: (sam_account_name: string) =>
-        apiClient<ADUserGroupsResponse>(`${API_BASE}/ad/users/${encodeURIComponent(sam_account_name)}/groups`),
-    addToGroup: (sam_account_name: string, group_name: string) =>
-        apiClient<ADActionResponse>(`${API_BASE}/ad/users/add-to-group`, {
-            method: "POST",
-            json: { sam_account_name, group_name },
-        }),
-    removeFromGroup: (sam_account_name: string, group_name: string) =>
-        apiClient<ADActionResponse>(`${API_BASE}/ad/users/remove-from-group`, {
-            method: "POST",
-            json: { sam_account_name, group_name },
-        }),
+    testAD: (profileId?: number) =>
+        apiClient<ConnectionTestResult>(
+            `${API_BASE}/ad/test${profileId ? `?profile_id=${profileId}` : ""}`
+        ),
+    getADSummary: (profileId?: number) =>
+        apiClient<ADSummary>(
+            `${API_BASE}/ad/summary${profileId ? `?profile_id=${profileId}` : ""}`
+        ),
+    getADUsers: (profileId?: number) =>
+        apiClient<ADUsersResponse>(
+            `${API_BASE}/ad/users${profileId ? `?profile_id=${profileId}` : ""}`
+        ),
+    getADGroups: (profileId?: number) =>
+        apiClient<ADGroupsResponse>(
+            `${API_BASE}/ad/groups${profileId ? `?profile_id=${profileId}` : ""}`
+        ),
+    getADDevices: (profileId?: number) =>
+        apiClient<ADDevicesResponse>(
+            `${API_BASE}/ad/devices${profileId ? `?profile_id=${profileId}` : ""}`
+        ),
+    getADHealth: (profileId?: number) =>
+        apiClient<ADHealthResponse>(
+            `${API_BASE}/ad/health${profileId ? `?profile_id=${profileId}` : ""}`
+        ),
 
-    testM365: () => apiClient<ConnectionTestResult>(`${API_BASE}/m365/test`),
-    getM365Summary: () => apiClient<M365Summary>(`${API_BASE}/m365/summary`),
-    getM365Users: () => apiClient<M365UsersResponse>(`${API_BASE}/m365/users`),
-    getM365Groups: () => apiClient<M365GroupsResponse>(`${API_BASE}/m365/groups`),
-    getM365Devices: () => apiClient<M365DevicesResponse>(`${API_BASE}/m365/devices`),
-    getM365Health: () => apiClient<M365HealthResponse>(`${API_BASE}/m365/health`),
+    resetPassword: (sam_account_name: string, new_password: string, profileId?: number) =>
+        apiClient<ADActionResponse>(
+            `${API_BASE}/ad/users/reset-password${profileId ? `?profile_id=${profileId}` : ""}`,
+            { method: "POST", json: { sam_account_name, new_password } },
+        ),
+    unlockAccount: (sam_account_name: string, profileId?: number) =>
+        apiClient<ADActionResponse>(
+            `${API_BASE}/ad/users/unlock${profileId ? `?profile_id=${profileId}` : ""}`,
+            { method: "POST", json: { sam_account_name } },
+        ),
+    enableAccount: (sam_account_name: string, profileId?: number) =>
+        apiClient<ADActionResponse>(
+            `${API_BASE}/ad/users/enable${profileId ? `?profile_id=${profileId}` : ""}`,
+            { method: "POST", json: { sam_account_name } },
+        ),
+    disableAccount: (sam_account_name: string, profileId?: number) =>
+        apiClient<ADActionResponse>(
+            `${API_BASE}/ad/users/disable${profileId ? `?profile_id=${profileId}` : ""}`,
+            { method: "POST", json: { sam_account_name } },
+        ),
+    renameUser: (sam_account_name: string, display_name: string, first_name?: string, last_name?: string, profileId?: number) =>
+        apiClient<ADActionResponse>(
+            `${API_BASE}/ad/users/rename${profileId ? `?profile_id=${profileId}` : ""}`,
+            { method: "POST", json: { sam_account_name, display_name, first_name, last_name } },
+        ),
+    getUserGroups: (sam_account_name: string, profileId?: number) =>
+        apiClient<ADUserGroupsResponse>(
+            `${API_BASE}/ad/users/${encodeURIComponent(sam_account_name)}/groups${profileId ? `?profile_id=${profileId}` : ""}`,
+        ),
+    addToGroup: (sam_account_name: string, group_name: string, profileId?: number) =>
+        apiClient<ADActionResponse>(
+            `${API_BASE}/ad/users/add-to-group${profileId ? `?profile_id=${profileId}` : ""}`,
+            { method: "POST", json: { sam_account_name, group_name } },
+        ),
+    removeFromGroup: (sam_account_name: string, group_name: string, profileId?: number) =>
+        apiClient<ADActionResponse>(
+            `${API_BASE}/ad/users/remove-from-group${profileId ? `?profile_id=${profileId}` : ""}`,
+            { method: "POST", json: { sam_account_name, group_name } },
+        ),
+
+    getM365Domains: () => apiClient<ADDomainProfile[]>(`${API_BASE}/m365/domains`),
+
+    testM365: (profileId?: number) =>
+        apiClient<ConnectionTestResult>(
+            `${API_BASE}/m365/test${profileId ? `?profile_id=${profileId}` : ""}`
+        ),
+    getM365Summary: (profileId?: number) =>
+        apiClient<M365Summary>(
+            `${API_BASE}/m365/summary${profileId ? `?profile_id=${profileId}` : ""}`
+        ),
+    getM365Users: (profileId?: number) =>
+        apiClient<M365UsersResponse>(
+            `${API_BASE}/m365/users${profileId ? `?profile_id=${profileId}` : ""}`
+        ),
+    getM365Groups: (profileId?: number) =>
+        apiClient<M365GroupsResponse>(
+            `${API_BASE}/m365/groups${profileId ? `?profile_id=${profileId}` : ""}`
+        ),
+    getM365Devices: (profileId?: number) =>
+        apiClient<M365DevicesResponse>(
+            `${API_BASE}/m365/devices${profileId ? `?profile_id=${profileId}` : ""}`
+        ),
+    getM365Health: (profileId?: number) =>
+        apiClient<M365HealthResponse>(
+            `${API_BASE}/m365/health${profileId ? `?profile_id=${profileId}` : ""}`
+        ),
 };
