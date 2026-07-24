@@ -188,7 +188,22 @@ if (-not (Test-Path $AgentSource)) {
 
 Write-Status "Installing agent to $InstallDir..."
 if (Test-Path $InstallDir) {
-    Remove-Item -Recurse -Force $InstallDir
+    # Stop any running agent processes first
+    Get-Process -Name "python*" -ErrorAction SilentlyContinue | Where-Object {
+        $_.Path -and $_.Path.StartsWith($InstallDir)
+    } | Stop-Process -Force -ErrorAction SilentlyContinue
+    Start-Sleep -Seconds 2
+
+    try {
+        Remove-Item -Recurse -Force $InstallDir
+    } catch {
+        Write-Status "Cleaning up locked files..."
+        cmd.exe /c "rmdir /s /q `"$InstallDir`"" 2>&1 | Out-Null
+        if (Test-Path $InstallDir) {
+            Write-Fail "Could not remove $InstallDir — run this script as Administrator"
+            exit 1
+        }
+    }
 }
 New-Item -ItemType Directory -Path $InstallDir -Force | Out-Null
 
