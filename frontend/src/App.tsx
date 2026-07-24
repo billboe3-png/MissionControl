@@ -88,9 +88,9 @@ export default function App() {
                 <SidebarProvider>
                     <ToastProvider>
                         <Routes>
+                            <Route path="/setup" element={<SetupWizardPage />} />
                             <Route element={<RequireSetup />}>
                                 <Route path="/login" element={<LoginPage />} />
-                                <Route path="/setup" element={<SetupWizardPage />} />
                             </Route>
                             <Route element={<RequireAuth />}>
                             <Route element={<AppLayout />}>

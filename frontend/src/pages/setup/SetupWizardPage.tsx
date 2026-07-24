@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { setupApi, BootstrapInput } from "../../services/setup";
 
@@ -25,6 +25,7 @@ export default function SetupWizardPage() {
     const navigate = useNavigate();
     const [step, setStep] = useState(0);
     const [loading, setLoading] = useState(false);
+    const [checking, setChecking] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [data, setData] = useState<BootstrapInput>({
         company_name: "",
@@ -39,6 +40,16 @@ export default function SetupWizardPage() {
 
     const update = (fields: Partial<BootstrapInput>) =>
         setData((prev) => ({ ...prev, ...fields }));
+
+    useEffect(() => {
+        setupApi
+            .getStatus()
+            .then((s) => {
+                if (!s.setup_required) navigate("/login", { replace: true });
+                else setChecking(false);
+            })
+            .catch(() => setChecking(false));
+    }, [navigate]);
 
     const validateStep = (): string | null => {
         if (step === 1) {
@@ -87,6 +98,8 @@ export default function SetupWizardPage() {
     };
 
     const goToLogin = () => navigate("/login");
+
+    if (checking) return <div className="loading-bar" />;
 
     return (
         <div className="login-container">
