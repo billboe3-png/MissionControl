@@ -100,10 +100,10 @@ class HyperVPlugin(AgentPlugin):
                     "state": vm.get("State", "Unknown"),
                     "cpu_usage": vm.get("CPUUsage", 0),
                     "memory_mb": round(
-                        (vm.get("MemoryAssigned") or 0) / 1MB, 0
+                        (vm.get("MemoryAssigned") or 0) / (1024 * 1024), 0
                     ),
                     "memory_startup_mb": round(
-                        (vm.get("MemoryStartup") or 0) / 1MB, 0
+                        (vm.get("MemoryStartup") or 0) / (1024 * 1024), 0
                     ),
                     "uptime": str(vm.get("Uptime", "")),
                     "status": vm.get("Status", ""),
