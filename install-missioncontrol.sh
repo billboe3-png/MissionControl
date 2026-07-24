@@ -18,7 +18,7 @@ set -euo pipefail
 # ---------------------------------------------------------------------------
 REPO_URL="https://github.com/billboe3-png/MissionControl.git"
 MC_DIR="${MC_DIR:-/opt/MissionControl}"
-MC_BRANCH="${MC_BRANCH:-main}"
+MC_BRANCH="${MC_BRANCH:-develop}"
 SKIP_BUILD=false
 FORCE=false
 
