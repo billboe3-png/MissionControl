@@ -41,8 +41,9 @@ class AgentClient:
         return self._client
 
     def set_api_key(self, api_key: str) -> None:
-        """Update the API key for authentication."""
+        """Update the API key for authentication. Recreates the HTTP client."""
         self.api_key = api_key
+        self._client = None
 
     async def _request_with_retry(
         self, method: str, path: str, **kwargs: Any
