@@ -243,14 +243,14 @@ Write-Ok "Agent files copied"
 # ── Install Python dependencies ──────────────────────────
 
 Write-Status "Installing Python dependencies..."
-& $python -m pip install --quiet httpx psutil pydantic pydantic-settings pyyaml packaging 2>&1 | Out-Null
+& "$python" -m pip install --quiet httpx psutil pydantic pydantic-settings pyyaml packaging 2>$null
 Write-Ok "Dependencies installed"
 
 # ── Install as a package ─────────────────────────────────
 
 Write-Status "Installing agent package..."
 Push-Location $InstallDir
-& $python -m pip install --quiet --no-deps -e . 2>&1 | Out-Null
+& "$python" -m pip install --quiet --no-deps -e . 2>$null
 Pop-Location
 Write-Ok "Agent package installed"
 
