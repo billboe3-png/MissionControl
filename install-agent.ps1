@@ -59,6 +59,60 @@ function Find-Python {
     return $null
 }
 
+function Install-Python {
+    Write-Status "Python 3.11+ not found. Installing..."
+
+    # Try winget first (Windows 10/11 built-in)
+    $winget = Get-Command "winget" -ErrorAction SilentlyContinue
+    if ($winget) {
+        Write-Status "Installing Python via winget..."
+        winget install --id Python.Python.3.12 --accept-package-agreements --accept-source-agreements --silent 2>&1 | Out-Null
+        # Refresh PATH
+        $env:Path = [System.Environment]::GetEnvironmentVariable("Path", "Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path", "User")
+        $py = Find-Python
+        if ($py) { return $py }
+    }
+
+    # Try chocolatey
+    $choco = Get-Command "choco" -ErrorAction SilentlyContinue
+    if ($choco) {
+        Write-Status "Installing Python via Chocolatey..."
+        choco install python --version=3.12 -y 2>&1 | Out-Null
+        $env:Path = [System.Environment]::GetEnvironmentVariable("Path", "Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path", "User")
+        $py = Find-Python
+        if ($py) { return $py }
+    }
+
+    # Download and install directly
+    Write-Status "Downloading Python 3.12..."
+    $pyUrl = "https://www.python.org/ftp/python/3.12.4/python-3.12.4-amd64.exe"
+    $pyInstaller = "$env:TEMP\python-installer.exe"
+
+    try {
+        [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+        Invoke-WebRequest -Uri $pyUrl -OutFile $pyInstaller -UseBasicParsing
+    } catch {
+        Write-Fail "Failed to download Python: $_"
+        return $null
+    }
+
+    Write-Status "Installing Python 3.12 (this may take a minute)..."
+    Start-Process -FilePath $pyInstaller -ArgumentList "/quiet", "InstallAllUsers=1", "PrependPath=1", "Include_test=0" -Wait -NoNewWindow
+    Remove-Item $pyInstaller -Force -ErrorAction SilentlyContinue
+
+    # Refresh PATH
+    $env:Path = [System.Environment]::GetEnvironmentVariable("Path", "Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path", "User")
+
+    $py = Find-Python
+    if ($py) {
+        Write-Ok "Python installed: $py"
+        return $py
+    }
+
+    Write-Fail "Python installation failed. Install manually from https://www.python.org/downloads/"
+    return $null
+}
+
 # ── Uninstall ────────────────────────────────────────────
 
 if ($Uninstall) {
