@@ -273,7 +273,7 @@ $WrapperContent = @"
 `$env:MC_LOG_FILE = '$LogDir\agent.log'
 $(if ($NoSslVerify) { "`$env:MC_VERIFY_SSL = 'false'" })
 
-& $python "$AgentScript" --log-file "$LogDir\agent.log"
+& $python -m agent --log-file "$LogDir\agent.log"
 "@
 Set-Content -Path $WrapperPath -Value $WrapperContent -Encoding UTF8
 Write-Ok "Wrapper script created"
@@ -319,7 +319,7 @@ $BatchPath = "$InstallDir\start-agent.bat"
 $BatchContent = @"
 @echo off
 cd /d "$InstallDir"
-"$pythonExe" "$AgentScript"
+"$pythonExe" -m agent
 "@
 Set-Content -Path $BatchPath -Value $BatchContent -Encoding ASCII
 
