@@ -200,7 +200,7 @@ if (Test-Path $InstallDir) {
         Write-Status "Cleaning up locked files..."
         cmd.exe /c "rmdir /s /q `"$InstallDir`"" 2>&1 | Out-Null
         if (Test-Path $InstallDir) {
-            Write-Fail "Could not remove $InstallDir — run this script as Administrator"
+            Write-Fail "Could not remove $InstallDir - run this script as Administrator"
             exit 1
         }
     }
