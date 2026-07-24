@@ -126,12 +126,22 @@ def _upload_sql(client: paramiko.SSHClient, sql: str) -> str:
     return sql_path
 
 
-def _exec_pg(client: paramiko.SSHClient, sql_path: str, shell: str = "pwsh.exe") -> dict:
-    """Execute SQL via psql.exe on the remote server."""
-    psql_cmd = (
-        f"& '{PG_PSQL_PATH}' -h 127.0.0.1 -U postgres -d {PG_DB_NAME} "
-        f"-t -A -f {sql_path}"
-    )
+def _exec_pg(client: paramiko.SSHClient, sql_path: str, shell: str = "pwsh.exe", use_pg_user: bool = True) -> dict:
+    """Execute SQL via psql.exe on the remote server.
+
+    When use_pg_user=True, connects as -U postgres (password auth).
+    When use_pg_user=False, omits -U (uses Windows SSPI / current user).
+    """
+    if use_pg_user:
+        psql_cmd = (
+            f"& '{PG_PSQL_PATH}' -h 127.0.0.1 -U postgres -d {PG_DB_NAME} "
+            f"-t -A -f {sql_path}"
+        )
+    else:
+        psql_cmd = (
+            f"& '{PG_PSQL_PATH}' -h 127.0.0.1 -d {PG_DB_NAME} "
+            f"-t -A -f {sql_path}"
+        )
     cmd = f'{shell} -NoProfile -NonInteractive -Command "{psql_cmd}"'
     _, stdout, stderr = client.exec_command(cmd, timeout=60)
     out = stdout.read().decode("utf-8", errors="replace")
@@ -203,6 +213,14 @@ async def run_db_query(
                 result = _exec_pg(client, sql_path, "pwsh.exe")
                 if not result["success"] and "is not recognized" in result.get("stderr", ""):
                     result = _exec_pg(client, sql_path, "powershell.exe")
+
+                # Retry without -U postgres on auth failure (SSPI/trust servers)
+                auth_errors = ("SSPI", "password authentication failed", "pg_hba.conf", "FATAL:")
+                if not result["success"] and any(e in result.get("stderr", "") for e in auth_errors):
+                    logger.info("PG auth failed, retrying without -U postgres for %s", ssh_host)
+                    shell = "powershell.exe" if "is not recognized" in result.get("stderr", "") else "pwsh.exe"
+                    result = _exec_pg(client, sql_path, shell, use_pg_user=False)
+
                 return result
         finally:
             if client:

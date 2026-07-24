@@ -18,6 +18,16 @@ const DATE_RANGE_OPTIONS = [
     { label: "90 days", value: 90 },
 ];
 
+const SYSTEM_JOB_PATTERNS = [
+    "Database Maintenance",
+    "HealthCheck",
+    "Security & Compliance Analyzer",
+];
+
+function isSystemJob(name: string): boolean {
+    return SYSTEM_JOB_PATTERNS.some((p) => name.toLowerCase().includes(p.toLowerCase()));
+}
+
 function formatShortDate(dateStr: string): string {
     const d = new Date(dateStr + "T00:00:00");
     return `${d.getDate().toString().padStart(2, "0")}/${(d.getMonth() + 1).toString().padStart(2, "0")}`;
@@ -114,6 +124,7 @@ export default function VeeamJobsPage() {
     const [error, setError] = useState<string | null>(null);
     const [dateRange, setDateRange] = useState(7);
     const [selectedServer, setSelectedServer] = useState<string | null>(null);
+    const [showSystemJobs, setShowSystemJobs] = useState(false);
 
     useEffect(() => {
         setLoading(true);
@@ -134,9 +145,10 @@ export default function VeeamJobsPage() {
     const uniqueServers = serverNames.length > 0 ? serverNames : [...new Set(jobRows.map((r) => r.server_name ?? "").filter(Boolean))];
     const hasMultiServer = uniqueServers.length > 1;
 
-    const filteredRows = selectedServer
+    const filteredRows = (selectedServer
         ? jobRows.filter((r) => r.server_name === selectedServer)
-        : jobRows;
+        : jobRows
+    ).filter((r) => showSystemJobs || !isSystemJob(r.job_name));
 
     if (loading) return (
         <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "4rem 2rem" }}>
@@ -155,7 +167,7 @@ export default function VeeamJobsPage() {
         <>
             <PageHeader
                 title="Backup Jobs"
-                subtitle={`${jobRows.length} jobs across ${hasMultiServer ? uniqueServers.length + " servers" : "1 server"} over the last ${dateRange} days`}
+                subtitle={`${filteredRows.length} jobs across ${hasMultiServer ? uniqueServers.length + " servers" : "1 server"} over the last ${dateRange} days`}
             />
             {!sshAvailable && (
                 <div className="info-banner" style={{ marginBottom: "1rem", padding: "0.75rem 1rem", background: "#1a3a5c", border: "1px solid #2a5a8c", borderRadius: "6px", color: "#b8d4f0" }}>
@@ -213,6 +225,15 @@ export default function VeeamJobsPage() {
                             </option>
                         ))}
                     </select>
+                </label>
+                <label style={{ fontSize: "0.85rem", color: "#8b949e", display: "flex", alignItems: "center", gap: "0.4rem", cursor: "pointer" }}>
+                    <input
+                        type="checkbox"
+                        checked={showSystemJobs}
+                        onChange={(e) => setShowSystemJobs(e.target.checked)}
+                        style={{ accentColor: "#58a6ff" }}
+                    />
+                    System jobs
                 </label>
                 <div style={{ display: "flex", gap: "1rem", alignItems: "center" }}>
                     <div style={{ display: "flex", gap: "1rem", fontSize: "0.75rem", color: "#8b949e" }}>
