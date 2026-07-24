@@ -34,17 +34,24 @@ $ErrorActionPreference = "Stop"
 $currentPrincipal = New-Object Security.Principal.WindowsPrincipal([Security.Principal.WindowsIdentity]::GetCurrent())
 if (-not $currentPrincipal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
     Write-Host "[*] Restarting as Administrator..." -ForegroundColor Yellow
-    $args = @("-NoProfile", "-ExecutionPolicy", "Bypass", "-File", $MyInvocation.MyCommand.Path) + $MyInvocation.BoundParameters.Keys | ForEach-Object { "-$_"; $MyInvocation.BoundParameters[$_] }
-    $argString = "-NoProfile -ExecutionPolicy Bypass -File `"$($MyInvocation.MyCommand.Path)`""
+    $scriptPath = if ($MyInvocation.MyCommand.Path) { $MyInvocation.MyCommand.Path } else { $PSCommandPath }
+    $workingDir = $PWD.Path
+
+    # Build argument string from bound parameters
+    $paramArgs = ""
     foreach ($key in $MyInvocation.BoundParameters.Keys) {
         $val = $MyInvocation.BoundParameters[$key]
-        if ($val -is [switch] -and $val) {
-            $argString += " -$key"
-        } elseif ($val) {
-            $argString += " -$key `"$val`""
-        }
+        if ($val -is [switch] -and $val) { $paramArgs += " -$key" }
+        elseif ($val) { $paramArgs += " -$key `"$val`"" }
     }
-    Start-Process powershell.exe -ArgumentList $argString -Verb RunAs -Wait
+
+    $psArgs = @(
+        "-NoProfile",
+        "-ExecutionPolicy", "Bypass",
+        "-Command",
+        "Set-Location `"$workingDir`"; & `"$scriptPath`"$paramArgs"
+    )
+    Start-Process powershell.exe -ArgumentList $psArgs -Verb RunAs -Wait
     exit
 }
 
