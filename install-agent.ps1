@@ -284,6 +284,7 @@ Write-Status "Creating config file..."
 New-Item -ItemType Directory -Path $ConfigDir -Force | Out-Null
 
 $SslVerify = if ($NoSslVerify) { "false" } else { "true" }
+$LogDirFwd = $LogDir -replace '\\','/'
 $configYaml = @"
 # Mission Control Agent Configuration
 # Installed: $(Get-Date -Format "yyyy-MM-dd HH:mm:ss")
@@ -294,10 +295,12 @@ heartbeat_interval: $HeartbeatInterval
 inventory_interval: 300
 verify_ssl: $SslVerify
 log_level: "INFO"
-log_file: "$LogDir\agent.log"
+log_file: "$LogDirFwd/agent.log"
 command_timeout: 60
 "@
-Set-Content -Path $ConfigFile -Value $configYaml -Encoding UTF8
+# Write UTF-8 without BOM (YAML parsers reject BOM)
+$utf8NoBom = New-Object System.Text.UTF8Encoding $false
+[System.IO.File]::WriteAllText($ConfigFile, $configYaml, $utf8NoBom)
 Write-Ok "Config written to $ConfigFile"
 
 # ── Create log directory ─────────────────────────────────
