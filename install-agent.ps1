@@ -244,14 +244,16 @@ Write-Ok "Agent files copied"
 
 Write-Status "Installing Python dependencies..."
 $pyDir = Split-Path $python -Parent
-& "$pyDir\python.exe" -m pip install --quiet httpx psutil pydantic pydantic-settings pyyaml packaging 2>$null
+$pyExe = "$pyDir\python.exe"
+$env:MC_PYTHON = $pyExe
+cmd.exe /c "`"$pyExe`" -m pip install --quiet httpx psutil pydantic pydantic-settings pyyaml packaging" 2>$null
 Write-Ok "Dependencies installed"
 
 # ── Install as a package ─────────────────────────────────
 
 Write-Status "Installing agent package..."
 Push-Location $InstallDir
-& "$pyDir\python.exe" -m pip install --quiet --no-deps -e . 2>$null
+cmd.exe /c "`"$pyExe`" -m pip install --quiet --no-deps -e ." 2>$null
 Pop-Location
 Write-Ok "Agent package installed"
 
