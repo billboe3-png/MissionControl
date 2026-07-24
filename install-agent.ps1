@@ -53,17 +53,35 @@ function Write-Ok($msg)   { Write-Host "[+] $msg" -ForegroundColor Green }
 function Write-Fail($msg) { Write-Host "[-] $msg" -ForegroundColor Red }
 
 function Find-Python {
+    # Check common install locations first (avoids Windows Store stub)
+    $localPy = "C:\Users\$env:USERNAME\AppData\Local\Programs\Python\Python312\python.exe"
+    if (Test-Path $localPy) { return $localPy }
+
     foreach ($cmd in @("python", "python3", "py")) {
         try {
             $ver = & $cmd --version 2>&1
             if ($ver -match "Python 3\.(\d+)") {
                 $minor = [int]$Matches[1]
                 if ($minor -ge 11) {
-                    return $cmd
+                    # Verify it's not the Windows Store stub
+                    $location = (Get-Command $cmd -ErrorAction SilentlyContinue).Source
+                    if ($location -notmatch "WindowsApps") {
+                        return $cmd
+                    }
                 }
             }
         } catch {}
     }
+
+    # Last resort: check py launcher
+    try {
+        $ver = & py -3 --version 2>&1
+        if ($ver -match "Python 3\.(\d+)") {
+            $minor = [int]$Matches[1]
+            if ($minor -ge 11) { return "py -3" }
+        }
+    } catch {}
+
     return $null
 }
 
