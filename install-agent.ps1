@@ -145,8 +145,10 @@ Write-Host ""
 
 $python = Find-Python
 if (-not $python) {
-    Write-Fail "Python 3.11+ not found. Install from https://www.python.org/downloads/"
-    exit 1
+    $python = Install-Python
+    if (-not $python) {
+        exit 1
+    }
 }
 Write-Ok "Python found: $python"
 
