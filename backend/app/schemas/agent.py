@@ -107,6 +107,7 @@ class AgentHeartbeatResponse(BaseModel):
     update_available: bool = False
     latest_version: str | None = None
     heartbeat_interval: int = 30
+    remote_targets: list[dict] | None = None
 
 
 class AgentPendingCommand(BaseModel):

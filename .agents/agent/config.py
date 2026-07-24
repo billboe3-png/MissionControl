@@ -103,6 +103,12 @@ class AgentSettings(BaseSettings):
         alias="MC_OFFLINE_BUFFER_MAX",
     )
 
+    remote_inventory_interval: int = Field(
+        default=300,
+        description="Seconds between remote target inventory collection.",
+        alias="MC_REMOTE_INVENTORY_INTERVAL",
+    )
+
     model_config = {
         "env_prefix": "",
         "extra": "ignore",

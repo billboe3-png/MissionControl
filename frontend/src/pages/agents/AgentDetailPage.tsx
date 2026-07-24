@@ -9,6 +9,7 @@ import {
     AgentCommand,
     AgentInventory,
 } from "../../services/agents";
+import AgentRemoteTargetsTab from "./AgentRemoteTargetsTab";
 
 export default function AgentDetailPage() {
     const { id } = useParams<{ id: string }>();
@@ -18,7 +19,7 @@ export default function AgentDetailPage() {
     const [agent, setAgent] = useState<Agent | null>(null);
     const [commands, setCommands] = useState<AgentCommand[]>([]);
     const [inventory, setInventory] = useState<AgentInventory | null>(null);
-    const [activeTab, setActiveTab] = useState<"overview" | "commands" | "inventory" | "execute">("overview");
+    const [activeTab, setActiveTab] = useState<"overview" | "commands" | "inventory" | "remote-targets" | "execute">("overview");
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
 
@@ -144,14 +145,14 @@ export default function AgentDetailPage() {
             )}
 
             <div className="agent-detail-tabs">
-                {(["overview", "commands", "inventory", "execute"] as const).map(
+                {(["overview", "commands", "inventory", "remote-targets", "execute"] as const).map(
                     (tab) => (
                         <button
                             key={tab}
                             className={`tab-btn ${activeTab === tab ? "active" : ""}`}
                             onClick={() => setActiveTab(tab)}
                         >
-                            {tab.charAt(0).toUpperCase() + tab.slice(1)}
+                            {tab === "remote-targets" ? "Remote Targets" : tab.charAt(0).toUpperCase() + tab.slice(1)}
                         </button>
                     )
                 )}
@@ -304,6 +305,10 @@ export default function AgentDetailPage() {
                         </div>
                     )}
                 </div>
+            )}
+
+            {activeTab === "remote-targets" && (
+                <AgentRemoteTargetsTab agentId={agentId} />
             )}
 
             {activeTab === "execute" && (

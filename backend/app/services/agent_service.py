@@ -207,10 +207,54 @@ class AgentService:
                 )
             )
 
+        remote_targets = self._get_remote_targets_for_agent(db, agent.id)
+
         return AgentHeartbeatResponse(
             commands=commands if commands else None,
             heartbeat_interval=agent.heartbeat_interval,
+            remote_targets=remote_targets if remote_targets else None,
         )
+
+    def _get_remote_targets_for_agent(
+        self, db: Session, agent_id: int
+    ) -> list[dict]:
+        """Fetch enabled remote targets with decrypted credentials."""
+        from app.core.config import get_settings
+        from app.core.security import CredentialCipher
+        from app.repositories.agent_remote_target_repository import (
+            AgentRemoteTargetRepository,
+        )
+
+        settings = get_settings()
+        cipher = CredentialCipher(settings.missioncontrol_secret_key)
+        targets = AgentRemoteTargetRepository.get_enabled_by_agent_id(
+            db, agent_id
+        )
+
+        result = []
+        for t in targets:
+            target_dict = {
+                "id": t.id,
+                "name": t.name,
+                "hostname": t.hostname,
+                "protocol": t.protocol,
+                "port": t.port,
+                "username": t.username,
+                "password": (
+                    cipher.decrypt(t.password_encrypted)
+                    if t.password_encrypted
+                    else None
+                ),
+                "ssh_key": (
+                    cipher.decrypt(t.ssh_key_encrypted)
+                    if t.ssh_key_encrypted
+                    else None
+                ),
+                "tags": t.tags,
+            }
+            result.append(target_dict)
+
+        return result
 
     # ------------------------------------------------------------------ #
     # Command Results                                                     #
@@ -371,6 +415,42 @@ class AgentService:
             disk_percent=agent.disk_percent,
             inventory=inventory,
         )
+
+    async def get_remote_inventory(
+        self, db: Session, agent_id: int
+    ) -> dict:
+        """Get remote target inventory from an agent's latest inventory."""
+        agent = AgentRepository.get_by_id(db, agent_id)
+        if agent is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Agent not found",
+            )
+
+        if not agent.inventory_json:
+            return {
+                "agent_id": agent.id,
+                "agent_name": agent.name,
+                "hostname": agent.hostname,
+                "remote_targets": {},
+            }
+
+        try:
+            inventory = json.loads(agent.inventory_json)
+        except json.JSONDecodeError:
+            return {
+                "agent_id": agent.id,
+                "agent_name": agent.name,
+                "hostname": agent.hostname,
+                "remote_targets": {},
+            }
+
+        return {
+            "agent_id": agent.id,
+            "agent_name": agent.name,
+            "hostname": agent.hostname,
+            "remote_targets": inventory.get("remote_targets", {}),
+        }
 
     # ------------------------------------------------------------------ #
     # CRUD                                                                #

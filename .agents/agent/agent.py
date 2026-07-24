@@ -5,6 +5,7 @@ import logging
 import platform
 import socket
 import time
+from typing import Any
 
 from agent import __version__
 from agent.client import AgentClient
@@ -15,6 +16,7 @@ from agent.heartbeat import HeartbeatManager
 from agent.inventory import InventoryCollector
 from agent.plugin import PluginManager
 from agent.registration import RegistrationManager
+from agent.remote import RemoteManager
 from agent.updater import AgentUpdater
 
 logger = logging.getLogger("mc-agent")
@@ -45,8 +47,10 @@ class MissionControlAgent:
             max_size=config.offline_buffer_max,
         )
         self.plugin_manager = PluginManager()
+        self.remote_manager = RemoteManager()
         self.updater = AgentUpdater(self.client, __version__)
         self._running = False
+        self._remote_inventory_cache: dict[str, Any] = {}
         self._agent_id: int | None = config.agent_id
         self._last_inventory_time: float = 0
         self._last_update_check: float = 0
@@ -72,6 +76,7 @@ class MissionControlAgent:
         await asyncio.gather(
             self._heartbeat_loop(),
             self._inventory_loop(),
+            self._remote_inventory_loop(),
             self._result_reporting_loop(),
         )
 
@@ -144,6 +149,10 @@ class MissionControlAgent:
                     active_plugins=active_plugins,
                 )
 
+                remote_targets = response.get("remote_targets")
+                if remote_targets:
+                    self.remote_manager.update_targets(remote_targets)
+
                 pending_commands = response.get("commands") or []
                 for cmd in pending_commands:
                     await self._execute_command(cmd)
@@ -182,6 +191,9 @@ class MissionControlAgent:
                 if plugin_inventory:
                     inventory["plugins"] = plugin_inventory
 
+                if self._remote_inventory_cache:
+                    inventory["remote_targets"] = self._remote_inventory_cache
+
                 await self.client.post(
                     f"/api/v1/agents/{self._agent_id}/inventory",
                     inventory,
@@ -213,6 +225,26 @@ class MissionControlAgent:
 
             await asyncio.sleep(5)
 
+    async def _remote_inventory_loop(self) -> None:
+        """Periodic remote target inventory collection."""
+        while self._running:
+            try:
+                await asyncio.sleep(self.config.remote_inventory_interval)
+                if not self._running:
+                    break
+                if self.remote_manager.target_count == 0:
+                    continue
+
+                self._remote_inventory_cache = (
+                    await self.remote_manager.collect_inventory()
+                )
+                logger.info(
+                    "Remote inventory collected: %d targets",
+                    len(self._remote_inventory_cache),
+                )
+            except Exception as e:
+                logger.warning("Remote inventory cycle failed: %s", e)
+
     async def _execute_command(self, cmd: dict) -> None:
         """Execute a single command from the server."""
         command_id = cmd.get("id")
@@ -223,14 +255,32 @@ class MissionControlAgent:
         )
 
         try:
-            result = await self.command_executor.execute(
-                command=cmd.get("command", ""),
-                command_type=cmd.get("command_type", "execute"),
-                timeout=cmd.get("timeout", self.config.command_timeout),
-                file_path=cmd.get("file_path"),
-                file_name=cmd.get("file_name"),
-                file_content_b64=cmd.get("file_content_b64"),
-            )
+            command_type = cmd.get("command_type", "execute")
+
+            if command_type == "remote_execute":
+                target_id = cmd.get("target_id")
+                if target_id is None:
+                    result = {
+                        "success": False,
+                        "stdout": "",
+                        "stderr": "No target_id specified for remote_execute",
+                        "exit_code": -1,
+                    }
+                else:
+                    result = await self.remote_manager.execute_on_target(
+                        target_id=target_id,
+                        command=cmd.get("command", ""),
+                        timeout=cmd.get("timeout", self.config.command_timeout),
+                    )
+            else:
+                result = await self.command_executor.execute(
+                    command=cmd.get("command", ""),
+                    command_type=command_type,
+                    timeout=cmd.get("timeout", self.config.command_timeout),
+                    file_path=cmd.get("file_path"),
+                    file_name=cmd.get("file_name"),
+                    file_content_b64=cmd.get("file_content_b64"),
+                )
 
             report = {
                 "command_id": command_id,

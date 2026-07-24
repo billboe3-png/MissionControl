@@ -95,6 +95,7 @@ logging.basicConfig(
 logger = logging.getLogger("missioncontrol")
 from app.routers import (
     agent,
+    agent_remote_target,
     agent_token,
     ai,
     auth,
@@ -204,6 +205,7 @@ app.include_router(veeam.router, prefix="/api/v1")
 app.include_router(site.router, prefix="/api/v1")
 app.include_router(ai.router, prefix="/api/v1")
 app.include_router(agent.router, prefix="/api/v1")
+app.include_router(agent_remote_target.router, prefix="/api/v1")
 app.include_router(automation.router, prefix="/api/v1")
 app.include_router(company.router, prefix="/api/v1")
 app.include_router(setup.router, prefix="/api/v1")

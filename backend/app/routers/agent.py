@@ -285,3 +285,16 @@ async def get_inventory(
 ) -> AgentInventoryResponse:
     """Get current inventory for an agent."""
     return await service.get_inventory(db, agent_id)
+
+
+@router.get(
+    "/{agent_id}/remote-inventory",
+)
+async def get_remote_inventory(
+    agent_id: int,
+    current_user: object = Depends(get_current_user),
+    db: Session = Depends(get_db),
+    service: AgentService = Depends(get_agent_service),
+) -> dict:
+    """Get remote target inventory from an agent's latest inventory data."""
+    return await service.get_remote_inventory(db, agent_id)
