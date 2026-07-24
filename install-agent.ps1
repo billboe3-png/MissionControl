@@ -30,6 +30,24 @@ param(
 
 $ErrorActionPreference = "Stop"
 
+# ── Auto-elevate to admin if needed ────────────────────────
+$currentPrincipal = New-Object Security.Principal.WindowsPrincipal([Security.Principal.WindowsIdentity]::GetCurrent())
+if (-not $currentPrincipal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
+    Write-Host "[*] Restarting as Administrator..." -ForegroundColor Yellow
+    $args = @("-NoProfile", "-ExecutionPolicy", "Bypass", "-File", $MyInvocation.MyCommand.Path) + $MyInvocation.BoundParameters.Keys | ForEach-Object { "-$_"; $MyInvocation.BoundParameters[$_] }
+    $argString = "-NoProfile -ExecutionPolicy Bypass -File `"$($MyInvocation.MyCommand.Path)`""
+    foreach ($key in $MyInvocation.BoundParameters.Keys) {
+        $val = $MyInvocation.BoundParameters[$key]
+        if ($val -is [switch] -and $val) {
+            $argString += " -$key"
+        } elseif ($val) {
+            $argString += " -$key `"$val`""
+        }
+    }
+    Start-Process powershell.exe -ArgumentList $argString -Verb RunAs -Wait
+    exit
+}
+
 $ServiceName = "MissionControlAgent"
 $InstallDir = "$env:ProgramFiles\MissionControlAgent"
 $AgentScript = "$InstallDir\agent\__main__.py"
