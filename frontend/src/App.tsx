@@ -4,7 +4,9 @@ import { SidebarProvider } from "./contexts/SidebarContext";
 import { ToastProvider } from "./contexts/ToastContext";
 import AppLayout from "./layouts/AppLayout";
 import RequireAuth from "./layouts/RequireAuth";
+import RequireSetup from "./layouts/RequireSetup";
 import LoginPage from "./pages/auth/LoginPage";
+import SetupWizardPage from "./pages/setup/SetupWizardPage";
 import DashboardPage from "./pages/DashboardPage";
 import OverviewPage from "./pages/infrastructure/OverviewPage";
 import SystemPage from "./pages/infrastructure/SystemPage";
@@ -86,7 +88,10 @@ export default function App() {
                 <SidebarProvider>
                     <ToastProvider>
                         <Routes>
-                            <Route path="/login" element={<LoginPage />} />
+                            <Route element={<RequireSetup />}>
+                                <Route path="/login" element={<LoginPage />} />
+                                <Route path="/setup" element={<SetupWizardPage />} />
+                            </Route>
                             <Route element={<RequireAuth />}>
                             <Route element={<AppLayout />}>
                             <Route path="/" element={<DashboardPage />} />

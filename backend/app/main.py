@@ -54,7 +54,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         path = request.url.path
         if any(
             path.startswith(p)
-            for p in ("/api/v1/health", "/api/v1/version", "/api/v1/agents/")
+            for p in ("/api/v1/health", "/api/v1/version", "/api/v1/agents/", "/api/v1/setup")
         ):
             return await call_next(request)
 
@@ -115,6 +115,7 @@ from app.routers import (
     proxmox,
     remote,
     resume,
+    setup,
     site,
     status,
     tasks,
@@ -205,6 +206,7 @@ app.include_router(ai.router, prefix="/api/v1")
 app.include_router(agent.router, prefix="/api/v1")
 app.include_router(automation.router, prefix="/api/v1")
 app.include_router(company.router, prefix="/api/v1")
+app.include_router(setup.router, prefix="/api/v1")
 app.include_router(auth.router, prefix="/api/v1")
 app.include_router(agent_token.router, prefix="/api/v1")
 app.include_router(plugin.router, prefix="/api/v1")
@@ -220,3 +222,28 @@ async def api_root() -> dict[str, str]:
         "status": "online",
         "version": "3.0.0",
     }
+
+
+@app.on_event("startup")
+async def _startup_banner():
+    """Print installation status on startup."""
+    from app.db.database import SessionLocal
+    from app.services.setup_service import is_setup_required
+
+    print("")
+    print("  Mission Control")
+    print("  ─────────────────────────────────────")
+    try:
+        db = SessionLocal()
+        try:
+            if is_setup_required(db):
+                print("  Setup Required: YES")
+                print("  Waiting for administrator bootstrap...")
+            else:
+                print("  Setup Required: NO")
+                print("  Starting Platform...")
+        finally:
+            db.close()
+    except Exception:
+        print("  Setup Required: UNKNOWN (database not reachable)")
+    print("")
