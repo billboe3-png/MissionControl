@@ -261,7 +261,9 @@ fi
 
 mkdir -p "$INSTALL_DIR"
 cp -r "$AGENT_SOURCE/agent" "$INSTALL_DIR/agent"
-cp -r "$AGENT_SOURCE/skills" "$INSTALL_DIR/skills"
+if [[ -d "$AGENT_SOURCE/skills" ]]; then
+    cp -r "$AGENT_SOURCE/skills" "$INSTALL_DIR/skills"
+fi
 cp "$AGENT_SOURCE/pyproject.toml" "$INSTALL_DIR/"
 cp "$AGENT_SOURCE/requirements.txt" "$INSTALL_DIR/"
 
@@ -285,7 +287,7 @@ cd "$INSTALL_DIR"
     ok "Package install skipped (will use PYTHONPATH)"
 }
 
-cd "$SCRIPT_DIR"
+cd /
 
 ok "Python dependencies installed"
 
