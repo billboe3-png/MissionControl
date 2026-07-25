@@ -1,6 +1,7 @@
 """Mission Control Agent - Main agent orchestrator."""
 
 import asyncio
+import json
 import logging
 import platform
 import socket
@@ -259,6 +260,14 @@ class MissionControlAgent:
 
             if command_type == "remote_execute":
                 target_id = cmd.get("target_id")
+                command_text = cmd.get("command", "")
+                if target_id is None and command_text.startswith("{"):
+                    try:
+                        payload = json.loads(command_text)
+                        target_id = payload.get("target_id")
+                        command_text = payload.get("command", "")
+                    except (json.JSONDecodeError, AttributeError):
+                        pass
                 if target_id is None:
                     result = {
                         "success": False,
@@ -269,7 +278,7 @@ class MissionControlAgent:
                 else:
                     result = await self.remote_manager.execute_on_target(
                         target_id=target_id,
-                        command=cmd.get("command", ""),
+                        command=command_text,
                         timeout=cmd.get("timeout", self.config.command_timeout),
                     )
             else:

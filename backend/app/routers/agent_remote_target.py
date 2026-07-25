@@ -212,13 +212,21 @@ async def test_remote_target(
 
     from app.services.agent_service import agent_service as svc
 
-    cmd_result = await svc.dispatch_command(
-        db,
+    import json as _json
+
+    from app.schemas.agent import AgentCommandDispatchRequest
+
+    cmd_payload = _json.dumps({
+        "target_id": target_id,
+        "command": "echo connected",
+    })
+    cmd_data = AgentCommandDispatchRequest(
         agent_id=agent_id,
         command_type="remote_execute",
-        command=f"echo connected",
+        command=cmd_payload,
         timeout=15,
     )
+    cmd_result = await svc.dispatch_command(db, cmd_data)
 
     return {
         "connected": True,
