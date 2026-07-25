@@ -15,16 +15,16 @@ logger = logging.getLogger(__name__)
 
 _HYPERV_STATE_MAP = {
     0: "other",
-    1: "running",
-    2: "stopped",
-    3: "saved",
-    4: "paused",
-    5: "running",  # "running (paused)"
-    6: "running",  # "running (saved)"
-    7: "stopped",  # "stopping"
-    8: "saved",    # "saving"
-    9: "paused",   # "pausing"
-    10: "running", # "resuming"
+    1: "running",   # OtherRunning
+    2: "running",   # Running
+    3: "stopped",   # Off
+    4: "saved",     # Saved
+    5: "paused",    # Paused
+    6: "running",   # RunningSaved
+    7: "stopped",   # Stopping
+    8: "saved",     # Saving
+    9: "paused",    # Pausing
+    10: "running",  # Resuming
 }
 
 _SWITCH_TYPE_MAP = {
