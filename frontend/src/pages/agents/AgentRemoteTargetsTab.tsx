@@ -60,7 +60,7 @@ function TargetInventory({ inventory }: { inventory: Record<string, unknown> }) 
                                 <div><strong>CPU:</strong> {(system.cpu_percent as number)?.toFixed(1) ?? "—"}%</div>
                                 <div><strong>Memory:</strong> {(system.memory_percent as number)?.toFixed(1) ?? "—"}% ({formatBytes((system.memory_used_mb as number) ?? 0)} / {formatBytes((system.memory_total_mb as number) ?? 0)})</div>
                                 {system.uptime != null && <div><strong>Uptime:</strong> {formatUptime(system.uptime as number)}</div>}
-                                {system.os_version && <div><strong>Version:</strong> {system.os_version as string}</div>}
+                                {system.os_version ? <div><strong>Version:</strong> {String(system.os_version)}</div> : null}
                             </div>
                         </div>
                     )}
@@ -93,7 +93,7 @@ function TargetInventory({ inventory }: { inventory: Record<string, unknown> }) 
                                                     <td>{vm.cpu_usage != null ? `${vm.cpu_usage}%` : "—"}</td>
                                                     <td>{formatBytes((vm.memory_mb as number) ?? 0)}</td>
                                                     <td>{formatUptime((vm.uptime_seconds as number) ?? 0)}</td>
-                                                    <td>{vm.generation ?? "—"}</td>
+                                                    <td>{vm.generation != null ? String(vm.generation) : "—"}</td>
                                                 </tr>
                                             ))}
                                         </tbody>
