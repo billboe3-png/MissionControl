@@ -1,284 +1,278 @@
 """
-Veeam B&R Provider Factory
+Mission Control Veeam Provider Factory
 
-Resolves the appropriate Veeam provider based on DB integration profiles
-and environment configuration. Supports both REST API (Enterprise) and
-PowerShell remoting (Community Edition) providers.
+Manages multiple Veeam providers keyed by IntegrationProfile ID.
+Also supports agent-relayed Veeam inventory via negative host IDs.
+Falls back to mock when no profile is configured.
 """
 
-import base64
+import json
 import logging
-import time
-from typing import Any
+from functools import lru_cache
 
 from sqlalchemy.orm import Session
 
-from app.providers.veeam.base_provider import VeeamProvider
-from app.providers.veeam.mock_provider import MockVeeamProvider
+from .base_provider import VeeamProvider
 
 logger = logging.getLogger(__name__)
 
-_provider: VeeamProvider | None = None
-
-# ── Cache ───────────────────────────────────────────────────────
-# Provider cache: keyed by profile.id, stores (provider, created_at)
-_provider_cache: dict[int, tuple[VeeamProvider, float]] = {}
-_PROVIDER_CACHE_TTL = 300  # 5 minutes
-
-# db_type cache: keyed by (ssh_host, ssh_port, ssh_username), stores (db_type, detected_at)
-_db_type_cache: dict[tuple[str, int, str], tuple[str, float]] = {}
-_DB_TYPE_CACHE_TTL = 3600  # 1 hour — db_type doesn't change
+_providers: dict[int, VeeamProvider] = {}
+_default_provider: VeeamProvider | None = None
 
 
-def get_veeam_provider(db: Session | None = None) -> VeeamProvider:
-    """Return the active Veeam provider.
+def _build_provider(profile) -> VeeamProvider:
+    """Create a production provider from an IntegrationProfile."""
+    from app.core.config import get_settings
+    from app.core.security import CredentialCipher
 
-    Resolution priority:
-    1. Cached singleton
-    2. DB IntegrationProfile (type='veeam')
-       - If base_url is set → REST API provider
-       - If no base_url but ssh_host is set → PowerShell provider
-    3. Mock fallback
+    settings = get_settings()
+    cipher = CredentialCipher(settings.missioncontrol_secret_key)
+    password = cipher.decrypt(profile.encrypted_secret) if profile.encrypted_secret else ""
+    username = profile.username or ""
+    base_url = profile.base_url or ""
+    timeout = profile.timeout or 30
+    verify_ssl = profile.verify_ssl if profile.verify_ssl is not None else True
+
+    # REST API provider
+    if base_url and username:
+        from .veeam_provider import VeeamRESTProvider
+
+        return VeeamRESTProvider(
+            base_url=base_url,
+            username=username,
+            password=password,
+            timeout=timeout,
+            verify_ssl=verify_ssl,
+        )
+
+    # PowerShell provider (SSH bridge)
+    ssh_host = profile.ssh_host or ""
+    ssh_port = profile.ssh_port or 22
+    ssh_username = profile.ssh_username or ""
+    ssh_password = cipher.decrypt(profile.ssh_password_encrypted) if profile.ssh_password_encrypted else ""
+    if ssh_host and ssh_username:
+        from .powershell_provider import VeeamPowerShellProvider
+
+        return VeeamPowerShellProvider(
+            host=ssh_host,
+            port=ssh_port,
+            username=ssh_username,
+            password=ssh_password,
+            timeout=timeout,
+            transport="ssh",
+        )
+
+    raise ValueError("Profile missing base_url/username or ssh_host/ssh_username")
+
+
+def list_veeam_hosts(db: Session) -> list[dict]:
+    """Return all Veeam hosts (profiles + agent targets with Veeam inventory)."""
+    from app.repositories.integration_profile_repository import (
+        IntegrationProfileRepository,
+    )
+
+    profiles = IntegrationProfileRepository.get_all_enabled_by_type(db, "veeam")
+    hosts = [
+        {"id": p.id, "name": p.name, "host": p.base_url or p.ssh_host or "unknown"}
+        for p in profiles
+    ]
+
+    try:
+        from app.models.db.agent import Agent
+        from app.models.db.agent_remote_target import AgentRemoteTarget
+
+        targets = (
+            db.query(AgentRemoteTarget, Agent)
+            .join(Agent, AgentRemoteTarget.agent_id == Agent.id)
+            .filter(
+                AgentRemoteTarget.enabled.is_(True),
+                Agent.status != "offline",
+            )
+            .all()
+        )
+        for target, agent in targets:
+            inv = _get_target_inventory(agent, target.id)
+            veeam = inv.get("veeam")
+            if veeam and len(veeam.get("jobs", [])) > 0:
+                hosts.append({
+                    "id": -target.id,
+                    "name": f"{target.name} (Agent)",
+                    "host": target.hostname,
+                })
+    except Exception as e:
+        logger.debug("Could not load agent targets for Veeam: %s", e)
+
+    return hosts
+
+
+def get_veeam_provider(
+    db: Session | None = None,
+    host_id: int | None = None,
+) -> VeeamProvider:
+    """Return a Veeam provider.
+
+    If host_id is positive: loads (or caches) the provider for that IntegrationProfile.
+    If host_id is negative: loads from agent remote target inventory.
+    If host_id is None: returns the default (first available) provider.
+    Falls back to mock when no profile exists.
     """
-    global _provider
-    if _provider is not None:
-        return _provider
+    global _default_provider
+
+    if host_id is not None:
+        if host_id < 0:
+            return _get_agent_provider(db, -host_id)
+
+        if host_id in _providers:
+            return _providers[host_id]
+
+        if db is not None:
+            try:
+                from app.repositories.integration_profile_repository import (
+                    IntegrationProfileRepository,
+                )
+
+                profile = IntegrationProfileRepository.get_by_id(db, host_id)
+                if profile is not None and profile.enabled and profile.integration_type == "veeam":
+                    try:
+                        provider = _build_provider(profile)
+                        _providers[host_id] = provider
+                        logger.info("Created Veeam provider for profile %s", profile.name)
+                        return provider
+                    except Exception as e:
+                        logger.warning("Failed to create provider for profile %s: %s", profile.name, e)
+            except Exception as e:
+                logger.warning("Failed to load Veeam profile %s from DB: %s", host_id, e)
+
+        logger.warning("Veeam host_id=%s not found, falling back to default", host_id)
+
+    if _default_provider is not None:
+        return _default_provider
 
     if db is not None:
         try:
-            from app.core.config import get_settings
-            from app.core.security import CredentialCipher
             from app.repositories.integration_profile_repository import (
                 IntegrationProfileRepository,
             )
 
-            profiles = IntegrationProfileRepository.get_all_enabled_by_type(
-                db, "veeam"
-            )
-            if profiles:
-                profile = profiles[0]
-                settings = get_settings()
-                cipher = CredentialCipher(settings.missioncontrol_secret_key)
-                password = ""
-                if profile.encrypted_secret:
-                    try:
-                        password = cipher.decrypt(
-                            profile.encrypted_secret
-                        )
-                    except Exception:
-                        logger.warning("Failed to decrypt Veeam secret")
-
-                ssh_password = ""
-                if profile.ssh_password_encrypted:
-                    try:
-                        ssh_password = cipher.decrypt(
-                            profile.ssh_password_encrypted
-                        )
-                    except Exception:
-                        logger.warning("Failed to decrypt Veeam SSH password")
-
-                # Decide provider based on configuration
-                has_rest = bool(profile.base_url)
-                has_ssh = bool(profile.ssh_host and profile.ssh_username)
-
-                if has_rest:
-                    # REST API provider (Enterprise / with REST API)
-                    from app.providers.veeam.veeam_provider import VeeamRESTProvider
-
-                    _provider = VeeamRESTProvider(
-                        base_url=profile.base_url or "",
-                        username=profile.username or "",
-                        password=password,
-                        timeout=profile.timeout or 30,
-                        verify_ssl=(
-                            profile.verify_ssl
-                            if profile.verify_ssl is not None
-                            else True
-                        ),
-                        ssh_host=profile.ssh_host or "",
-                        ssh_port=profile.ssh_port or 22,
-                        ssh_username=profile.ssh_username or "",
-                        ssh_password=ssh_password,
-                        data_source=profile.data_source or "both",
-                    )
-                    logger.info(
-                        "Veeam REST provider initialized from DB profile: %s",
-                        profile.name,
-                    )
-                elif has_ssh:
-                    # PowerShell provider (Community Edition - no REST API)
-                    from app.providers.veeam.powershell_provider import (
-                        VeeamPowerShellProvider,
-                    )
-
-                    transport = "ssh"  # Community Edition typically uses SSH
-                    port = 22
-
-                    _provider = VeeamPowerShellProvider(
-                        host=profile.ssh_host or "",
-                        port=5985,
-                        username=profile.ssh_username or "",
-                        password=ssh_password,
-                        timeout=profile.timeout or 60,
-                        transport=transport,
-                        ssh_port=profile.ssh_port or 22,
-                    )
-                    logger.info(
-                        "Veeam PowerShell provider initialized from DB profile: %s",
-                        profile.name,
-                    )
-                else:
-                    logger.warning(
-                        "Veeam profile '%s' has no base_url or ssh_host configured",
-                        profile.name,
-                    )
-                    _provider = MockVeeamProvider()
-                    return _provider
-
-                return _provider
-        except Exception as exc:
-            logger.exception("Failed to initialize Veeam provider from DB: %s", exc)
+            profile = IntegrationProfileRepository.get_enabled_by_type(db, "veeam")
+            if profile is not None:
+                try:
+                    _default_provider = _build_provider(profile)
+                    _providers[profile.id] = _default_provider
+                    logger.info("Using production Veeam provider (profile: %s)", profile.name)
+                    return _default_provider
+                except Exception as e:
+                    logger.warning("Failed to create default Veeam provider: %s", e)
+        except Exception as e:
+            logger.warning("Failed to load Veeam profile from DB: %s", e)
 
     logger.info("Using mock Veeam provider")
-    _provider = MockVeeamProvider()
-    return _provider
+    from .mock_provider import MockVeeamProvider
+
+    _default_provider = MockVeeamProvider()
+    return _default_provider
 
 
-def reset_veeam_provider() -> None:
-    """Clear the cached Veeam provider singleton and all caches."""
-    global _provider
-    _provider = None
-    _provider_cache.clear()
-    _db_type_cache.clear()
-
-
-def _create_provider_for_profile(profile, settings, cipher) -> VeeamProvider | None:
-    """Create a provider instance for a single IntegrationProfile."""
-    password = ""
-    if profile.encrypted_secret:
-        try:
-            password = cipher.decrypt(profile.encrypted_secret)
-        except Exception:
-            logger.warning("Failed to decrypt Veeam secret for profile %s", profile.name)
-
-    ssh_password = ""
-    if profile.ssh_password_encrypted:
-        try:
-            ssh_password = cipher.decrypt(profile.ssh_password_encrypted)
-        except Exception:
-            logger.warning("Failed to decrypt Veeam SSH password for profile %s", profile.name)
-
-    has_rest = bool(profile.base_url)
-    has_ssh = bool(profile.ssh_host and profile.ssh_username)
-
-    # Auto-detect database type (PostgreSQL vs MSSQL) — with cache
-    db_type = "postgresql"
-    column_case = "pascal"
-    if has_ssh:
-        cache_key = (profile.ssh_host or "", profile.ssh_port or 22, profile.ssh_username or "")
-        now = time.monotonic()
-        cached = _db_type_cache.get(cache_key)
-        if cached and (now - cached[1]) < _DB_TYPE_CACHE_TTL:
-            db_type = cached[0]
-            logger.info("Cached db_type=%s for profile %s", db_type, profile.name)
-        else:
-            from app.providers.veeam.db_bridge import detect_db_type
-            try:
-                db_type = detect_db_type(
-                    profile.ssh_host, profile.ssh_port or 22,
-                    profile.ssh_username, ssh_password,
-                )
-                _db_type_cache[cache_key] = (db_type, now)
-                logger.info("Detected db_type=%s column_case=%s for profile %s", db_type, column_case, profile.name)
-            except Exception as exc:
-                logger.warning("DB type detection failed for %s, defaulting to postgresql: %s", profile.name, exc)
-        if db_type == "mssql":
-            column_case = "snake"
-
-    if has_rest:
-        from app.providers.veeam.veeam_provider import VeeamRESTProvider
-
-        provider = VeeamRESTProvider(
-            base_url=profile.base_url or "",
-            username=profile.username or "",
-            password=password,
-            timeout=profile.timeout or 30,
-            verify_ssl=profile.verify_ssl if profile.verify_ssl is not None else True,
-            ssh_host=profile.ssh_host or "",
-            ssh_port=profile.ssh_port or 22,
-            ssh_username=profile.ssh_username or "",
-            ssh_password=ssh_password,
-            data_source=profile.data_source or "both",
-            db_type=db_type,
-            column_case=column_case,
-        )
-        logger.info("Veeam REST provider created for profile: %s (db_type=%s, column_case=%s)", profile.name, db_type, column_case)
-        return provider
-
-    if has_ssh:
-        from app.providers.veeam.powershell_provider import VeeamPowerShellProvider
-
-        provider = VeeamPowerShellProvider(
-            host=profile.ssh_host or "",
-            port=5985,
-            username=profile.ssh_username or "",
-            password=ssh_password,
-            timeout=profile.timeout or 60,
-            transport="ssh",
-            ssh_port=profile.ssh_port or 22,
-            db_type=db_type,
-            column_case=column_case,
-        )
-        logger.info("Veeam PowerShell provider created for profile: %s (db_type=%s, column_case=%s)", profile.name, db_type, column_case)
-        return provider
-
-    logger.warning("Profile '%s' has no base_url or ssh_host configured", profile.name)
-    return None
-
-
-def get_all_veeam_providers(
-    db: Session | None = None,
-) -> list[tuple[str, VeeamProvider]]:
-    """Return (name, provider) pairs for every enabled Veeam profile.
-
-    Uses a 5-minute cache to avoid recreating SSH connections on every request.
-    """
-    if db is None:
-        singleton = get_veeam_provider()
-        return [("default", singleton)]
-
+def _get_target_inventory(agent, target_id: int) -> dict:
+    """Extract the remote target inventory dict from an agent."""
+    if not agent.inventory_json:
+        return {}
     try:
-        from app.core.config import get_settings
-        from app.core.security import CredentialCipher
-        from app.repositories.integration_profile_repository import (
-            IntegrationProfileRepository,
+        full_inv = json.loads(agent.inventory_json)
+        remote = full_inv.get("remote_targets", {})
+        target_data = remote.get(f"target-{target_id}", {})
+        return target_data.get("inventory", {})
+    except (json.JSONDecodeError, TypeError):
+        return {}
+
+
+def _get_agent_provider(db: Session | None, target_id: int) -> VeeamProvider:
+    """Build an AgentVeeamProvider from stored remote target inventory."""
+    from app.models.db.agent import Agent
+    from app.models.db.agent_remote_target import AgentRemoteTarget
+
+    if db is None:
+        raise ValueError("Database session required for agent provider")
+
+    target = db.query(AgentRemoteTarget).filter(AgentRemoteTarget.id == target_id).first()
+    if target is None:
+        raise ValueError(f"Agent remote target {target_id} not found")
+
+    agent = db.query(Agent).filter(Agent.id == target.agent_id).first()
+    if agent is None or not agent.inventory_json:
+        raise ValueError(f"Agent inventory not available for target {target_id}")
+
+    inv = _get_target_inventory(agent, target_id)
+    veeam = inv.get("veeam")
+    if not veeam:
+        raise ValueError(f"No Veeam inventory collected for target {target_id}")
+
+    async def _dispatch_on_agent(command_str: str) -> dict:
+        from app.schemas.agent import AgentCommandDispatchRequest
+        from app.services.agent_service import agent_service
+        from fastapi import HTTPException
+
+        if agent.status != "online":
+            return {
+                "success": False,
+                "error": f"Agent '{agent.name}' is {agent.status}, cannot dispatch command",
+            }
+        cmd_payload = json.dumps({
+            "command": command_str,
+            "target_id": target.id,
+        })
+        req = AgentCommandDispatchRequest(
+            agent_id=agent.id,
+            command_type="remote_execute",
+            command=cmd_payload,
+            timeout=120,
         )
+        try:
+            result = await agent_service.dispatch_command(db, req)
+            return {
+                "success": True,
+                "command_id": result.id,
+                "message": f"Command dispatched to agent (id={result.id})",
+            }
+        except HTTPException as e:
+            return {"success": False, "error": e.detail}
+        except Exception as e:
+            logger.exception("Failed to dispatch command to agent %s", agent.id)
+            return {"success": False, "error": str(e)}
 
-        settings = get_settings()
-        cipher = CredentialCipher(settings.missioncontrol_secret_key)
+    from .agent_provider import AgentVeeamProvider
+    return AgentVeeamProvider(
+        veeam,
+        target_hostname=target.hostname,
+        agent_id=agent.id,
+        target_id=target.id,
+        dispatch_cmd=_dispatch_on_agent,
+    )
 
-        profiles = IntegrationProfileRepository.get_all_enabled_by_type(db, "veeam")
-        now = time.monotonic()
-        result: list[tuple[str, VeeamProvider]] = []
-        uncached_profiles = []
 
-        # Check cache first
-        for profile in profiles:
-            cached = _provider_cache.get(profile.id)
-            if cached and (now - cached[1]) < _PROVIDER_CACHE_TTL:
-                result.append((profile.name, cached[0]))
-            else:
-                uncached_profiles.append(profile)
+def reset_veeam_provider(host_id: int | None = None) -> None:
+    """Reset cached provider(s). If host_id given, reset only that one."""
+    global _default_provider
+    if host_id is not None:
+        if host_id > 0:
+            _providers.pop(host_id, None)
+    else:
+        _providers.clear()
+        _default_provider = None
 
-        # Only create providers for uncached profiles
-        for profile in uncached_profiles:
-            provider = _create_provider_for_profile(profile, settings, cipher)
-            if provider is not None:
-                _provider_cache[profile.id] = (provider, now)
-                result.append((profile.name, provider))
 
-        return result
-    except Exception as exc:
-        logger.exception("Failed to load Veeam providers from DB: %s", exc)
-        singleton = get_veeam_provider()
-        return [("default", singleton)]
+def get_all_veeam_providers(db: Session) -> list[tuple[str, VeeamProvider]]:
+    """Return list of (name, provider) for all enabled Veeam profiles."""
+    from app.repositories.integration_profile_repository import (
+        IntegrationProfileRepository,
+    )
+
+    profiles = IntegrationProfileRepository.get_all_enabled_by_type(db, "veeam")
+    result: list[tuple[str, VeeamProvider]] = []
+    for p in profiles:
+        try:
+            provider = _build_provider(p)
+            result.append((p.name, provider))
+        except Exception as e:
+            logger.warning("Failed to build Veeam provider for %s: %s", p.name, e)
+    return result

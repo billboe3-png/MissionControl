@@ -118,6 +118,65 @@ class SSHConnector(RemoteConnector):
     async def collect_hyperv_inventory(self) -> dict | None:
         return None
 
+    async def collect_proxmox_inventory(self) -> dict | None:
+        """Collect Proxmox VE cluster data via pvesh CLI."""
+        check = await self._run_cmd("which pvesh 2>/dev/null && pvesh version 2>/dev/null", timeout=10)
+        if not check["success"] or not check["stdout"].strip():
+            return None
+
+        nodes_result = await self._run_cmd(
+            "pvesh get /nodes --output-format json 2>/dev/null || echo '[]'",
+            timeout=15,
+        )
+        nodes = []
+        if nodes_result["success"]:
+            try:
+                nodes = json.loads(nodes_result["stdout"])
+            except (json.JSONDecodeError, TypeError):
+                pass
+
+        vms_result = await self._run_cmd(
+            "pvesh get /cluster/resources --type vm --output-format json 2>/dev/null || echo '[]'",
+            timeout=15,
+        )
+        vms = []
+        if vms_result["success"]:
+            try:
+                vms = json.loads(vms_result["stdout"])
+            except (json.JSONDecodeError, TypeError):
+                pass
+
+        lxc_result = await self._run_cmd(
+            "pvesh get /cluster/resources --type lxc --output-format json 2>/dev/null || echo '[]'",
+            timeout=15,
+        )
+        lxc = []
+        if lxc_result["success"]:
+            try:
+                lxc = json.loads(lxc_result["stdout"])
+            except (json.JSONDecodeError, TypeError):
+                pass
+
+        storage_result = await self._run_cmd(
+            "pvesh get /cluster/resources --type storage --output-format json 2>/dev/null || echo '[]'",
+            timeout=15,
+        )
+        storage = []
+        if storage_result["success"]:
+            try:
+                storage = json.loads(storage_result["stdout"])
+            except (json.JSONDecodeError, TypeError):
+                pass
+
+        return {
+            "vm_count": len(vms),
+            "lxc_count": len(lxc),
+            "nodes": nodes,
+            "vms": vms,
+            "lxc": lxc,
+            "storage": storage,
+        }
+
     async def collect_services(self) -> list[dict]:
         script = (
             "systemctl list-units --type=service --state=running --no-pager --no-legend 2>/dev/null | "

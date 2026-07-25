@@ -102,6 +102,8 @@ class RemoteManager:
 
                 system = await connector.collect_system_inventory()
                 hyperv = await connector.collect_hyperv_inventory()
+                proxmox = await connector.collect_proxmox_inventory()
+                veeam = await connector.collect_veeam_inventory()
                 services = await connector.collect_services()
 
                 inventory: dict[str, Any] = {
@@ -110,6 +112,10 @@ class RemoteManager:
                 }
                 if hyperv:
                     inventory["hyperv"] = hyperv
+                if proxmox:
+                    inventory["proxmox"] = proxmox
+                if veeam:
+                    inventory["veeam"] = veeam
 
                 results[key] = {
                     "hostname": target["hostname"],

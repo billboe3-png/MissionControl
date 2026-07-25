@@ -35,6 +35,14 @@ class RemoteConnector(ABC):
     async def collect_services(self) -> list[dict]:
         """Collect running services."""
 
+    async def collect_proxmox_inventory(self) -> dict | None:
+        """Collect Proxmox VE data if available. Returns None if not a Proxmox host."""
+        return None
+
+    async def collect_veeam_inventory(self) -> dict | None:
+        """Collect Veeam B&R data if available. Returns None if not a Veeam server."""
+        return None
+
     @abstractmethod
     async def disconnect(self) -> None:
         """Close any open connections."""

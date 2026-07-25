@@ -152,6 +152,56 @@ class WinRMConnector(RemoteConnector):
                 pass
         return None
 
+    async def collect_veeam_inventory(self) -> dict | None:
+        """Collect Veeam B&R data if Veeam PowerShell module is available."""
+        check = (
+            "if (Get-Module -ListAvailable -Name Veeam.Backup.PowerShell) { "
+            "  'available' "
+            "} else { 'unavailable' }"
+        )
+        result = await self._run_ps(check, timeout=10)
+        if not result["success"] or "available" not in result["stdout"].lower():
+            return None
+
+        script = (
+            "Import-Module Veeam.Backup.PowerShell -ErrorAction Stop; "
+            "$jobs = Get-VBRJob | Select-Object Id, Name, JobType, "
+            "  @{N='Status';E={$_.GetLastStatus()}}, "
+            "  @{N='LastRun';E={$_.GetLastRun()}}, "
+            "  Enabled, Description | ConvertTo-Json -Depth 3; "
+            "$sessions = Get-VBRSession -Last 50 | Select-Object Id, Name, "
+            "  JobId, JobName, @{N='CreationTime';E={$_.CreationTime.ToString('o')}}, "
+            "  @{N='EndTime';E={$_.EndTime.ToString('o')}}, "
+            "  Result, Status | ConvertTo-Json -Depth 3; "
+            "$repos = Get-VBRRepository | Select-Object Id, Name, "
+            "  Type, HostName, Path, "
+            "  @{N='CapacityGB';E={[math]::Round($_.CapacityGB,1)}}, "
+            "  @{N='FreeGB';E={[math]::Round($_.FreeGB,1)}} | ConvertTo-Json -Depth 3; "
+            "$servers = Get-VBRServer | Select-Object Id, Name, Type, "
+            "  @{N='Status';E={$_.Status}} | ConvertTo-Json -Depth 3; "
+            "$license = Get-VBRLicense | Select-Object "
+            "  LicenseType, @{N='ExpirationDate';E={$_.ExpirationDate.ToString('o')}}, "
+            "  SupportExpirationDate, MaxUsedSockets, UsedSockets | ConvertTo-Json -Depth 3; "
+            "try { $capacityTier = Get-VBRCapacityTierExtent | "
+            "  Select-Object Name, Type, Status | ConvertTo-Json -Depth 2 "
+            "} catch { $capacityTier = 'null' }; "
+            "@{ "
+            "  jobs=(try { $jobs | ConvertFrom-Json } catch { @() }); "
+            "  sessions=(try { $sessions | ConvertFrom-Json } catch { @() }); "
+            "  repositories=(try { $repos | ConvertFrom-Json } catch { @() }); "
+            "  managed_servers=(try { $servers | ConvertFrom-Json } catch { @() }); "
+            "  license=(try { $license | ConvertFrom-Json } catch { $null }); "
+            "  capacity_tier=(try { $capacityTier | ConvertFrom-Json } catch { $null }) "
+            "} | ConvertTo-Json -Depth 5"
+        )
+        result = await self._run_ps(script, timeout=60)
+        if result["success"]:
+            try:
+                return json.loads(result["stdout"])
+            except json.JSONDecodeError:
+                pass
+        return None
+
     async def collect_services(self) -> list[dict]:
         script = (
             "Get-Service | Where-Object {$_.Status -eq 'Running'} | "

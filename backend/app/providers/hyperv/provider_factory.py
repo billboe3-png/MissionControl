@@ -192,8 +192,48 @@ def _get_agent_provider(db: Session | None, target_id: int) -> HyperVProvider:
     if not hyperv:
         raise ValueError(f"No Hyper-V inventory collected for target {target_id}")
 
+    async def _dispatch_on_agent(command_str: str) -> dict:
+        """Queue a PowerShell command for execution on the remote target."""
+        from app.schemas.agent import AgentCommandDispatchRequest
+        from app.services.agent_service import agent_service
+        from fastapi import HTTPException
+
+        if agent.status != "online":
+            return {
+                "success": False,
+                "error": f"Agent '{agent.name}' is {agent.status}, cannot dispatch command",
+            }
+        cmd_payload = json.dumps({
+            "command": command_str,
+            "target_id": target.id,
+        })
+        req = AgentCommandDispatchRequest(
+            agent_id=agent.id,
+            command_type="remote_execute",
+            command=cmd_payload,
+            timeout=120,
+        )
+        try:
+            result = await agent_service.dispatch_command(db, req)
+            return {
+                "success": True,
+                "command_id": result.id,
+                "message": f"Command dispatched to agent (id={result.id})",
+            }
+        except HTTPException as e:
+            return {"success": False, "error": e.detail}
+        except Exception as e:
+            logger.exception("Failed to dispatch command to agent %s", agent.id)
+            return {"success": False, "error": str(e)}
+
     from .agent_provider import AgentHyperVProvider
-    return AgentHyperVProvider(hyperv, target_hostname=target.hostname)
+    return AgentHyperVProvider(
+        hyperv,
+        target_hostname=target.hostname,
+        agent_id=agent.id,
+        target_id=target.id,
+        dispatch_cmd=_dispatch_on_agent,
+    )
 
 
 def reset_hyperv_provider(host_id: int | None = None) -> None:

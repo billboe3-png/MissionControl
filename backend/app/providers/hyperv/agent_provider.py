@@ -4,6 +4,9 @@ Mission Control Agent Hyper-V Provider
 Reads Hyper-V inventory from agent-collected remote target data
 stored in Agent.inventory_json.  Implements HyperVProvider so the
 existing Hyper-V pages work transparently for agent-relayed hosts.
+
+Write operations (start/stop/restart/pause/resume VM, checkpoints)
+dispatch commands to the agent via the server's command queue.
 """
 
 import json
@@ -33,13 +36,35 @@ _SWITCH_TYPE_MAP = {
     2: "private",
 }
 
+_HV_CMD_START = "Start-VM -Id '{vm_id}'"
+_HV_CMD_STOP = "Stop-VM -Id '{vm_id}'{force}"
+_HV_CMD_RESTART = "Restart-VM -Id '{vm_id}'"
+_HV_CMD_PAUSE = "Suspend-VM -Id '{vm_id}'"
+_HV_CMD_RESUME = "Resume-VM -Id '{vm_id}'"
+_HV_CMD_CREATE_CHECKPOINT = "Checkpoint-VM -Id '{vm_id}'{name}"
+_HV_CMD_DELETE_CHECKPOINT = "Remove-VMCheckpoint -Id '{checkpoint_id}'"
+
 
 class AgentHyperVProvider(HyperVProvider):
-    """Hyper-V provider backed by agent remote inventory data."""
+    """Hyper-V provider backed by agent remote inventory data.
 
-    def __init__(self, inventory: dict, target_hostname: str = "") -> None:
+    Write operations queue commands to the managing agent for
+    execution on the remote Hyper-V host.
+    """
+
+    def __init__(
+        self,
+        inventory: dict,
+        target_hostname: str = "",
+        agent_id: int | None = None,
+        target_id: int | None = None,
+        dispatch_cmd: callable | None = None,
+    ) -> None:
         self._inventory = inventory
         self._hostname = target_hostname
+        self._agent_id = agent_id
+        self._target_id = target_id
+        self._dispatch_cmd = dispatch_cmd
 
     def _get_vm_list(self) -> list[dict]:
         raw = self._inventory.get("vms", [])
@@ -51,6 +76,17 @@ class AgentHyperVProvider(HyperVProvider):
         if isinstance(raw, dict):
             raw = [raw]
         return raw
+
+    async def _dispatch(self, command_str: str) -> dict:
+        """Dispatch a PowerShell command to the managing agent."""
+        if not self._dispatch_cmd:
+            return {"success": False, "error": "No agent dispatch available for this host"}
+        try:
+            result = await self._dispatch_cmd(command_str)
+            return result
+        except Exception as e:
+            logger.exception("Agent dispatch failed for target %s", self._target_id)
+            return {"success": False, "error": str(e)}
 
     def _get_switch_list(self) -> list[dict]:
         raw = self._inventory.get("switches", [])
@@ -148,23 +184,29 @@ class AgentHyperVProvider(HyperVProvider):
         return {"connected": False, "error": "VM not found in agent inventory"}
 
     # ------------------------------------------------------------------ #
-    # VM actions (not supported via agent — read-only relay)              #
+    # VM actions (dispatched to agent via command queue)                  #
     # ------------------------------------------------------------------ #
 
     async def start_vm(self, vm_id: str) -> dict:
-        return {"success": False, "error": "VM actions not supported via agent relay"}
+        cmd = _HV_CMD_START.format(vm_id=vm_id)
+        return await self._dispatch(cmd)
 
     async def stop_vm(self, vm_id: str, force: bool = False) -> dict:
-        return {"success": False, "error": "VM actions not supported via agent relay"}
+        force_flag = " -Force" if force else ""
+        cmd = _HV_CMD_STOP.format(vm_id=vm_id, force=force_flag)
+        return await self._dispatch(cmd)
 
     async def restart_vm(self, vm_id: str) -> dict:
-        return {"success": False, "error": "VM actions not supported via agent relay"}
+        cmd = _HV_CMD_RESTART.format(vm_id=vm_id)
+        return await self._dispatch(cmd)
 
     async def pause_vm(self, vm_id: str) -> dict:
-        return {"success": False, "error": "VM actions not supported via agent relay"}
+        cmd = _HV_CMD_PAUSE.format(vm_id=vm_id)
+        return await self._dispatch(cmd)
 
     async def resume_vm(self, vm_id: str) -> dict:
-        return {"success": False, "error": "VM actions not supported via agent relay"}
+        cmd = _HV_CMD_RESUME.format(vm_id=vm_id)
+        return await self._dispatch(cmd)
 
     # ------------------------------------------------------------------ #
     # Networks                                                            #
@@ -205,13 +247,16 @@ class AgentHyperVProvider(HyperVProvider):
         return await self.create_checkpoint(vm_id, name)
 
     async def create_checkpoint(self, vm_id: str, name: str | None = None) -> dict:
-        return {"success": False, "error": "Checkpoints not supported via agent relay"}
+        name_flag = f" -SnapshotName '{name}'" if name else ""
+        cmd = _HV_CMD_CREATE_CHECKPOINT.format(vm_id=vm_id, name=name_flag)
+        return await self._dispatch(cmd)
 
     async def delete_snapshot(self, vm_id: str, snapshot_id: str) -> dict:
         return await self.delete_checkpoint(vm_id, snapshot_id)
 
     async def delete_checkpoint(self, vm_id: str, checkpoint_id: str) -> dict:
-        return {"success": False, "error": "Checkpoints not supported via agent relay"}
+        cmd = _HV_CMD_DELETE_CHECKPOINT.format(checkpoint_id=checkpoint_id)
+        return await self._dispatch(cmd)
 
     # ------------------------------------------------------------------ #
     # Health                                                              #

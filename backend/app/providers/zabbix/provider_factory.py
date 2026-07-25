@@ -1,18 +1,16 @@
 """
 Mission Control Zabbix Provider Factory
 
-Singleton factory that returns the correct Zabbix provider
-based on configuration.
+Returns the correct Zabbix provider based on configuration.
 
 Priority order:
   1. Active IntegrationProfile in the database (when db is provided)
   2. ZABBIX_URL + ZABBIX_USERNAME environment variables
-  3. MockZabbixProvider (fallback for dev/testing)
-
-Sprint 2.3.0 - Enterprise Zabbix Integration.
-Sprint 2.3.2 - Database-driven provider selection.
+  3. Agent-collected Zabbix inventory (when agent data is available)
+  4. MockZabbixProvider (fallback)
 """
 
+import json
 import logging
 
 from app.providers.zabbix.base_provider import ZabbixProvider
@@ -24,10 +22,8 @@ _zabbix_provider: ZabbixProvider | None = None
 
 
 def _is_zabbix_configured() -> bool:
-    """Check if production Zabbix is configured via env vars."""
     try:
         from app.core.config import get_settings
-
         settings = get_settings()
         return bool(settings.zabbix_url and settings.zabbix_username)
     except Exception:
@@ -35,7 +31,6 @@ def _is_zabbix_configured() -> bool:
 
 
 def _build_provider_from_profile(profile) -> ZabbixProvider:
-    """Create an ApiZabbixProvider from a database IntegrationProfile."""
     from app.core.config import get_settings
     from app.core.security import CredentialCipher
     from app.providers.zabbix.zabbix_provider import ApiZabbixProvider
@@ -44,14 +39,10 @@ def _build_provider_from_profile(profile) -> ZabbixProvider:
     if profile.encrypted_secret:
         try:
             settings = get_settings()
-            cipher = CredentialCipher(
-                settings.missioncontrol_secret_key
-            )
+            cipher = CredentialCipher(settings.missioncontrol_secret_key)
             password = cipher.decrypt(profile.encrypted_secret)
         except Exception as e:
-            logger.warning(
-                "Failed to decrypt Zabbix credential: %s", e
-            )
+            logger.warning("Failed to decrypt Zabbix credential: %s", e)
             password = None
 
     return ApiZabbixProvider(
@@ -64,81 +55,88 @@ def _build_provider_from_profile(profile) -> ZabbixProvider:
 
 
 def _resolve_from_db(db) -> ZabbixProvider | None:
-    """Query DB for an active Zabbix integration profile."""
     try:
         from app.repositories.integration_profile_repository import (
             IntegrationProfileRepository,
         )
 
-        profile = IntegrationProfileRepository.get_enabled_by_type(
-            db, "zabbix"
-        )
+        profile = IntegrationProfileRepository.get_enabled_by_type(db, "zabbix")
         if profile is None:
             logger.debug("No active Zabbix profile in database")
             return None
-
         if not profile.base_url:
-            logger.warning(
-                "Active Zabbix profile %s has no URL", profile.id
-            )
+            logger.warning("Active Zabbix profile %s has no URL", profile.id)
             return None
-
         if not profile.username:
-            logger.warning(
-                "Active Zabbix profile %s has no username", profile.id
-            )
+            logger.warning("Active Zabbix profile %s has no username", profile.id)
             return None
-
-        logger.info(
-            "Using database profile '%s' for Zabbix provider",
-            profile.name,
-        )
+        logger.info("Using database profile '%s' for Zabbix provider", profile.name)
         return _build_provider_from_profile(profile)
     except Exception as e:
         logger.warning("Failed to resolve Zabbix from DB: %s", e)
         return None
 
 
+def _resolve_from_agent(db) -> ZabbixProvider | None:
+    """Check for Zabbix data collected by any agent plugin."""
+    try:
+        from app.models.db.agent import Agent
+
+        agents = (
+            db.query(Agent)
+            .filter(
+                Agent.status == "online",
+                Agent.inventory_json.isnot(None),
+                Agent.inventory_json != "",
+            )
+            .all()
+        )
+        for agent in agents:
+            try:
+                inv = json.loads(agent.inventory_json)
+                plugins = inv.get("plugins", {})
+                zabbix_data = plugins.get("zabbix")
+                if zabbix_data:
+                    from .agent_provider import AgentZabbixProvider
+                    logger.info("Using agent-collected Zabbix data from %s", agent.name)
+                    return AgentZabbixProvider(zabbix_data, hostname=agent.hostname)
+            except (json.JSONDecodeError, TypeError):
+                continue
+    except Exception as e:
+        logger.debug("Could not resolve Zabbix from agent: %s", e)
+    return None
+
+
 def get_zabbix_provider(db=None) -> ZabbixProvider:
-    """
-    Return the singleton Zabbix provider.
-
-    Resolution order:
-      1. Cached singleton (if already created)
-      2. Active Zabbix IntegrationProfile in DB (when *db* provided)
-      3. ZABBIX_URL + ZABBIX_USERNAME env vars
-      4. MockZabbixProvider (fallback)
-
-    When *db* is None the database is skipped and the provider
-    is resolved from env vars or falls back to mock.
-    """
     global _zabbix_provider
 
     if _zabbix_provider is not None:
         return _zabbix_provider
 
-    # 1. Try database profile
     if db is not None:
         db_provider = _resolve_from_db(db)
         if db_provider is not None:
             _zabbix_provider = db_provider
             return _zabbix_provider
 
-    # 2. Fall back to env vars
     if _is_zabbix_configured():
         from app.providers.zabbix.zabbix_provider import ApiZabbixProvider
-
         _zabbix_provider = ApiZabbixProvider()
         logger.info("Created singleton ApiZabbixProvider (env config)")
-    else:
-        _zabbix_provider = MockZabbixProvider()
-        logger.info("Created singleton MockZabbixProvider (no config)")
+        return _zabbix_provider
 
+    if db is not None:
+        agent_provider = _resolve_from_agent(db)
+        if agent_provider is not None:
+            _zabbix_provider = agent_provider
+            return _zabbix_provider
+
+    _zabbix_provider = MockZabbixProvider()
+    logger.info("Created singleton MockZabbixProvider (no config)")
     return _zabbix_provider
 
 
 def reset_zabbix_provider() -> None:
-    """Reset singleton provider. Used for testing."""
     global _zabbix_provider
     _zabbix_provider = None
     logger.info("Zabbix provider singleton reset")
