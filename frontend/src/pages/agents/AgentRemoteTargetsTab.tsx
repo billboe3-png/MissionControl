@@ -283,7 +283,7 @@ export default function AgentRemoteTargetsTab({ agentId }: Props) {
                                                     ? "healthy"
                                                     : t.last_status === "error"
                                                     ? "error"
-                                                    : "default"
+                                                    : "neutral"
                                             }
                                             label={t.last_status}
                                         />
