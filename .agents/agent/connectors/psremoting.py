@@ -22,13 +22,12 @@ class PSRemotingConnector(RemoteConnector):
             f"('{self.username}', $secPwd)"
         )
 
-        escaped_script = script.replace("'", "''")
         full_cmd = (
             f"powershell -NoProfile -Command "
             f"\"{cred_ps}; "
             f"Invoke-Command -ComputerName '{self.hostname}' "
             f"-Port {self.port} -Credential $cred "
-            f"-ScriptBlock {{ {escaped_script} }} "
+            f"-ScriptBlock {{ {script} }} "
             f"-ErrorAction Stop\""
         )
 
