@@ -5,6 +5,7 @@ Manages multiple Hyper-V providers keyed by IntegrationProfile ID.
 Falls back to mock when no profile is configured.
 """
 
+import json
 import logging
 
 from sqlalchemy.orm import Session
@@ -48,28 +49,70 @@ def _build_provider(profile) -> HyperVProvider:
 
 
 def list_hyperv_hosts(db: Session) -> list[dict]:
-    """Return all enabled Hyper-V hosts for the frontend selector."""
+    """Return all enabled Hyper-V hosts for the frontend selector.
+
+    Includes both IntegrationProfile hosts and agent remote targets
+    that have collected Hyper-V inventory.
+    """
     from app.repositories.integration_profile_repository import (
         IntegrationProfileRepository,
     )
 
     profiles = IntegrationProfileRepository.get_all_enabled_by_type(db, "hyperv")
-    return [
+    hosts = [
         {"id": p.id, "name": p.name, "host": p.base_url or "unknown"}
         for p in profiles
     ]
+
+    try:
+        from app.models.db.agent import Agent
+        from app.models.db.agent_remote_target import AgentRemoteTarget
+
+        targets = (
+            db.query(AgentRemoteTarget, Agent)
+            .join(Agent, AgentRemoteTarget.agent_id == Agent.id)
+            .filter(
+                AgentRemoteTarget.enabled.is_(True),
+                Agent.status != "offline",
+            )
+            .all()
+        )
+        for target, agent in targets:
+            inv = {}
+            if agent.inventory_json:
+                try:
+                    full_inv = json.loads(agent.inventory_json)
+                    remote = full_inv.get("remote_targets", {})
+                    inv = remote.get(f"target-{target.id}", {}).get("inventory", {})
+                except (json.JSONDecodeError, TypeError):
+                    pass
+            hyperv = inv.get("hyperv")
+            if hyperv and hyperv.get("vm_count", 0) > 0:
+                hosts.append({
+                    "id": -target.id,
+                    "name": f"{target.name} (Agent)",
+                    "host": target.hostname,
+                })
+    except Exception as e:
+        logger.debug("Could not load agent targets for host list: %s", e)
+
+    return hosts
 
 
 def get_hyperv_provider(db: Session | None = None, host_id: int | None = None) -> HyperVProvider:
     """Return the Hyper-V provider for a given host_id.
 
-    If host_id is provided, loads (or caches) the provider for that profile.
-    If host_id is None, returns the default (first available) provider.
+    If host_id is positive: loads (or caches) the provider for that IntegrationProfile.
+    If host_id is negative: loads from agent remote target inventory.
+    If host_id is None: returns the default (first available) provider.
     Falls back to mock when no profile exists.
     """
     global _default_provider
 
     if host_id is not None:
+        if host_id < 0:
+            return _get_agent_provider(db, -host_id)
+
         if host_id in _providers:
             return _providers[host_id]
 
@@ -121,11 +164,44 @@ def get_hyperv_provider(db: Session | None = None, host_id: int | None = None) -
     return _default_provider
 
 
+def _get_agent_provider(db: Session | None, target_id: int) -> HyperVProvider:
+    """Build an AgentHyperVProvider from stored remote target inventory."""
+    from app.models.db.agent import Agent
+    from app.models.db.agent_remote_target import AgentRemoteTarget
+
+    if db is None:
+        raise ValueError("Database session required for agent provider")
+
+    target = db.query(AgentRemoteTarget).filter(AgentRemoteTarget.id == target_id).first()
+    if target is None:
+        raise ValueError(f"Agent remote target {target_id} not found")
+
+    agent = db.query(Agent).filter(Agent.id == target.agent_id).first()
+    if agent is None or not agent.inventory_json:
+        raise ValueError(f"Agent inventory not available for target {target_id}")
+
+    try:
+        full_inv = json.loads(agent.inventory_json)
+        remote = full_inv.get("remote_targets", {})
+        target_data = remote.get(f"target-{target_id}", {})
+        inv = target_data.get("inventory", {})
+    except (json.JSONDecodeError, TypeError):
+        raise ValueError(f"Invalid inventory JSON for target {target_id}")
+
+    hyperv = inv.get("hyperv")
+    if not hyperv:
+        raise ValueError(f"No Hyper-V inventory collected for target {target_id}")
+
+    from .agent_provider import AgentHyperVProvider
+    return AgentHyperVProvider(hyperv, target_hostname=target.hostname)
+
+
 def reset_hyperv_provider(host_id: int | None = None) -> None:
     """Reset cached provider(s). If host_id given, reset only that one."""
     global _default_provider
     if host_id is not None:
-        _providers.pop(host_id, None)
+        if host_id > 0:
+            _providers.pop(host_id, None)
     else:
         _providers.clear()
         _default_provider = None
