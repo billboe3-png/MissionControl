@@ -100,7 +100,7 @@ class AgentHyperVProvider(HyperVProvider):
             items.append({
                 "id": v.get("vm_id", v.get("name", "")),
                 "name": v.get("name", ""),
-                "state": (v.get("state") or "unknown").lower(),
+                "state": str(v.get("state") or "unknown").lower(),
                 "cpu_count": 0,
                 "memory_assigned_mb": int(v.get("memory_mb") or 0),
                 "memory_startup_mb": int(v.get("memory_startup_mb") or 0),
