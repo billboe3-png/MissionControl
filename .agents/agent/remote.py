@@ -51,8 +51,22 @@ class RemoteManager:
 
         for target in targets:
             tid = target["id"]
+            old = self._targets.get(tid)
             self._targets[tid] = target
-            if tid not in self._connectors:
+            if tid in self._connectors:
+                if old and (
+                    old.get("hostname") != target.get("hostname")
+                    or old.get("password") != target.get("password")
+                    or old.get("port") != target.get("port")
+                    or old.get("username") != target.get("username")
+                    or old.get("protocol") != target.get("protocol")
+                ):
+                    old_conn = self._connectors.pop(tid)
+                    asyncio.create_task(old_conn.disconnect())
+                    connector = _create_connector(target)
+                    if connector:
+                        self._connectors[tid] = connector
+            else:
                 connector = _create_connector(target)
                 if connector:
                     self._connectors[tid] = connector
