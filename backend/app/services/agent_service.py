@@ -15,6 +15,7 @@ from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.models.db.agent import Agent
+from app.models.db.agent_remote_target import AgentRemoteTarget
 from app.repositories.agent_repository import (
     AgentCommandRepository,
     AgentRepository,
@@ -384,7 +385,38 @@ class AgentService:
             updated_at=datetime.now(UTC),
         )
 
+        remote_targets = inventory_data.get("remote_targets", {})
+        if remote_targets:
+            self._sync_remote_target_status(db, agent_id, remote_targets)
+
         return {"received": True, "message": "Inventory updated"}
+
+    def _sync_remote_target_status(
+        self,
+        db: Session,
+        agent_id: int,
+        remote_targets: dict,
+    ) -> None:
+        """Sync last_collected_at / last_status from agent inventory data."""
+        targets = (
+            db.query(AgentRemoteTarget)
+            .filter(AgentRemoteTarget.agent_id == agent_id)
+            .all()
+        )
+        for t in targets:
+            key = f"target-{t.id}"
+            data = remote_targets.get(key)
+            if data is None:
+                continue
+            collected_at = data.get("collected_at")
+            if collected_at:
+                try:
+                    t.last_collected_at = datetime.fromisoformat(collected_at)
+                except (ValueError, TypeError):
+                    t.last_collected_at = datetime.now(UTC)
+            t.last_status = data.get("status", "unknown")
+            t.last_error = data.get("error")
+        db.commit()
 
     async def get_inventory(
         self, db: Session, agent_id: int
