@@ -203,7 +203,7 @@ fi
 # ---------------------------------------------------------------------------
 step "Installing build dependencies"
 
-apt-get install -y -qq gcc libffi-dev python3-dev 2>/dev/null || {
+apt-get install -y -qq gcc libffi-dev python3-dev python3-venv 2>/dev/null || {
     warn "Some build dependencies may be missing (non-fatal)"
 }
 
