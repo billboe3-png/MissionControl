@@ -243,7 +243,7 @@ else
     # Clone from git
     info "Cloning agent from $GIT_REPO (branch: $GIT_BRANCH)..."
     TEMP_DIR=$(mktemp -d)
-    trap "rm -rf $TEMP_DIR" EXIT
+    trap 'rm -rf "$TEMP_DIR"' EXIT
 
     apt-get install -y -qq git >/dev/null 2>&1
     git clone --depth 1 --branch "$GIT_BRANCH" "$GIT_REPO" "$TEMP_DIR/repo" 2>&1
@@ -280,9 +280,9 @@ python3 -m venv "$INSTALL_DIR/venv"
 "$INSTALL_DIR/venv/bin/pip" install --quiet \
     httpx psutil pydantic pydantic-settings pyyaml packaging docker paramiko
 
-# Install the agent package itself (editable not needed for production)
+# Install the agent package (non-editable for reliability)
 cd "$INSTALL_DIR"
-"$INSTALL_DIR/venv/bin/pip" install --quiet --no-deps -e . 2>/dev/null || {
+"$INSTALL_DIR/venv/bin/pip" install --quiet --no-deps . 2>/dev/null || {
     # Fallback: just ensure the package is importable via PYTHONPATH
     ok "Package install skipped (will use PYTHONPATH)"
 }
@@ -298,7 +298,11 @@ step "Creating directories"
 
 mkdir -p "$CONFIG_DIR" "$DATA_DIR" "$LOG_DIR"
 chown -R "$SERVICE_USER:$SERVICE_USER" "$DATA_DIR" "$LOG_DIR"
+chown -R root:"$SERVICE_USER" "$INSTALL_DIR"
+chmod -R o+rX "$INSTALL_DIR"
 chmod 755 "$CONFIG_DIR"
+chown root:"$SERVICE_USER" "$CONFIG_DIR"
+chmod 750 "$CONFIG_DIR"
 
 ok "Directories created"
 
@@ -331,6 +335,7 @@ remote_inventory_interval: 300
 verify_ssl: $SSL_VERIFY
 log_level: "INFO"
 log_file: "$LOG_DIR/agent.log"
+config_dir: "$CONFIG_DIR"
 data_dir: "$DATA_DIR"
 command_timeout: 60
 reconnect_delay: 5
@@ -349,7 +354,6 @@ step "Creating systemd service"
 cat > "/etc/systemd/system/${SERVICE_NAME}.service" << EOF
 [Unit]
 Description=Mission Control Agent
-Documentation=file://${INSTALL_DIR}/README.md
 After=network-online.target
 Wants=network-online.target
 
@@ -361,17 +365,12 @@ ExecStart=${INSTALL_DIR}/venv/bin/python -m agent --config ${CONFIG_DIR}/config.
 WorkingDirectory=${INSTALL_DIR}
 Environment=MC_DATA_DIR=${DATA_DIR}
 Environment=MC_CONFIG_DIR=${CONFIG_DIR}
+Environment=PYTHONDONTWRITEBYTECODE=1
 
 # Logging
 StandardOutput=journal
 StandardError=journal
 SyslogIdentifier=$SERVICE_NAME
-
-# Hardening
-NoNewPrivileges=true
-ProtectSystem=strict
-ReadWritePaths=$CONFIG_DIR $DATA_DIR $LOG_DIR $INSTALL_DIR
-PrivateTmp=true
 
 # Restart policy
 Restart=always
