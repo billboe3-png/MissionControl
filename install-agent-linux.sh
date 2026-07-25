@@ -298,7 +298,7 @@ step "Creating directories"
 
 mkdir -p "$CONFIG_DIR" "$DATA_DIR" "$LOG_DIR"
 chown -R "$SERVICE_USER:$SERVICE_USER" "$DATA_DIR" "$LOG_DIR"
-chmod 700 "$CONFIG_DIR"
+chmod 755 "$CONFIG_DIR"
 
 ok "Directories created"
 
@@ -337,7 +337,7 @@ max_reconnect_delay: 300
 offline_buffer_max: 1000
 EOF
 
-chmod 640 "$CONFIG_FILE"
+chmod 644 "$CONFIG_FILE"
 ok "Config written to $CONFIG_FILE"
 
 # ---------------------------------------------------------------------------
@@ -368,7 +368,7 @@ SyslogIdentifier=$SERVICE_NAME
 NoNewPrivileges=true
 ProtectSystem=strict
 ProtectHome=true
-ReadWritePaths=$DATA_DIR $LOG_DIR
+ReadWritePaths=$CONFIG_DIR $DATA_DIR $LOG_DIR
 PrivateTmp=true
 
 # Restart policy
