@@ -356,9 +356,8 @@ Wants=network-online.target
 Type=simple
 User=$SERVICE_USER
 Group=$SERVICE_USER
-ExecStart=${INSTALL_DIR}/venv/bin/python -m agent
+ExecStart=${INSTALL_DIR}/venv/bin/python -m agent --config ${CONFIG_DIR}/config.yaml
 WorkingDirectory=${INSTALL_DIR}
-Environment=MC_CONFIG_DIR=${CONFIG_DIR}
 
 # Logging
 StandardOutput=journal
