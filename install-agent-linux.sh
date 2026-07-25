@@ -331,6 +331,7 @@ remote_inventory_interval: 300
 verify_ssl: $SSL_VERIFY
 log_level: "INFO"
 log_file: "$LOG_DIR/agent.log"
+data_dir: "$DATA_DIR"
 command_timeout: 60
 reconnect_delay: 5
 max_reconnect_delay: 300
@@ -358,6 +359,8 @@ User=$SERVICE_USER
 Group=$SERVICE_USER
 ExecStart=${INSTALL_DIR}/venv/bin/python -m agent --config ${CONFIG_DIR}/config.yaml
 WorkingDirectory=${INSTALL_DIR}
+Environment=MC_DATA_DIR=${DATA_DIR}
+Environment=MC_CONFIG_DIR=${CONFIG_DIR}
 
 # Logging
 StandardOutput=journal
@@ -367,8 +370,7 @@ SyslogIdentifier=$SERVICE_NAME
 # Hardening
 NoNewPrivileges=true
 ProtectSystem=strict
-ProtectHome=true
-ReadWritePaths=$CONFIG_DIR $DATA_DIR $LOG_DIR
+ReadWritePaths=$CONFIG_DIR $DATA_DIR $LOG_DIR $INSTALL_DIR
 PrivateTmp=true
 
 # Restart policy
