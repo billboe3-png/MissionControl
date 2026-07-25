@@ -19,7 +19,7 @@ class LinuxPlatform(PlatformBase):
         return {
             "project": settings.project_name,
             "environment": settings.environment,
-            "version": "0.1.0",
+            "version": "3.0.0",
             "backend": "online",
             "database": "connected" if postgres else "disconnected",
             "redis": "connected" if redis else "disconnected",
