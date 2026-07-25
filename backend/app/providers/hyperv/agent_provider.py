@@ -13,6 +13,26 @@ from .base_provider import HyperVProvider
 
 logger = logging.getLogger(__name__)
 
+_HYPERV_STATE_MAP = {
+    0: "other",
+    1: "running",
+    2: "stopped",
+    3: "saved",
+    4: "paused",
+    5: "running",  # "running (paused)"
+    6: "running",  # "running (saved)"
+    7: "stopped",  # "stopping"
+    8: "saved",    # "saving"
+    9: "paused",   # "pausing"
+    10: "running", # "resuming"
+}
+
+_SWITCH_TYPE_MAP = {
+    0: "external",
+    1: "internal",
+    2: "private",
+}
+
 
 class AgentHyperVProvider(HyperVProvider):
     """Hyper-V provider backed by agent remote inventory data."""
@@ -100,7 +120,7 @@ class AgentHyperVProvider(HyperVProvider):
             items.append({
                 "id": v.get("vm_id", v.get("name", "")),
                 "name": v.get("name", ""),
-                "state": str(v.get("state") or "unknown").lower(),
+                "state": _HYPERV_STATE_MAP.get(v.get("state", -1), str(v.get("state", "unknown")).lower()),
                 "cpu_count": 0,
                 "memory_assigned_mb": int(v.get("memory_mb") or 0),
                 "memory_startup_mb": int(v.get("memory_startup_mb") or 0),
@@ -156,7 +176,7 @@ class AgentHyperVProvider(HyperVProvider):
             {
                 "id": s.get("name", str(i)),
                 "name": s.get("name", ""),
-                "switch_type": (s.get("type") or "").lower(),
+                "switch_type": _SWITCH_TYPE_MAP.get(s.get("type", -1), str(s.get("type", "")).lower()),
                 "allow_management_os": False,
                 "status": "operational",
             }
