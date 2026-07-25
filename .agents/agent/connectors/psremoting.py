@@ -96,9 +96,13 @@ class PSRemotingConnector(RemoteConnector):
     async def collect_hyperv_inventory(self) -> dict | None:
         script = (
             "if (Get-Command Get-VM -ErrorAction SilentlyContinue) { "
-            "  $vms = Get-VM | Select-Object Name, State, CPUUsage, "
-            "    MemoryAssigned, MemoryStartup, Uptime, Status, Generation, "
-            "    VMId, ComputerName | ConvertTo-Json -Depth 3; "
+            "  $vms = Get-VM | ForEach-Object { "
+            "    @{ Name=$_.Name; State=$_.State; CPUUsage=$_.CPUUsage; "
+            "       MemoryAssigned=$_.MemoryAssigned; MemoryStartup=$_.MemoryStartup; "
+            "       Uptime=$([math]::Round($_.Uptime.TotalSeconds,0)); "
+            "       Status=$_.Status; Generation=$_.Generation; "
+            "       VMId=$_.VMId; ComputerName=$_.ComputerName } } | "
+            "    ConvertTo-Json -Depth 3; "
             "  $sw = Get-VMSwitch | Select-Object Name, SwitchType | "
             "    ConvertTo-Json; "
             "  @{ vm_count=(Get-VM).Count; vms=$vms; switches=$sw } | "
