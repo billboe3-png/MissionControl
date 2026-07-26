@@ -4,8 +4,6 @@ const routeLabels: Record<string, string> = {
     "": "Dashboard",
     infrastructure: "Infrastructure",
     system: "System",
-    docker: "Docker",
-    git: "Git",
     health: "Health",
     remote: "Remote Operations",
     hosts: "Hosts",

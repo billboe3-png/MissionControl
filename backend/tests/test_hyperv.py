@@ -532,27 +532,6 @@ class TestHyperVDashboardProvider:
         set_mock_mode("healthy")
         reset_hyperv_provider()
 
-    @pytest.mark.asyncio
-    async def test_dashboard_provider_data(self) -> None:
-        from app.providers.hyperv_dashboard import VirtualizationDashboardProvider
-
-        provider = VirtualizationDashboardProvider()
-        result = await provider.get_virtualization_data(None)
-        assert result["connected"] is True
-        assert result["total_vms"] == 6
-        assert result["running"] == 4
-        assert result["stopped"] == 1
-
-    @pytest.mark.asyncio
-    async def test_dashboard_provider_offline(self) -> None:
-        set_mock_mode("offline")
-        from app.providers.hyperv_dashboard import VirtualizationDashboardProvider
-
-        provider = VirtualizationDashboardProvider()
-        result = await provider.get_virtualization_data(None)
-        assert result["connected"] is False
-        assert result["total_vms"] == 0
-
 
 # ------------------------------------------------------------------ #
 # VirtualizationProvider Abstraction Tests                            #

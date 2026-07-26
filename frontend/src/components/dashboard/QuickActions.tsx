@@ -3,7 +3,6 @@ import { Link } from "react-router-dom";
 const actions = [
     { label: "Add Host", path: "/remote/hosts", icon: "🖥️" },
     { label: "Execute Command", path: "/remote/execute", icon: "⚡" },
-    { label: "View Docker", path: "/infrastructure/docker", icon: "🐳" },
     { label: "System Health", path: "/infrastructure/health", icon: "❤️" },
 ];
 

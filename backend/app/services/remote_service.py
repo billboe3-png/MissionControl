@@ -374,6 +374,62 @@ class RemoteService:
                 ssh_key = _decrypt_credential(profile.private_key_encrypted)
         return username, password, ssh_key
 
+    async def _try_agent_execution(
+        self,
+        db: Session,
+        host,
+        request: RemoteExecuteRequest,
+        execution_source: str,
+        username_override: str | None,
+    ) -> RemoteExecuteResponse | None:
+        """Try to execute via an online agent. Returns None if no agent available."""
+        try:
+            from app.models.db.agent import Agent
+            from app.models.db.agent_remote_target import AgentRemoteTarget
+
+            target = db.query(AgentRemoteTarget).filter(
+                AgentRemoteTarget.agent_id == Agent.id,
+                Agent.status == "online",
+                AgentRemoteTarget.hostname == host.hostname,
+            ).first()
+
+            if target is None:
+                return None
+
+            agent = db.query(Agent).filter(Agent.id == target.agent_id).first()
+            if agent is None or agent.status != "online":
+                return None
+
+            logger.info(
+                "Routing command to agent %s for host %s",
+                agent.name, host.name,
+            )
+
+            from app.repositories.agent_repository import AgentCommandRepository
+
+            AgentCommandRepository.create(
+                db=db,
+                agent_id=agent.id,
+                command_type="remote_exec",
+                command=request.command,
+                timeout=300,
+            )
+
+            return RemoteExecuteResponse(
+                host=host.name,
+                connection_type="agent",
+                command=request.command,
+                stdout=f"[Dispatched to agent {agent.name} — awaiting result]",
+                stderr="",
+                exit_code=0,
+                success=True,
+                duration_ms=0,
+                timestamp=datetime.now(UTC).isoformat(),
+            )
+        except Exception as e:
+            logger.debug("Agent execution attempt failed: %s", e)
+            return None
+
     async def execute_command(
         self,
         db: Session,
@@ -398,6 +454,15 @@ class RemoteService:
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"shell must be one of: {', '.join(valid_shells)}",
             )
+
+        # Agent-first: try to route through an online agent
+        agent_result = await self._try_agent_execution(
+            db, host, request, execution_source, username_override,
+        )
+        if agent_result is not None:
+            return agent_result
+
+        # Fallback: direct SSH/WinRM
         username, password, ssh_key = await self._resolve_credentials(db, host)
         provider = get_remote_provider(host.connection_type)
         result = await provider.execute_command(

@@ -19,6 +19,12 @@ class Settings(BaseSettings):
         alias="ENVIRONMENT",
     )
 
+    edition: str = Field(
+        default="community",
+        alias="EDITION",
+        description="Server edition: community or enterprise",
+    )
+
     compose_project_name: str = Field(
         default="missioncontrol",
         alias="COMPOSE_PROJECT_NAME",

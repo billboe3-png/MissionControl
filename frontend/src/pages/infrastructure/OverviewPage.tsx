@@ -37,22 +37,6 @@ export default function OverviewPage() {
                   : ("neutral" as const),
         },
         {
-            label: "Docker Containers",
-            count: data.docker.container_count,
-            path: "/infrastructure/docker",
-            status: data.docker.stopped > 0
-                ? ("warning" as const)
-                : data.docker.container_count > 0
-                  ? ("healthy" as const)
-                  : ("neutral" as const),
-        },
-        {
-            label: "Git",
-            count: data.git.repository_name ? 1 : 0,
-            path: "/infrastructure/git",
-            status: data.git.working_tree_clean ? ("healthy" as const) : ("warning" as const),
-        },
-        {
             label: "Parking Lot Items",
             count: data.parking_lot.count,
             path: "/infrastructure/system",

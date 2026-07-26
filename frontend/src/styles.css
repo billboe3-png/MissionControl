@@ -5955,3 +5955,1052 @@ select.form-input {
     color: #c9d1d9 !important;
     font-weight: 700;
 }
+
+/* ==========================================================================
+   Sprint 3.9.1 — Operations Workspace
+   ========================================================================== */
+
+/* ---- Ops Dashboard Grid ---- */
+
+.ops-dashboard-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
+    gap: 16px;
+}
+
+/* ---- Refresh Indicator ---- */
+
+.refresh-indicator {
+    font-size: 0.78rem;
+    color: var(--text-muted);
+}
+
+/* ---- Widget Card ---- */
+
+.widget-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    transition: border-color 0.15s;
+}
+
+.widget-card:hover {
+    border-color: rgba(59, 130, 246, 0.3);
+}
+
+.widget-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 18px 10px;
+}
+
+.widget-title-group {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.widget-icon {
+    font-size: 1rem;
+}
+
+.widget-title {
+    margin: 0;
+    font-size: 0.92rem;
+    font-weight: 600;
+}
+
+.widget-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.widget-link {
+    font-size: 0.78rem;
+    color: var(--primary);
+    text-decoration: none;
+    font-weight: 500;
+}
+
+.widget-link:hover {
+    text-decoration: underline;
+}
+
+.widget-body {
+    padding: 0 18px 16px;
+}
+
+/* ---- Stat Tile ---- */
+
+.stat-tile-link {
+    text-decoration: none;
+    color: inherit;
+}
+
+.stat-tile {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 14px;
+    background: var(--background);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--text-muted);
+    border-radius: 8px;
+    transition: border-color 0.15s;
+    gap: 12px;
+}
+
+.stat-tile-link:hover .stat-tile {
+    border-color: var(--primary);
+}
+
+.stat-tile-body {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+}
+
+.stat-tile-icon {
+    font-size: 1.3rem;
+    flex-shrink: 0;
+}
+
+.stat-tile-text {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+
+.stat-tile-value {
+    font-size: 1.15rem;
+    font-weight: 700;
+    line-height: 1.2;
+}
+
+.stat-tile-label {
+    font-size: 0.78rem;
+    color: var(--text-muted);
+}
+
+.stat-tile-subtitle {
+    font-size: 0.72rem;
+    color: var(--text-muted);
+}
+
+.stat-tile-actions {
+    flex-shrink: 0;
+}
+
+/* ---- Fleet Widget ---- */
+
+.fleet-widget-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+    margin-bottom: 12px;
+}
+
+.fleet-stat {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    padding: 8px;
+    background: var(--background);
+    border-radius: 8px;
+}
+
+.fleet-stat-value {
+    font-size: 1.4rem;
+    font-weight: 700;
+}
+
+.fleet-stat-value.success {
+    color: var(--success);
+}
+
+.fleet-stat-value.danger {
+    color: var(--danger);
+}
+
+.fleet-stat-label {
+    font-size: 0.72rem;
+    color: var(--text-muted);
+}
+
+.fleet-widget-bar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 10px;
+}
+
+.fleet-bar-track {
+    flex: 1;
+    height: 6px;
+    background: var(--border);
+    border-radius: 3px;
+    overflow: hidden;
+}
+
+.fleet-bar-fill {
+    height: 100%;
+    background: var(--success);
+    border-radius: 3px;
+    transition: width 0.3s;
+}
+
+.fleet-bar-text {
+    font-size: 0.78rem;
+    color: var(--text-muted);
+    white-space: nowrap;
+}
+
+.fleet-widget-footer {
+    padding-top: 8px;
+    border-top: 1px solid var(--border);
+}
+
+/* ---- Infra Widget ---- */
+
+.infra-widget-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px;
+}
+
+.infra-widget-tile {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    padding: 12px 8px;
+    background: var(--background);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    text-decoration: none;
+    color: inherit;
+    transition: border-color 0.15s;
+}
+
+.infra-widget-tile:hover {
+    border-color: var(--primary);
+}
+
+.infra-widget-icon {
+    font-size: 1.2rem;
+}
+
+.infra-widget-value {
+    font-size: 1.2rem;
+    font-weight: 700;
+}
+
+.infra-widget-label {
+    font-size: 0.72rem;
+    color: var(--text-muted);
+    text-align: center;
+}
+
+/* ---- System Widget ---- */
+
+.system-widget-list {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.system-widget-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 6px 10px;
+    background: var(--background);
+    border-radius: 6px;
+    gap: 8px;
+}
+
+.system-widget-name {
+    font-size: 0.85rem;
+    font-weight: 500;
+}
+
+.system-widget-right {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.system-widget-latency {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    font-family: "Cascadia Code", "Fira Code", monospace;
+}
+
+/* ---- System Overview (Dashboard) ---- */
+
+.system-overview-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.system-overview-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 6px 10px;
+    background: var(--background);
+    border-radius: 6px;
+}
+
+.sov-label {
+    font-size: 0.85rem;
+    font-weight: 500;
+}
+
+/* ---- Automation Widget ---- */
+
+.automation-widget-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+}
+
+.auto-stat {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    padding: 8px;
+    background: var(--background);
+    border-radius: 8px;
+}
+
+.auto-stat-value {
+    font-size: 1.2rem;
+    font-weight: 700;
+}
+
+.auto-stat-value.success {
+    color: var(--success);
+}
+
+.auto-stat-value.danger {
+    color: var(--danger);
+}
+
+.auto-stat-value.warning {
+    color: var(--warning);
+}
+
+.auto-stat-label {
+    font-size: 0.72rem;
+    color: var(--text-muted);
+}
+
+/* ---- AI Widget ---- */
+
+.ai-widget-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px;
+    margin-bottom: 10px;
+}
+
+.ai-stat {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    padding: 10px 8px;
+    background: var(--background);
+    border-radius: 8px;
+}
+
+.ai-stat-score {
+    font-size: 1.6rem;
+    font-weight: 700;
+    color: var(--primary);
+}
+
+.ai-stat-grade {
+    font-size: 0.78rem;
+    color: var(--text-muted);
+    font-weight: 500;
+}
+
+.ai-stat-value {
+    font-size: 1.2rem;
+    font-weight: 700;
+}
+
+.ai-stat-label {
+    font-size: 0.72rem;
+    color: var(--text-muted);
+}
+
+.ai-risks {
+    padding-top: 8px;
+    border-top: 1px solid var(--border);
+}
+
+.ai-risks-title {
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    display: block;
+    margin-bottom: 6px;
+}
+
+.ai-risk-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 0;
+}
+
+.ai-risk-title {
+    font-size: 0.82rem;
+}
+
+/* ---- Activity Widget ---- */
+
+.activity-widget-list {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    max-height: 320px;
+    overflow-y: auto;
+}
+
+.activity-widget-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 6px 8px;
+    background: var(--background);
+    border-radius: 6px;
+}
+
+.activity-widget-dot {
+    flex-shrink: 0;
+    margin-top: 2px;
+}
+
+.activity-widget-content {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.activity-widget-message {
+    font-size: 0.82rem;
+    font-family: "Cascadia Code", "Fira Code", monospace;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.activity-widget-meta {
+    display: flex;
+    gap: 8px;
+    font-size: 0.72rem;
+    color: var(--text-muted);
+}
+
+.activity-widget-status {
+    font-size: 0.72rem;
+    color: var(--text-muted);
+    flex-shrink: 0;
+    text-transform: capitalize;
+}
+
+/* ---- Company Widget ---- */
+
+.company-widget-info {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+}
+
+.company-stat {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    padding: 10px;
+    background: var(--background);
+    border-radius: 8px;
+}
+
+.company-stat-value {
+    font-size: 1.4rem;
+    font-weight: 700;
+}
+
+.company-stat-label {
+    font-size: 0.72rem;
+    color: var(--text-muted);
+}
+
+/* ---- AI Insights Widget ---- */
+
+.ai-insights-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.ai-insight-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 8px 10px;
+    background: var(--background);
+    border-radius: 6px;
+    font-size: 0.85rem;
+}
+
+.ai-insight-item.warning {
+    border-left: 3px solid var(--warning);
+}
+
+.ai-insight-icon {
+    flex-shrink: 0;
+}
+
+.ai-insight-text {
+    color: var(--text-muted);
+    line-height: 1.4;
+}
+
+/* --------------------------------------------------------------------------
+   Fleet Management
+   -------------------------------------------------------------------------- */
+
+.fleet-stats-bar {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 16px;
+    flex-wrap: wrap;
+}
+
+.fleet-stat-chip {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    padding: 8px 16px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    min-width: 80px;
+}
+
+.fleet-stat-chip.success {
+    border-left: 3px solid var(--success);
+}
+
+.fleet-stat-chip.danger {
+    border-left: 3px solid var(--danger);
+}
+
+.fleet-stat-chip-value {
+    font-size: 1.15rem;
+    font-weight: 700;
+}
+
+.fleet-stat-chip-label {
+    font-size: 0.72rem;
+    color: var(--text-muted);
+}
+
+.fleet-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 16px;
+    flex-wrap: wrap;
+}
+
+.fleet-filter {
+    min-width: 140px;
+    padding: 6px 10px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    font-size: 0.85rem;
+}
+
+.fleet-table th,
+.fleet-table td {
+    white-space: nowrap;
+}
+
+.fleet-th-check {
+    width: 40px;
+    text-align: center !important;
+}
+
+.fleet-th-sortable {
+    cursor: pointer;
+    user-select: none;
+}
+
+.fleet-th-sortable:hover {
+    color: var(--text);
+}
+
+.fleet-sort-icon {
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    margin-left: 4px;
+}
+
+.fleet-sort-icon.active {
+    color: var(--primary);
+}
+
+.fleet-agent-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    text-decoration: none;
+    color: inherit;
+}
+
+.fleet-agent-name {
+    font-weight: 600;
+    color: var(--text);
+}
+
+.fleet-agent-link:hover .fleet-agent-name {
+    color: var(--primary);
+}
+
+.fleet-row.selected {
+    background: rgba(59, 130, 246, 0.08);
+}
+
+.fleet-heartbeat {
+    font-size: 0.82rem;
+    color: var(--text-muted);
+}
+
+/* --------------------------------------------------------------------------
+   Agent Detail Workspace — Enhanced Tabs
+   -------------------------------------------------------------------------- */
+
+.agent-detail-tabs {
+    display: flex;
+    gap: 2px;
+    margin-bottom: 20px;
+    border-bottom: 1px solid var(--border);
+    overflow-x: auto;
+    flex-wrap: nowrap;
+}
+
+.agent-detail-tabs .tab-btn {
+    padding: 8px 14px;
+    font-size: 0.82rem;
+}
+
+.agent-overview-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 12px;
+    margin-bottom: 20px;
+}
+
+.agent-overview-card {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 14px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+}
+
+.agent-overview-label {
+    font-size: 0.72rem;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.agent-overview-value {
+    font-size: 1rem;
+    font-weight: 500;
+}
+
+.agent-section-title {
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    margin: 20px 0 10px;
+}
+
+.agent-section-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px;
+}
+
+/* ---- Command Center ---- */
+
+.command-center-filters {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 12px;
+    flex-wrap: wrap;
+}
+
+.command-center-filters .tab-btn {
+    padding: 5px 12px;
+    font-size: 0.78rem;
+    border-radius: 6px;
+}
+
+.command-center-filters .tab-btn.active {
+    background: rgba(59, 130, 246, 0.15);
+}
+
+.cmd-action-btns {
+    display: flex;
+    gap: 4px;
+}
+
+.cmd-output-expand {
+    margin-top: 8px;
+}
+
+.cmd-output-text {
+    background: var(--background);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 10px;
+    font-family: "Cascadia Code", "Fira Code", monospace;
+    font-size: 0.78rem;
+    white-space: pre-wrap;
+    word-break: break-all;
+    max-height: 200px;
+    overflow-y: auto;
+}
+
+/* ---- Health Center ---- */
+
+.health-center-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 14px;
+}
+
+.health-center-card {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 16px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+}
+
+.health-center-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.health-center-name {
+    font-weight: 600;
+    font-size: 0.92rem;
+}
+
+.health-center-metrics {
+    display: flex;
+    gap: 16px;
+    font-size: 0.82rem;
+    color: var(--text-muted);
+}
+
+.health-center-metric {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.health-center-metric-label {
+    font-size: 0.72rem;
+}
+
+.health-center-metric-value {
+    font-weight: 600;
+    color: var(--text);
+}
+
+/* ---- Plugin Center ---- */
+
+.plugin-center-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    gap: 14px;
+}
+
+.plugin-center-card {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 16px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    transition: border-color 0.15s;
+}
+
+.plugin-center-card:hover {
+    border-color: rgba(59, 130, 246, 0.3);
+}
+
+.plugin-center-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+.plugin-center-name {
+    font-weight: 600;
+    font-size: 0.95rem;
+}
+
+.plugin-center-meta {
+    display: flex;
+    gap: 12px;
+    font-size: 0.78rem;
+    color: var(--text-muted);
+}
+
+.plugin-center-actions {
+    display: flex;
+    gap: 6px;
+    padding-top: 8px;
+    border-top: 1px solid var(--border);
+}
+
+/* ---- Operations Timeline ---- */
+
+.timeline-list {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    max-height: 600px;
+    overflow-y: auto;
+}
+
+.timeline-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 8px 12px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    transition: background 0.1s;
+}
+
+.timeline-item:hover {
+    background: var(--surface-hover);
+}
+
+.timeline-dot {
+    flex-shrink: 0;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    margin-top: 6px;
+}
+
+.timeline-dot.green {
+    background: var(--success);
+}
+
+.timeline-dot.amber {
+    background: var(--warning);
+}
+
+.timeline-dot.red {
+    background: var(--danger);
+}
+
+.timeline-dot.blue {
+    background: var(--primary);
+}
+
+.timeline-dot.gray {
+    background: var(--text-muted);
+}
+
+.timeline-content {
+    flex: 1;
+    min-width: 0;
+}
+
+.timeline-message {
+    font-size: 0.85rem;
+    line-height: 1.3;
+}
+
+.timeline-meta {
+    display: flex;
+    gap: 10px;
+    font-size: 0.72rem;
+    color: var(--text-muted);
+    margin-top: 2px;
+}
+
+.timeline-time {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    flex-shrink: 0;
+    white-space: nowrap;
+}
+
+/* ---- Company Workspace ---- */
+
+.company-workspace-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    gap: 14px;
+}
+
+.company-workspace-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    transition: border-color 0.15s;
+}
+
+.company-workspace-card:hover {
+    border-color: rgba(59, 130, 246, 0.3);
+}
+
+.company-workspace-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.company-workspace-name {
+    font-weight: 600;
+    font-size: 1rem;
+}
+
+.company-workspace-stats {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+}
+
+.company-workspace-stat {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    padding: 6px;
+    background: var(--background);
+    border-radius: 6px;
+}
+
+.company-workspace-stat-value {
+    font-size: 1rem;
+    font-weight: 600;
+}
+
+.company-workspace-stat-label {
+    font-size: 0.68rem;
+    color: var(--text-muted);
+}
+
+/* ---- Personal Dashboard ---- */
+
+.personal-dash-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+    gap: 14px;
+}
+
+.personal-dash-grid.customizing {
+    outline: 2px dashed var(--primary);
+    outline-offset: 8px;
+    border-radius: var(--radius);
+}
+
+.personal-dash-widget {
+    transition: opacity 0.15s;
+}
+
+.personal-dash-widget.hidden-widget {
+    opacity: 0.3;
+}
+
+.personal-dash-toolbar {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 16px;
+    flex-wrap: wrap;
+    align-items: center;
+}
+
+.personal-dash-toolbar .btn.active {
+    background: rgba(59, 130, 246, 0.15);
+    color: var(--primary);
+}
+
+/* ---- Responsive ---- */
+
+@media (max-width: 900px) {
+    .ops-dashboard-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .automation-widget-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+
+    .fleet-toolbar {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .health-center-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .plugin-center-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .company-workspace-grid {
+        grid-template-columns: 1fr;
+    }
+}

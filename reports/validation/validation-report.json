@@ -1,0 +1,42 @@
+{
+  "version": "1.0",
+  "timestamp": "2026-07-26T11:01:13.273437+00:00",
+  "system": {
+    "platform": "Windows-11-10.0.26200-SP0",
+    "python": "3.12.10",
+    "machine": "AMD64",
+    "timestamp": "2026-07-26T11:01:13.273437+00:00",
+    "git_commit": "d2880ba",
+    "git_branch": "develop",
+    "docker_compose": "5.3.1",
+    "docker": "Docker version 29.6.2, build dfc4efb"
+  },
+  "summary": {
+    "passed": 0,
+    "failed": 1,
+    "warnings": 0,
+    "total": 1,
+    "certified": false
+  },
+  "modules": [
+    {
+      "module": "installation",
+      "passed": 0,
+      "failed": 1,
+      "warnings": 0,
+      "skipped": 0,
+      "total": 1,
+      "ok": false,
+      "duration_ms": 11181.36,
+      "checks": [
+        {
+          "name": "installation_runner",
+          "status": "FAIL",
+          "message": "Validator crashed: 'InstallationValidator' object has no attribute 'result'",
+          "duration_ms": 0.0,
+          "details": "Traceback (most recent call last):\n  File \"C:\\Users\\robert\\OneDrive - cordys.co.za\\Documents\\Personal\\UnitSphere\\CascadeProjects\\Casa\\MissionControl\\scripts\\validation\\run_validation.py\", line 420, in main\n    result = validator.run(config)\n             ^^^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\robert\\OneDrive - cordys.co.za\\Documents\\Personal\\UnitSphere\\CascadeProjects\\Casa\\MissionControl\\scripts\\validation\\validators\\installation.py\", line 23, in run\n    return self.result()\n           ^^^^^^^^^^^\nAttributeError: 'InstallationValidator' object has no attribute 'result'\n"
+        }
+      ]
+    }
+  ]
+}

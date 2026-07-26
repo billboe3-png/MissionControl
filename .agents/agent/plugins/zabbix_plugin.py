@@ -1,6 +1,5 @@
 """Mission Control Agent - Zabbix monitoring plugin."""
 
-import json
 import logging
 import os
 from typing import Any

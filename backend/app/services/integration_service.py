@@ -532,5 +532,36 @@ class IntegrationService:
             updated_at=profile.updated_at,
         )
 
+    async def get_dashboard_summary(self, db: Session) -> dict:
+        """Dashboard-friendly integration summary. Never raises."""
+        try:
+            profiles = IntegrationProfileRepository.get_all(db)
+            items = []
+            for p in profiles:
+                items.append({
+                    "id": p.id,
+                    "name": p.name,
+                    "type": p.integration_type,
+                    "enabled": p.enabled,
+                    "connected": (
+                        p.last_success is not None
+                        and p.last_error is None
+                    ),
+                    "last_test": (
+                        p.last_test.isoformat()
+                        if p.last_test
+                        else None
+                    ),
+                })
+            return {
+                "count": len(items),
+                "items": items,
+            }
+        except Exception as e:
+            logger.warning(
+                "Dashboard: integrations summary failed: %s", e
+            )
+            return {"count": 0, "items": []}
+
 
 integration_service = IntegrationService()

@@ -12,6 +12,7 @@ import secrets
 from datetime import UTC, datetime
 
 from fastapi import HTTPException, status
+from sqlalchemy import desc, func, select
 from sqlalchemy.orm import Session
 
 from app.models.db.agent import Agent
@@ -488,6 +489,172 @@ class AgentService:
     # CRUD                                                                #
     # ------------------------------------------------------------------ #
 
+    # ------------------------------------------------------------------ #
+    # Fleet Summary                                                       #
+    # ------------------------------------------------------------------ #
+
+    async def get_fleet_summary(self, db: Session) -> dict:
+        """Return a comprehensive fleet summary for dashboard consumption."""
+        try:
+            agents = db.execute(select(Agent)).scalars().all()
+            total = len(agents)
+
+            status_counts: dict[str, int] = {}
+            os_counts: dict[str, int] = {}
+            version_counts: dict[str, int] = {}
+            company_counts: dict[str, int] = {}
+            site_counts: dict[str, int] = {}
+            health_counts: dict[str, int] = {}
+            heartbeat_latencies: list[float] = []
+            recent_failures = 0
+            update_up_to_date = 0
+            update_available = 0
+
+            now = datetime.now(UTC)
+
+            for a in agents:
+                st = a.status or "offline"
+                status_counts[st] = status_counts.get(st, 0) + 1
+
+                os_name = a.operating_system or "Unknown"
+                os_counts[os_name] = os_counts.get(os_name, 0) + 1
+
+                ver = a.agent_version or "unknown"
+                version_counts[ver] = version_counts.get(ver, 0) + 1
+
+                if a.company_id is not None:
+                    key = str(a.company_id)
+                    company_counts[key] = company_counts.get(key, 0) + 1
+
+                if a.site_id is not None:
+                    key = str(a.site_id)
+                    site_counts[key] = site_counts.get(key, 0) + 1
+
+                h = a.health or "unknown"
+                health_counts[h] = health_counts.get(h, 0) + 1
+
+                if a.last_heartbeat is not None:
+                    hb_time = a.last_heartbeat
+                    if hb_time.tzinfo is None:
+                        hb_time = hb_time.replace(tzinfo=UTC)
+                    latency = (now - hb_time).total_seconds()
+                    heartbeat_latencies.append(latency * 1000)
+
+            online = status_counts.get("online", 0)
+            offline = status_counts.get("offline", 0)
+            warning = status_counts.get("warning", 0)
+            updating = status_counts.get("updating", 0)
+            idle = health_counts.get("idle", 0)
+            busy = health_counts.get("busy", 0)
+
+            avg_latency = (
+                round(sum(heartbeat_latencies) / len(heartbeat_latencies), 2)
+                if heartbeat_latencies
+                else 0.0
+            )
+
+            cmd_queue = 0
+            try:
+                from app.models.db.agent_command import AgentCommand
+
+                cmd_queue = db.execute(
+                    select(func.count()).select_from(
+                        AgentCommand.__table__
+                    ).where(AgentCommand.status == "pending")
+                ).scalar() or 0
+            except Exception:
+                pass
+
+            return {
+                "total_agents": total,
+                "online": online,
+                "offline": offline,
+                "warning": warning,
+                "updating": updating,
+                "idle": idle,
+                "busy": busy,
+                "by_os": os_counts,
+                "by_version": version_counts,
+                "by_company": company_counts,
+                "by_site": site_counts,
+                "avg_heartbeat_latency_ms": avg_latency,
+                "command_queue_depth": cmd_queue,
+                "recent_failures": recent_failures,
+                "inventory_age_hours": 0.0,
+                "update_status": {
+                    "up_to_date": update_up_to_date,
+                    "update_available": update_available,
+                },
+            }
+        except Exception as e:
+            logger.warning("Fleet summary failed: %s", e)
+            return {
+                "total_agents": 0,
+                "online": 0,
+                "offline": 0,
+                "warning": 0,
+                "updating": 0,
+                "idle": 0,
+                "busy": 0,
+                "by_os": {},
+                "by_version": {},
+                "by_company": {},
+                "by_site": {},
+                "avg_heartbeat_latency_ms": 0.0,
+                "command_queue_depth": 0,
+                "recent_failures": 0,
+                "inventory_age_hours": 0.0,
+                "update_status": {"up_to_date": 0, "update_available": 0},
+            }
+
+    async def get_agent_health_history(
+        self, db: Session, agent_id: int, hours: int = 24
+    ) -> list[dict]:
+        """Return health data points for an agent over a time window."""
+        try:
+            from datetime import timedelta
+
+            from app.models.db.agent_health import AgentHealth
+
+            cutoff = datetime.now(UTC) - timedelta(hours=hours)
+
+            rows = (
+                db.execute(
+                    select(AgentHealth)
+                    .where(AgentHealth.agent_id == agent_id)
+                    .where(AgentHealth.recorded_at >= cutoff)
+                    .order_by(desc(AgentHealth.recorded_at))
+                    .limit(288)
+                )
+                .scalars()
+                .all()
+            )
+
+            return [
+                {
+                    "recorded_at": r.recorded_at.isoformat()
+                    if r.recorded_at
+                    else None,
+                    "health": r.health,
+                    "cpu_percent": r.cpu_percent,
+                    "memory_percent": r.memory_percent,
+                    "disk_percent": r.disk_percent,
+                }
+                for r in rows
+            ]
+        except ImportError:
+            logger.debug("AgentHealth model not available")
+            return []
+        except Exception as e:
+            logger.warning(
+                "Health history for agent %d failed: %s", agent_id, e,
+            )
+            return []
+
+    # ------------------------------------------------------------------ #
+    # CRUD (continued)                                                    #
+    # ------------------------------------------------------------------ #
+
     async def list_agents(
         self, db: Session
     ) -> AgentListResponse:
@@ -501,6 +668,46 @@ class AgentService:
             offline=offline,
             items=[self._to_response(a) for a in agents],
         )
+
+    async def get_dashboard_summary(self, db: Session) -> dict:
+        """Dashboard-friendly agent summary. Never raises."""
+        try:
+            from sqlalchemy import func, select
+
+            row = db.execute(
+                select(
+                    func.count(Agent.id).label("total"),
+                    func.count(Agent.id).filter(Agent.status == "online").label("online"),
+                    func.avg(Agent.cpu_percent).filter(
+                        Agent.status == "online", Agent.cpu_percent.isnot(None)
+                    ).label("avg_cpu"),
+                    func.avg(Agent.memory_percent).filter(
+                        Agent.status == "online", Agent.memory_percent.isnot(None)
+                    ).label("avg_mem"),
+                )
+            ).one()
+
+            total = row.total or 0
+            online = row.online or 0
+            avg_cpu = row.avg_cpu
+            avg_mem = row.avg_mem
+
+            return {
+                "total": total,
+                "online": online,
+                "offline": total - online,
+                "avg_cpu": round(float(avg_cpu), 1) if avg_cpu else 0,
+                "avg_memory": round(float(avg_mem), 1) if avg_mem else 0,
+            }
+        except Exception as e:
+            logger.warning("Dashboard: agent summary failed: %s", e)
+            return {
+                "total": 0,
+                "online": 0,
+                "offline": 0,
+                "avg_cpu": 0,
+                "avg_memory": 0,
+            }
 
     async def get_agent(
         self, db: Session, agent_id: int

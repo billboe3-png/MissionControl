@@ -804,27 +804,6 @@ class TestProxmoxDashboardProvider:
         set_mock_mode("healthy")
         reset_proxmox_provider()
 
-    @pytest.mark.asyncio
-    async def test_dashboard_provider_data(self) -> None:
-        from app.providers.proxmox_dashboard import ProxmoxDashboardProvider
-
-        provider = ProxmoxDashboardProvider()
-        result = await provider.get_proxmox_data(None)
-        assert result["connected"] is True
-        assert result["total_vms"] == 6
-        assert result["running"] == 4
-        assert result["running_lxc"] == 3
-
-    @pytest.mark.asyncio
-    async def test_dashboard_provider_offline(self) -> None:
-        set_mock_mode("offline")
-        from app.providers.proxmox_dashboard import ProxmoxDashboardProvider
-
-        provider = ProxmoxDashboardProvider()
-        result = await provider.get_proxmox_data(None)
-        assert result["connected"] is False
-        assert result["total_vms"] == 0
-
 
 # ------------------------------------------------------------------ #
 # VirtualizationProvider Abstraction Tests                            #

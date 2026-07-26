@@ -1,0 +1,122 @@
+name: Release Validation
+
+on:
+  workflow_dispatch:
+    inputs:
+      base_url:
+        description: 'Backend API base URL'
+        required: false
+        default: 'http://localhost:8000'
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+env:
+  PYTHON_VERSION: '3.12'
+  BASE_URL: ${{ github.event.inputs.base_url || 'http://localhost:8000' }}
+
+jobs:
+  validate:
+    name: Release Validation
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: mission_control
+          POSTGRES_USER: missioncontrol
+          POSTGRES_PASSWORD: testpassword
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      redis:
+        image: redis:7
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install dependencies
+        run: |
+          cd backend
+          pip install -r requirements.txt
+
+      - name: Create .env
+        run: |
+          SECRET_KEY=$(python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())")
+          cat > .env << EOF
+          MISSIONCONTROL_SECRET_KEY=$SECRET_KEY
+          POSTGRES_DB=mission_control
+          POSTGRES_USER=missioncontrol
+          POSTGRES_PASSWORD=testpassword
+          POSTGRES_HOST=localhost
+          POSTGRES_PORT=5432
+          REDIS_HOST=localhost
+          REDIS_PORT=6379
+          ENVIRONMENT=development
+          EDITION=community
+          EOF
+
+      - name: Run database migrations
+        run: |
+          cd backend
+          python -m alembic upgrade head
+
+      - name: Start backend
+        run: |
+          cd backend
+          python -m uvicorn app.main:app --host 0.0.0.0 --port 8000 &
+          sleep 5
+
+      - name: Verify backend is running
+        run: |
+          curl -sf ${{ env.BASE_URL }}/api/v1/health/live || exit 1
+
+      - name: Run validation framework
+        run: |
+          python scripts/validation/run_validation.py \
+            --base-url ${{ env.BASE_URL }} \
+            --output reports/validation \
+            --skip-backup
+
+      - name: Upload validation reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: validation-reports
+          path: reports/validation/
+          retention-days: 30
+
+      - name: Check validation results
+        run: |
+          if [ -f reports/validation/validation-report.json ]; then
+            CERTIFIED=$(python -c "import json; r=json.load(open('reports/validation/validation-report.json')); print(r['summary']['certified'])")
+            if [ "$CERTIFIED" != "True" ]; then
+              echo "Validation FAILED — not certified"
+              exit 1
+            fi
+            echo "Validation PASSED — certified"
+          else
+            echo "Validation report not found"
+            exit 1
+          fi

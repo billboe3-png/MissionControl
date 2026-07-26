@@ -1,7 +1,6 @@
 import logging
 import os
 import time
-import uuid
 from collections import defaultdict
 
 from fastapi import FastAPI, Request
@@ -10,6 +9,13 @@ from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from app.core.config import get_settings
+from app.core.logging_config import (
+    clear_context,
+    generate_request_id,
+    set_request_id,
+    setup_logging,
+)
+from app.core.error_handlers import register_error_handlers
 
 _TESTING = os.getenv("TESTING", "0") == "1"
 
@@ -54,7 +60,10 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         path = request.url.path
         if any(
             path.startswith(p)
-            for p in ("/api/v1/health", "/api/v1/version", "/api/v1/agents/", "/api/v1/setup")
+            for p in (
+                "/api/v1/health", "/api/v1/version",
+                "/api/v1/agents/", "/api/v1/setup",
+            )
         ):
             return await call_next(request)
 
@@ -87,11 +96,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         response.headers["X-RateLimit-Remaining"] = str(remaining - 1)
         return response
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s %(levelname)s [%(name)s] %(message)s",
-    datefmt="%Y-%m-%dT%H:%M:%S",
-)
+setup_logging(level="INFO")
 logger = logging.getLogger("missioncontrol")
 from app.routers import (  # noqa: E402
     agent,
@@ -102,8 +107,6 @@ from app.routers import (  # noqa: E402
     automation,
     company,
     dashboard,
-    docker,
-    doctor,
     health,
     hyperv,
     identity,
@@ -117,7 +120,6 @@ from app.routers import (  # noqa: E402
     resume,
     setup,
     site,
-    status,
     tasks,
     veeam,
     version,
@@ -153,19 +155,20 @@ app = FastAPI(
 @app.middleware("http")
 async def request_logging_middleware(request: Request, call_next):
     """Attach request ID and log every request with timing."""
-    request_id = request.headers.get("X-Request-ID", uuid.uuid4().hex[:12])
+    request_id = request.headers.get("X-Request-ID", generate_request_id())
+    set_request_id(request_id)
     start = time.perf_counter()
     response = await call_next(request)
     elapsed_ms = round((time.perf_counter() - start) * 1000, 1)
     response.headers["X-Request-ID"] = request_id
     logger.info(
         "%s %s %s %s %sms",
-        request_id,
         request.method,
         request.url.path,
         response.status_code,
         elapsed_ms,
     )
+    clear_context()
     return response
 
 
@@ -179,15 +182,15 @@ app.add_middleware(
     allow_headers=["Authorization", "Content-Type", "X-Agent-API-Key"],
 )
 
+# Register consistent error handlers
+register_error_handlers(app)
+
 # ------------------------------------------------------------------
 # API Routers
 # ------------------------------------------------------------------
 
 app.include_router(health.router, prefix="/api/v1")
 app.include_router(version.router, prefix="/api/v1")
-app.include_router(status.router, prefix="/api/v1")
-app.include_router(doctor.router, prefix="/api/v1")
-app.include_router(docker.router, prefix="/api/v1")
 app.include_router(dashboard.router, prefix="/api/v1")
 app.include_router(projects.router, prefix="/api/v1")
 app.include_router(tasks.router, prefix="/api/v1")
@@ -227,13 +230,30 @@ async def api_root() -> dict[str, str]:
 
 @app.on_event("startup")
 async def _startup_banner():
-    """Print installation status on startup."""
+    """Run startup validation and print status banner."""
     from app.db.database import SessionLocal
     from app.services.setup_service import is_setup_required
 
     print("")
-    print("  Mission Control")
+    print("  Mission Control v3.0.0")
     print("  ─────────────────────────────────────")
+
+    # Run comprehensive startup validation
+    try:
+        from app.core.startup_check import run_all_checks, print_startup_report
+
+        results = run_all_checks()
+        print_startup_report(results)
+
+        critical = [r for r in results if not r.ok and r.critical]
+        if critical:
+            logger.error("Startup validation failed: %d critical errors", len(critical))
+            for r in critical:
+                logger.error("  CRIT: %s - %s", r.name, r.message)
+    except Exception as exc:
+        logger.warning("Startup validation skipped: %s", exc)
+
+    # Check setup status
     try:
         db = SessionLocal()
         try:

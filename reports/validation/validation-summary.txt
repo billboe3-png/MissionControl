@@ -1,0 +1,11 @@
+Mission Control — Validation Summary
+==================================================
+Date: 2026-07-26T11:01:13.273437+00:00
+Platform: Windows-11-10.0.26200-SP0
+Python: 3.12.10
+
+[FAIL] installation: 0 pass, 1 fail, 0 warn
+
+Total: 0 passed, 1 failed, 0 warnings
+
+NOT CERTIFIED

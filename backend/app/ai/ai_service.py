@@ -213,18 +213,14 @@ class AIService:
 
     def _get_system(self) -> dict:
         try:
-            from app.providers.system_provider import system_provider
-
-            return system_provider.get_system_info()
+            return {"status": "agent_collected", "note": "System data collected by agents"}
         except Exception as e:
             logger.debug("AI: system data failed: %s", e)
             return {}
 
     async def _get_docker(self) -> dict:
         try:
-            from app.providers.docker_provider import docker_provider
-
-            return await docker_provider.get_docker_data()
+            return {"status": "agent_collected", "note": "Docker data collected by agents"}
         except Exception as e:
             logger.debug("AI: docker data failed: %s", e)
             return {}
@@ -256,16 +252,10 @@ class AIService:
         try:
             from app.providers.hyperv.mock_provider import MockHyperVProvider
             from app.providers.hyperv.provider_factory import get_hyperv_provider
-            from app.providers.hyperv_dashboard import (
-                virtualization_dashboard_provider,
-            )
 
-            data = await virtualization_dashboard_provider.get_virtualization_data(db)
-            try:
-                provider = get_hyperv_provider(db)
-                data["_mock"] = isinstance(provider, MockHyperVProvider)
-            except Exception:
-                data["_mock"] = True
+            provider = get_hyperv_provider(db)
+            data = await provider.get_summary()
+            data["_mock"] = isinstance(provider, MockHyperVProvider)
             return data
         except Exception as e:
             logger.debug("AI: hyperv data failed: %s", e)

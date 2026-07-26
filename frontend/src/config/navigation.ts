@@ -20,8 +20,6 @@ export const navigation: NavGroup[] = [
         items: [
             { label: "Overview", path: "/infrastructure", icon: "📈" },
             { label: "System", path: "/infrastructure/system", icon: "💻" },
-            { label: "Docker", path: "/infrastructure/docker", icon: "🐳" },
-            { label: "Git", path: "/infrastructure/git", icon: "📦" },
             { label: "Health", path: "/infrastructure/health", icon: "❤️" },
         ],
     },
@@ -124,6 +122,18 @@ export const navigation: NavGroup[] = [
         ],
     },
     {
+        label: "Fleet Workspace",
+        icon: "🚁",
+        items: [
+            { label: "Fleet Management", path: "/fleet", icon: "🤖" },
+            { label: "Timeline", path: "/fleet/timeline", icon: "📋" },
+            { label: "Command Center", path: "/fleet/commands", icon: "⚡" },
+            { label: "Health Center", path: "/fleet/health", icon: "❤️" },
+            { label: "Plugin Center", path: "/fleet/plugins", icon: "🧩" },
+            { label: "Company Workspace", path: "/fleet/companies", icon: "🏢" },
+        ],
+    },
+    {
         label: "Automation",
         icon: "⚙️",
         items: [
@@ -144,6 +154,7 @@ export const navigation: NavGroup[] = [
             { label: "Users", path: "/settings/users", icon: "👥" },
             { label: "Integrations", path: "/settings/integrations", icon: "🔌" },
             { label: "Appearance", path: "/settings/appearance", icon: "🎨" },
+            { label: "My Dashboard", path: "/settings/dashboard", icon: "📊" },
             { label: "About", path: "/settings/about", icon: "ℹ️" },
         ],
     },

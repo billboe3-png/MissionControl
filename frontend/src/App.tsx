@@ -10,8 +10,6 @@ import SetupWizardPage from "./pages/setup/SetupWizardPage";
 import DashboardPage from "./pages/DashboardPage";
 import OverviewPage from "./pages/infrastructure/OverviewPage";
 import SystemPage from "./pages/infrastructure/SystemPage";
-import DockerPage from "./pages/infrastructure/DockerPage";
-import GitPage from "./pages/infrastructure/GitPage";
 import HealthPage from "./pages/infrastructure/HealthPage";
 import HostsPage from "./pages/remote/HostsPage";
 import CredentialsPage from "./pages/remote/CredentialsPage";
@@ -28,6 +26,7 @@ import UsersPage from "./pages/settings/UsersPage";
 import IntegrationsPage from "./pages/settings/IntegrationsPage";
 import AppearancePage from "./pages/settings/AppearancePage";
 import AboutPage from "./pages/settings/AboutPage";
+import PersonalDashboardPage from "./pages/settings/PersonalDashboardPage";
 import ZabbixOverviewPage from "./pages/zabbix/OverviewPage";
 import ZabbixHostsPage from "./pages/zabbix/HostsPage";
 import ZabbixProblemsPage from "./pages/zabbix/ProblemsPage";
@@ -70,6 +69,11 @@ import AIHealthScorePage from "./pages/ai/HealthScorePage";
 import AIHistoryPage from "./pages/ai/HistoryPage";
 import CompaniesPage from "./pages/companies/CompaniesPage";
 import CompanyDetailPage from "./pages/companies/CompanyDetailPage";
+import CompanyWorkspacePage from "./pages/companies/CompanyWorkspacePage";
+import TimelinePage from "./pages/remote/TimelinePage";
+import CommandCenterPage from "./pages/remote/CommandCenterPage";
+import HealthCenterPage from "./pages/plugins/HealthCenterPage";
+import PluginCenterPage from "./pages/plugins/PluginCenterPage";
 import AutomationOverviewPage from "./pages/automation/OverviewPage";
 import PlaybooksPage from "./pages/automation/PlaybooksPage";
 import PlaybookDetailPage from "./pages/automation/PlaybookDetailPage";
@@ -98,8 +102,6 @@ export default function App() {
 
                             <Route path="/infrastructure" element={<OverviewPage />} />
                             <Route path="/infrastructure/system" element={<SystemPage />} />
-                            <Route path="/infrastructure/docker" element={<DockerPage />} />
-                            <Route path="/infrastructure/git" element={<GitPage />} />
                             <Route path="/infrastructure/health" element={<HealthPage />} />
 
                             <Route path="/remote/hosts" element={<HostsPage />} />
@@ -161,9 +163,17 @@ export default function App() {
                             <Route path="/settings/integrations" element={<IntegrationsPage />} />
                             <Route path="/settings/appearance" element={<AppearancePage />} />
                             <Route path="/settings/about" element={<AboutPage />} />
+                            <Route path="/settings/dashboard" element={<PersonalDashboardPage />} />
 
                             <Route path="/agents" element={<AgentsOverviewPage />} />
                             <Route path="/agents/:id" element={<AgentDetailPage />} />
+
+                            <Route path="/fleet" element={<AgentsOverviewPage />} />
+                            <Route path="/fleet/timeline" element={<TimelinePage />} />
+                            <Route path="/fleet/commands" element={<CommandCenterPage />} />
+                            <Route path="/fleet/health" element={<HealthCenterPage />} />
+                            <Route path="/fleet/plugins" element={<PluginCenterPage />} />
+                            <Route path="/fleet/companies" element={<CompanyWorkspacePage />} />
 
                             <Route path="/automation" element={<AutomationOverviewPage />} />
                             <Route path="/automation/playbooks" element={<PlaybooksPage />} />
