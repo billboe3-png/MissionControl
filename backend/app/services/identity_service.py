@@ -41,7 +41,7 @@ def _get_ad_provider_from_db(db: Session, profile_id: int | None = None):
                 db.query(IntegrationProfile)
                 .filter(
                     IntegrationProfile.integration_type == "active_directory",
-                    IntegrationProfile.enabled == True,
+                    IntegrationProfile.enabled,
                 )
                 .order_by(IntegrationProfile.id.desc())
                 .first()
@@ -97,7 +97,7 @@ def _get_m365_provider_from_db(db: Session, profile_id: int | None = None):
                 db.query(IntegrationProfile)
                 .filter(
                     IntegrationProfile.integration_type == "microsoft_365",
-                    IntegrationProfile.enabled == True,
+                    IntegrationProfile.enabled,
                 )
                 .order_by(IntegrationProfile.id.desc())
                 .first()
@@ -239,7 +239,6 @@ class IdentityService:
 
         Aggregates key metrics from all enabled AD profiles and M365.
         """
-        from app.models.db.integration_profile import IntegrationProfile
         from app.repositories.integration_profile_repository import (
             IntegrationProfileRepository,
         )

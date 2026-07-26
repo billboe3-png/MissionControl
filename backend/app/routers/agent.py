@@ -96,7 +96,7 @@ async def agent_heartbeat(
     service: AgentService = Depends(get_agent_service),
 ) -> AgentHeartbeatResponse:
     """Process agent heartbeat and return pending commands."""
-    agent = await service.authenticate_agent(db, x_agent_api_key)
+    await service.authenticate_agent(db, x_agent_api_key)
     return await service.process_heartbeat(db, payload, x_agent_api_key)
 
 

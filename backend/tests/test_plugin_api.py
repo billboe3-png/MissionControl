@@ -4,9 +4,7 @@ Plugin API Tests
 Tests for the /api/v1/plugins endpoints.
 """
 
-import pytest
 from fastapi.testclient import TestClient
-from httpx import AsyncClient
 
 
 class TestPluginCRUD:

@@ -210,11 +210,10 @@ async def test_remote_target(
             "latency_ms": 0,
         }
 
-    from app.services.agent_service import agent_service as svc
-
     import json as _json
 
     from app.schemas.agent import AgentCommandDispatchRequest
+    from app.services.agent_service import agent_service as svc
 
     cmd_payload = _json.dumps({
         "target_id": target_id,

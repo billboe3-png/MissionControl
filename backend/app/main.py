@@ -93,7 +93,7 @@ logging.basicConfig(
     datefmt="%Y-%m-%dT%H:%M:%S",
 )
 logger = logging.getLogger("missioncontrol")
-from app.routers import (
+from app.routers import (  # noqa: E402
     agent,
     agent_remote_target,
     agent_token,
@@ -104,7 +104,6 @@ from app.routers import (
     dashboard,
     docker,
     doctor,
-
     health,
     hyperv,
     identity,

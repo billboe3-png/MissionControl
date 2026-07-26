@@ -6,7 +6,6 @@ Pydantic request/response models for the Veeam Backup & Replication API.
 
 from pydantic import BaseModel
 
-
 # ------------------------------------------------------------------ #
 # Connection                                                          #
 # ------------------------------------------------------------------ #

@@ -231,8 +231,8 @@ class AIService:
 
     async def _get_zabbix(self) -> dict:
         try:
-            from app.providers.zabbix.provider_factory import get_zabbix_provider
             from app.providers.zabbix.mock_provider import MockZabbixProvider
+            from app.providers.zabbix.provider_factory import get_zabbix_provider
 
             provider = get_zabbix_provider()
             data = await provider.get_summary()
@@ -254,11 +254,11 @@ class AIService:
 
     async def _get_hyperv(self, db: Session) -> dict:
         try:
+            from app.providers.hyperv.mock_provider import MockHyperVProvider
+            from app.providers.hyperv.provider_factory import get_hyperv_provider
             from app.providers.hyperv_dashboard import (
                 virtualization_dashboard_provider,
             )
-            from app.providers.hyperv.provider_factory import get_hyperv_provider
-            from app.providers.hyperv.mock_provider import MockHyperVProvider
 
             data = await virtualization_dashboard_provider.get_virtualization_data(db)
             try:

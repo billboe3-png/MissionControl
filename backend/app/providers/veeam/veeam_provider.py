@@ -8,7 +8,6 @@ Includes optional SSH+PostgreSQL bridge for data that the REST API
 does not expose (e.g. session transfer statistics).
 """
 
-import json
 import logging
 from typing import Any
 from urllib.parse import urlparse
@@ -274,7 +273,6 @@ class VeeamRESTProvider(VeeamProvider):
                     "result": {"result": "Success"} if j.get("success_count", 0) > 0 else {"result": "Warning"},
                 }
             failed = j.get("failed_count", 0)
-            running_count = 0
             total = j.get("session_count", 0)
             state = "Stopped"
             if failed > 0:

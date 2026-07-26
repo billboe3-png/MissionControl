@@ -476,7 +476,7 @@ class LDAPActiveDirectoryProvider(ActiveDirectoryProvider):
             return {"success": False, "error": f"User '{sam_account_name}' not found"}
 
         try:
-            config = self._get_config()
+            self._get_config()
             self._connection.search(
                 dn,
                 "(objectClass=user)",
@@ -538,7 +538,7 @@ class LDAPActiveDirectoryProvider(ActiveDirectoryProvider):
         if not dn:
             return {"connected": False, "error": f"User '{sam_account_name}' not found"}
 
-        config = self._get_config()
+        self._get_config()
         try:
             from ldap3 import BASE
             self._connection.search(

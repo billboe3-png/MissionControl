@@ -462,7 +462,7 @@ class AutomationService:
         all_output = []
 
         for step in steps:
-            log_entry = ExecutionLogRepository.create(
+            ExecutionLogRepository.create(
                 db,
                 execution_id=execution_id,
                 step_id=step.id,

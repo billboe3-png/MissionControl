@@ -93,7 +93,7 @@ class PluginLoader:
         try:
             module = importlib.import_module(module_name)
         except ImportError as exc:
-            raise PluginLoadError(f"Failed to import plugin module '{module_name}': {exc}")
+            raise PluginLoadError(f"Failed to import plugin module '{module_name}': {exc}") from exc
 
         # Find the PluginSDK subclass (exclude base + abstract intermediaries)
         plugin_class = None

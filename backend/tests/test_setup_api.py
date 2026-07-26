@@ -14,14 +14,12 @@ Covers:
   - API permissions (no auth required for setup endpoints)
 """
 
-import pytest
 
 from app.models.db.company import Company
 from app.models.db.site import Site
 from app.models.db.user import User
 from app.services.auth_service import hash_password
 from app.services.setup_service import is_setup_required
-
 
 # ── Fixtures ──────────────────────────────────────────────────────
 

@@ -22,7 +22,7 @@ class DockerProvider:
             docker = get_docker_provider()
 
             version_data = await docker.version()
-            info_data = await docker.info()
+            await docker.info()
             containers_raw = await docker.containers()
 
             if not version_data:

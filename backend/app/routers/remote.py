@@ -212,7 +212,7 @@ async def execute_command_stream(
     async def event_generator():
         import json
         import logging
-        from starlette.requests import Request
+
         logger = logging.getLogger("missioncontrol")
         try:
             async for chunk in service.execute_command_stream(db, payload):
@@ -441,16 +441,18 @@ async def get_metrics(
 # Interactive Console (WebSocket)                                     #
 # ------------------------------------------------------------------ #
 
-import asyncio
-import json
-import logging
+import asyncio  # noqa: E402
+import json  # noqa: E402
+import logging  # noqa: E402
 
-from fastapi import WebSocket, WebSocketDisconnect
+from fastapi import WebSocket, WebSocketDisconnect  # noqa: E402
 
-from app.providers.remote.ssh_provider import SSHProvider
-from app.repositories.credential_profile_repository import CredentialProfileRepository
-from app.repositories.remote_host_repository import RemoteHostRepository
-from app.services.remote_service import _decrypt_credential
+from app.providers.remote.ssh_provider import SSHProvider  # noqa: E402
+from app.repositories.credential_profile_repository import (  # noqa: E402
+    CredentialProfileRepository,
+)
+from app.repositories.remote_host_repository import RemoteHostRepository  # noqa: E402
+from app.services.remote_service import _decrypt_credential  # noqa: E402
 
 logger = logging.getLogger(__name__)
 
@@ -489,7 +491,7 @@ async def console_ws(
 
         await websocket.send_json({"type": "connected", "host": host.name})
 
-        loop = asyncio.get_event_loop()
+        asyncio.get_event_loop()
 
         async def read_ssh():
             while True:

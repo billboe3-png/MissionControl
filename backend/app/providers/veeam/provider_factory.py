@@ -8,7 +8,6 @@ Falls back to mock when no profile is configured.
 
 import json
 import logging
-from functools import lru_cache
 
 from sqlalchemy.orm import Session
 
@@ -208,9 +207,10 @@ def _get_agent_provider(db: Session | None, target_id: int) -> VeeamProvider:
         raise ValueError(f"No Veeam inventory collected for target {target_id}")
 
     async def _dispatch_on_agent(command_str: str) -> dict:
+        from fastapi import HTTPException
+
         from app.schemas.agent import AgentCommandDispatchRequest
         from app.services.agent_service import agent_service
-        from fastapi import HTTPException
 
         if agent.status != "online":
             return {

@@ -16,8 +16,8 @@ from app.core.auth_dependency import get_current_user
 from app.db import get_db
 from app.schemas.identity import (
     ADActionResponse,
-    ADDomainProfile,
     ADDevicesResponse,
+    ADDomainProfile,
     ADGroupMembershipRequest,
     ADGroupsResponse,
     ADHealthResponse,

@@ -4,7 +4,6 @@ Mission Control Plugin Repository
 Data access layer for Plugin entities.
 """
 
-import json
 from datetime import UTC, datetime
 
 from sqlalchemy import func, select

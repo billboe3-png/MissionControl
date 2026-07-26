@@ -7,7 +7,6 @@ the host directly. They can register commands, scheduled tasks,
 background workers, health checks, inventory collectors, and more.
 """
 
-from abc import abstractmethod
 from typing import Any
 
 from app.plugins.base import PluginSDK

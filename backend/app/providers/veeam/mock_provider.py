@@ -6,7 +6,7 @@ Used when no real Veeam B&R server is configured.
 """
 
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from app.providers.veeam.base_provider import VeeamProvider
 
@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 
 
 def _ts(offset_hours: int = 0) -> str:
-    return (datetime.now(timezone.utc) - timedelta(hours=offset_hours)).isoformat()
+    return (datetime.now(UTC) - timedelta(hours=offset_hours)).isoformat()
 
 
 class MockVeeamProvider(VeeamProvider):

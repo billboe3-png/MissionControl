@@ -185,8 +185,8 @@ def _get_agent_provider(db: Session | None, target_id: int) -> HyperVProvider:
         remote = full_inv.get("remote_targets", {})
         target_data = remote.get(f"target-{target_id}", {})
         inv = target_data.get("inventory", {})
-    except (json.JSONDecodeError, TypeError):
-        raise ValueError(f"Invalid inventory JSON for target {target_id}")
+    except (json.JSONDecodeError, TypeError) as exc:
+        raise ValueError(f"Invalid inventory JSON for target {target_id}") from exc
 
     hyperv = inv.get("hyperv")
     if not hyperv:
@@ -194,9 +194,10 @@ def _get_agent_provider(db: Session | None, target_id: int) -> HyperVProvider:
 
     async def _dispatch_on_agent(command_str: str) -> dict:
         """Queue a PowerShell command for execution on the remote target."""
+        from fastapi import HTTPException
+
         from app.schemas.agent import AgentCommandDispatchRequest
         from app.services.agent_service import agent_service
-        from fastapi import HTTPException
 
         if agent.status != "online":
             return {

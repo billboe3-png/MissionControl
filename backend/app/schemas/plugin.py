@@ -5,19 +5,19 @@ Pydantic request/response models for plugin management.
 """
 
 from datetime import datetime
-from enum import Enum
+from enum import StrEnum
 
 from pydantic import BaseModel, Field
 
 
-class ExecutionTarget(str, Enum):
+class ExecutionTarget(StrEnum):
     """Plugin execution target."""
     SERVER = "server"
     AGENT = "agent"
     HYBRID = "hybrid"
 
 
-class PluginStatus(str, Enum):
+class PluginStatus(StrEnum):
     """Plugin lifecycle status."""
     REGISTERED = "registered"
     INITIALIZING = "initializing"

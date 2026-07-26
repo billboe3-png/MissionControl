@@ -767,7 +767,7 @@ class SSHProvider(RemoteBaseProvider):
         import threading
         target = ip_address if ip_address else hostname
         timeouts = _get_timeouts()
-        command_timeout = min(timeouts["command"], _get_max_command_timeout())
+        min(timeouts["command"], _get_max_command_timeout())
 
         q: queue.Queue = queue.Queue()
         cancel_event = threading.Event()
@@ -1049,7 +1049,7 @@ def _get_max_command_timeout() -> int:
 # File Transfer Methods (added to SSHProvider below)                  #
 # ------------------------------------------------------------------ #
 
-import stat
+import stat  # noqa: E402
 
 
 def _ssh_upload_file(

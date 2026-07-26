@@ -25,7 +25,7 @@ class AgentRemoteTargetRepository:
             db.query(AgentRemoteTarget)
             .filter(
                 AgentRemoteTarget.agent_id == agent_id,
-                AgentRemoteTarget.enabled == True,
+                AgentRemoteTarget.enabled,
             )
             .order_by(AgentRemoteTarget.name)
             .all()

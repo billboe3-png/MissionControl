@@ -7,7 +7,6 @@ navigation items, settings panels, providers, integrations,
 notifications, reports, database models, migrations, and background jobs.
 """
 
-from abc import abstractmethod
 from typing import Any
 
 from app.plugins.base import PluginSDK

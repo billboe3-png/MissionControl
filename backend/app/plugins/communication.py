@@ -12,13 +12,13 @@ import logging
 import secrets
 import time
 from datetime import UTC, datetime
-from enum import Enum
+from enum import StrEnum
 from typing import Any
 
 logger = logging.getLogger(__name__)
 
 
-class MessageType(str, Enum):
+class MessageType(StrEnum):
     """Plugin message types."""
     HEARTBEAT = "heartbeat"
     COMMAND = "command"
@@ -31,7 +31,7 @@ class MessageType(str, Enum):
     ERROR = "error"
 
 
-class MessagePriority(str, Enum):
+class MessagePriority(StrEnum):
     """Message priority levels."""
     LOW = "low"
     NORMAL = "normal"

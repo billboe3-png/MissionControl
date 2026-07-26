@@ -67,7 +67,6 @@ class GitProvider:
             ahead_behind = {"ahead": 0, "behind": 0}
             try:
                 if branch and "origin" in [r.name for r in repo.remotes]:
-                    remote = repo.remotes.origin
                     remote_ref = f"origin/{branch}"
                     if remote_ref in repo.refs:
                         ahead_behind = {

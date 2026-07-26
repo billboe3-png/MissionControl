@@ -8,7 +8,6 @@ Auto-detects which database engine the Veeam server uses.
 import asyncio
 import base64
 import logging
-from typing import Any
 
 import paramiko
 

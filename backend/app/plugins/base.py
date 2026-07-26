@@ -55,13 +55,13 @@ class PluginSDK(ABC):
     # Optional hooks                                                      #
     # ------------------------------------------------------------------ #
 
-    async def on_enable(self) -> None:
+    async def on_enable(self) -> None:  # noqa: B027
         """Called when the plugin is enabled by the administrator."""
 
-    async def on_disable(self) -> None:
+    async def on_disable(self) -> None:  # noqa: B027
         """Called when the plugin is disabled by the administrator."""
 
-    async def on_config_changed(self, new_config: dict[str, Any]) -> None:
+    async def on_config_changed(self, new_config: dict[str, Any]) -> None:  # noqa: B027
         """Called when the administrator updates plugin configuration."""
 
     async def health_check(self) -> dict[str, Any]:

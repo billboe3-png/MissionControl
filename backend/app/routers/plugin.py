@@ -92,7 +92,7 @@ async def register_plugin(
     try:
         plugin = plugin_service.register_plugin(db, data)
     except ValueError as exc:
-        raise HTTPException(status_code=409, detail=str(exc))
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     return plugin_service.to_response(plugin)
 
 

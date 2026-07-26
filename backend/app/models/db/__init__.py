@@ -17,12 +17,12 @@ from .execution_log import ExecutionLog
 from .integration_profile import IntegrationProfile
 from .note import Note
 from .parking_lot import ParkingLot
-from .plugin import Plugin
 from .playbook import Playbook
 from .playbook_execution import PlaybookExecution
 from .playbook_schedule import PlaybookSchedule
 from .playbook_step import PlaybookStep
 from .playbook_variable import PlaybookVariable
+from .plugin import Plugin
 from .project import Project
 from .remote_host import RemoteHost
 from .resume import Resume

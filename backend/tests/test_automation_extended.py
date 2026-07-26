@@ -1142,7 +1142,7 @@ class TestStepCRUDExtended:
 
     def test_step_fields(self, client: TestClient, db_session):
         pb = _create_playbook(db_session)
-        step = _create_step(
+        _create_step(
             db_session, pb.id,
             name="Full Step",
             provider="bash",

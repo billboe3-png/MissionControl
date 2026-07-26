@@ -144,4 +144,4 @@ def bootstrap(db: Session, data: BootstrapRequest) -> dict:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Bootstrap failed. Please try again.",
-        )
+        ) from None
