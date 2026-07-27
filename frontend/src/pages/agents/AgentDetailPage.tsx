@@ -291,25 +291,25 @@ export default function AgentDetailPage() {
                             <div className="agent-section-title">Hardware Information</div>
                             <div className="agent-section-card">
                                 <div className="agent-overview-grid">
-                                    {inv.cpu_count && (
+                                    {typeof inv.cpu_count === "number" && (
                                         <div className="agent-overview-card">
                                             <span className="agent-overview-label">CPU Cores</span>
                                             <span className="agent-overview-value">{String(inv.cpu_count)}</span>
                                         </div>
                                     )}
-                                    {inv.memory_total_gb && (
+                                    {typeof inv.memory_total_gb === "number" && (
                                         <div className="agent-overview-card">
                                             <span className="agent-overview-label">Total Memory</span>
                                             <span className="agent-overview-value">{String(inv.memory_total_gb)} GB</span>
                                         </div>
                                     )}
-                                    {inv.disk_total_gb && (
+                                    {typeof inv.disk_total_gb === "number" && (
                                         <div className="agent-overview-card">
                                             <span className="agent-overview-label">Total Disk</span>
                                             <span className="agent-overview-value">{String(inv.disk_total_gb)} GB</span>
                                         </div>
                                     )}
-                                    {inv.uptime_seconds && (
+                                    {typeof inv.uptime_seconds === "number" && (
                                         <div className="agent-overview-card">
                                             <span className="agent-overview-label">Uptime</span>
                                             <span className="agent-overview-value">
