@@ -35,7 +35,9 @@ async def _api_call(
     except httpx.TimeoutException:
         return {"success": False, "data": None, "error": "Request timed out"}
     except httpx.HTTPStatusError as e:
-        return {"success": False, "data": None, "error": f"HTTP {e.response.status_code}: {e.response.text[:200]}"}
+        body = e.response.text
+        logger.warning("Proxmox API %s %s -> HTTP %s: %s", method, path, e.response.status_code, body)
+        return {"success": False, "data": None, "error": f"HTTP {e.response.status_code}: {body[:500]}"}
     except Exception as e:
         return {"success": False, "data": None, "error": str(e)}
 
@@ -562,9 +564,9 @@ class ProxmoxRESTProvider(ProxmoxProvider):
             return {"success": False, "error": "No Proxmox node specified"}
         vmid = config.get("vmid")
         if not vmid:
-            maxid_r = await self._get(f"/nodes/{node}/maxid")
-            if maxid_r["success"] and maxid_r["data"]:
-                vmid = str(maxid_r["data"].get("next", 100))
+            nextid_r = await self._get("/cluster/nextid")
+            if nextid_r["success"] and nextid_r["data"]:
+                vmid = str(nextid_r["data"])
             else:
                 vmid = "100"
         params: dict = {
@@ -586,7 +588,8 @@ class ProxmoxRESTProvider(ProxmoxProvider):
         net_name = config.get("net_name", "eth0")
         net_bridge = config.get("net_bridge", "vmbr0")
         net_ip = config.get("net_ip", "dhcp")
-        params["net0"] = f"name={net_name},bridge={net_bridge},hwaddr=auto,ip={net_ip},type=veth"
+        # Proxmox rejects hwaddr=auto; omit it so Proxmox generates a MAC.
+        params["net0"] = f"name={net_name},bridge={net_bridge},ip={net_ip},type=veth"
         if config.get("nameserver"):
             params["nameserver"] = config["nameserver"]
         if config.get("searchdomain"):
@@ -594,7 +597,7 @@ class ProxmoxRESTProvider(ProxmoxProvider):
         if config.get("description"):
             params["description"] = config["description"]
         if config.get("nesting"):
-            params["features"] = "nesting=1,fuse=1"
+            params["features"] = "nesting=1"
         result = await self._post(f"/nodes/{node}/lxc", **params)
         if not result["success"]:
             return {"success": False, "error": result.get("error", "Failed to create container"), "node": node}

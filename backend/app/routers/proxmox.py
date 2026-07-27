@@ -199,6 +199,10 @@ async def create_lxc(
     """Create a new LXC container from a template."""
     config = payload.model_dump(exclude_none=True)
     data = await proxmox_service.create_lxc(config, db)
+    if not data.get("success"):
+        from fastapi import HTTPException
+
+        raise HTTPException(status_code=400, detail=data.get("error", "Failed to create container"))
     return ProxmoxLxcCreateResponse(**data)
 
 
