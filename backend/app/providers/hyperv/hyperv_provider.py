@@ -301,37 +301,25 @@ class HyperVPowerShellProvider(HyperVProvider):
         return {"success": True, "message": "VM started"}
 
     async def stop_vm(self, vm_id: str, force: bool = True) -> dict:
+        # Dispatch the stop as a background job so the WinRM call returns
+        # immediately; the VM reaches Off state on its own and the UI reflects
+        # it on the next refresh. Avoids the call hanging while the guest
+        # shuts down (which made the Stop button appear to do nothing).
         flag = "-Force" if force else ""
-        result = await self._exec(f"Get-VM -Id '{vm_id}' | Stop-VM {flag} -PassThru | Select-Object Name,State | ConvertTo-Json")
+        result = await self._exec(f"Get-VM -Id '{vm_id}' | Stop-VM {flag} -AsJob | Out-Null")
         if not result["success"]:
             return {"success": False, "error": result["stderr"]}
-        return {"success": True, "message": "VM stopped"}
+        return {"success": True, "message": "VM stop requested"}
 
     async def restart_vm(self, vm_id: str) -> dict:
-        # Restart-VM can hang waiting for graceful shutdown; perform an
-        # explicit forced stop followed by start. Poll the lightweight VM
-        # list for an Off state before starting so we don't race a
-        # transitional "Stopping" state (which makes Start-VM fail/hang).
-        stopped = await self.stop_vm(vm_id, force=True)
-        if not stopped["success"]:
-            return {"success": False, "error": stopped.get("error", "stop failed during restart")}
-        off = False
-        for _ in range(30):
-            try:
-                items = (await self.get_vms()).get("items", [])
-                st = next((v.get("state", "") for v in items if v.get("id") == vm_id), "")
-                if str(st).lower() in ("off", "disabled"):
-                    off = True
-                    break
-            except Exception:
-                pass
-            await asyncio.sleep(1)
-        if not off:
-            return {"success": False, "error": "VM did not reach Off state within timeout after stop"}
-        started = await self.start_vm(vm_id)
-        if not started["success"]:
-            return {"success": False, "error": started.get("error", "start failed during restart")}
-        return {"success": True, "message": "VM restarted"}
+        # Dispatch the restart as a background job so the WinRM call returns
+        # immediately (Restart-VM otherwise waits for graceful shutdown and
+        # can hang). The VM restarts on its own and the UI reflects it on the
+        # next refresh.
+        result = await self._exec(f"Get-VM -Id '{vm_id}' | Restart-VM -Force -AsJob | Out-Null")
+        if not result["success"]:
+            return {"success": False, "error": result["stderr"]}
+        return {"success": True, "message": "VM restart requested"}
 
     async def pause_vm(self, vm_id: str) -> dict:
         result = await self._exec(f"Get-VM -Id '{vm_id}' | Suspend-VM -PassThru | Select-Object Name,State | ConvertTo-Json")
