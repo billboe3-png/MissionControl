@@ -309,10 +309,25 @@ class HyperVPowerShellProvider(HyperVProvider):
 
     async def restart_vm(self, vm_id: str) -> dict:
         # Restart-VM can hang waiting for graceful shutdown; perform an
-        # explicit forced stop followed by start, which we know is reliable.
+        # explicit forced stop followed by start. Poll the lightweight VM
+        # list for an Off state before starting so we don't race a
+        # transitional "Stopping" state (which makes Start-VM fail/hang).
         stopped = await self.stop_vm(vm_id, force=True)
         if not stopped["success"]:
             return {"success": False, "error": stopped.get("error", "stop failed during restart")}
+        off = False
+        for _ in range(30):
+            try:
+                items = (await self.get_vms()).get("items", [])
+                st = next((v.get("state", "") for v in items if v.get("id") == vm_id), "")
+                if str(st).lower() in ("off", "disabled"):
+                    off = True
+                    break
+            except Exception:
+                pass
+            await asyncio.sleep(1)
+        if not off:
+            return {"success": False, "error": "VM did not reach Off state within timeout after stop"}
         started = await self.start_vm(vm_id)
         if not started["success"]:
             return {"success": False, "error": started.get("error", "start failed during restart")}
