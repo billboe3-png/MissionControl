@@ -34,12 +34,12 @@ class DashboardService:
     def __init__(self) -> None:
         self._remote_provider = RemoteProvider()
 
-    async def get_dashboard(self, db: Session) -> dict:
-        """
-        Aggregate all domain service data into a single dashboard response.
+    async def get_dashboard(self, db: Session, company_ids: list[int] | None = None) -> dict:
+        """Aggregate all domain service data into a single dashboard response.
 
-        Each domain service handles its own data access and error handling.
-        The orchestrator combines results without containing business logic.
+        When ``company_ids`` is provided (a non-global user's tenant tree),
+        the remote hosts, agents, and integrations are filtered to those
+        companies so tenants cannot see each other's data.
         """
         logger.info("Loading dashboard data from domain services")
 
@@ -57,9 +57,22 @@ class DashboardService:
         hyperv = await self._get_hyperv_data(db)
         proxmox = await self._get_proxmox_data(db)
         integrations = await self._get_integrations_data(db)
-        agents = await self._get_agent_data(db)
+        agents = await self._get_agent_data(db, company_ids)
         ai = await self._get_ai_data(db)
         automation = await self._get_automation_data(db)
+
+        # Tenant scoping: filter remote hosts and integrations to the
+        # caller's company tree (both expose an "items" list). The agent
+        # summary is counted directly via company_ids above. Global admins
+        # pass company_ids=None (no filter).
+        if company_ids is not None:
+            ids = set(company_ids)
+            if isinstance(remote, dict) and "items" in remote:
+                remote["items"] = [r for r in remote["items"] if (r.get("company_id") or -1) in ids]
+                remote["count"] = len(remote["items"])
+            if isinstance(integrations, dict) and "items" in integrations:
+                integrations["items"] = [i for i in integrations["items"] if (i.get("company_id") or -1) in ids]
+                integrations["count"] = len(integrations["items"])
 
         return {
             "application": {
@@ -291,12 +304,12 @@ class DashboardService:
             logger.warning("Dashboard: integrations data failed: %s", e)
             return {"count": 0, "items": []}
 
-    async def _get_agent_data(self, db: Session) -> dict:
+    async def _get_agent_data(self, db: Session, company_ids: list[int] | None = None) -> dict:
         """Delegate to AgentService, never raise."""
         try:
             from app.services.agent_service import agent_service
 
-            return await agent_service.get_dashboard_summary(db)
+            return await agent_service.get_dashboard_summary(db, company_ids)
         except Exception as e:
             logger.warning("Dashboard: agent data failed: %s", e)
             return {

@@ -13,6 +13,7 @@ from fastapi import APIRouter, Depends, Header, Query, status
 from sqlalchemy.orm import Session
 
 from app.core.auth_dependency import get_current_user
+from app.core.tenant_scope import CompanyScope, get_company_scope
 from app.db import get_db
 from app.schemas.agent import (
     AgentCommandDispatchRequest,
@@ -143,9 +144,15 @@ async def list_agents(
     current_user: object = Depends(get_current_user),
     db: Session = Depends(get_db),
     service: AgentService = Depends(get_agent_service),
+    scope: CompanyScope = Depends(get_company_scope),
 ) -> AgentListResponse:
-    """List all registered agents."""
-    return await service.list_agents(db)
+    """List all registered agents (scoped to the caller's tenant tree)."""
+    result = await service.list_agents(db)
+    if not scope.is_global:
+        ids = set(scope.company_ids)
+        result.items = [a for a in result.items if (a.company_id or -1) in ids]
+        result.count = len(result.items)
+    return result
 
 
 @router.get("/{agent_id}", response_model=AgentResponse)

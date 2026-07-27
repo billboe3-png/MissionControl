@@ -12,6 +12,7 @@ from fastapi import APIRouter, Depends, status
 from sqlalchemy.orm import Session
 
 from app.core.auth_dependency import get_current_user
+from app.core.tenant_scope import CompanyScope, get_company_scope
 from app.db import get_db
 from app.schemas.integration import (
     IntegrationProfileCreate,
@@ -49,8 +50,13 @@ def get_integration_service() -> IntegrationService:
 async def list_integrations(
     db: Session = Depends(get_db),
     service: IntegrationService = Depends(get_integration_service),
+    scope: CompanyScope = Depends(get_company_scope),
 ) -> IntegrationProfileListResponse:
-    return await service.list_profiles(db)
+    result = await service.list_profiles(db)
+    if not scope.is_global:
+        ids = set(scope.company_ids)
+        result.profiles = [p for p in result.profiles if (p.company_id or -1) in ids]
+    return result
 
 
 @router.get(

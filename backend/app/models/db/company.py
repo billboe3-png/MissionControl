@@ -11,7 +11,7 @@ to Company B.
 
 from datetime import UTC, datetime
 
-from sqlalchemy import Boolean, DateTime, Integer, String, Text
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.database import Base
@@ -50,6 +50,17 @@ class Company(Base):
     display_name: Mapped[str] = mapped_column(
         String(200),
         nullable=False,
+    )
+
+    # ------------------------------------------------------------------ #
+    # Tenant hierarchy                                                   #
+    # ------------------------------------------------------------------ #
+
+    parent_id: Mapped[int | None] = mapped_column(
+        Integer,
+        ForeignKey("companies.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
     )
 
     # ------------------------------------------------------------------ #

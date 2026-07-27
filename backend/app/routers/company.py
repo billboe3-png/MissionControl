@@ -11,6 +11,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from app.core.auth_dependency import get_current_user
+from app.core.tenant_scope import CompanyScope, get_company_scope
 from app.db import get_db
 from app.schemas.company import (
     CompanyCreate,
@@ -29,10 +30,16 @@ router = APIRouter(
 
 
 @router.get("", response_model=list[CompanyResponse])
-def list_companies(db: Session = Depends(get_db)):
-    """Return all companies with stats."""
+def list_companies(
+    db: Session = Depends(get_db),
+    scope: CompanyScope = Depends(get_company_scope),
+):
+    """Return companies with stats. Global admins see all; others see their tenant tree."""
     result = CompanyService.get_all(db)
-    return result.items
+    if scope.is_global:
+        return result.items
+    ids = set(scope.company_ids)
+    return [c for c in result.items if c.id in ids]
 
 
 @router.get("/summary")

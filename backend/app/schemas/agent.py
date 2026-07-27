@@ -225,6 +225,7 @@ class AgentResponse(BaseModel):
     created_at: datetime | None = None
     updated_at: datetime | None = None
     registered_at: datetime | None = None
+    company_id: int | None = None
 
 
 class AgentListResponse(BaseModel):
