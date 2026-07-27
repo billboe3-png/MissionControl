@@ -64,10 +64,10 @@ export default function ZabbixServersPage() {
                                         <StatusBadge
                                             status={
                                                 s.status === "healthy"
-                                                    ? "online"
+                                                    ? "healthy"
                                                     : s.status === "error"
                                                       ? "error"
-                                                      : "unknown"
+                                                      : "neutral"
                                             }
                                             label={s.status}
                                         />
