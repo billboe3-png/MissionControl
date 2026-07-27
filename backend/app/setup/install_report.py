@@ -10,7 +10,7 @@ import os
 import platform
 import subprocess
 import sys
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 
@@ -48,7 +48,7 @@ class InstallationReporter:
 
         info["validation"] = self._get_validation_results()
 
-        info["generated_at"] = datetime.now(timezone.utc).isoformat()
+        info["generated_at"] = datetime.now(UTC).isoformat()
 
         return info
 
@@ -245,7 +245,7 @@ class InstallationReporter:
 
         for manifest_path in plugins_dir.glob("*/manifest.json"):
             try:
-                with open(manifest_path, "r", encoding="utf-8") as f:
+                with open(manifest_path, encoding="utf-8") as f:
                     manifest = json.load(f)
                 plugins.append({
                     "name": manifest.get("name", manifest_path.parent.name),
@@ -299,7 +299,7 @@ class InstallationReporter:
 
         if env_file.exists():
             try:
-                with open(env_file, "r", encoding="utf-8") as f:
+                with open(env_file, encoding="utf-8") as f:
                     for line in f:
                         line = line.strip()
                         if not line or line.startswith("#"):

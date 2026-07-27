@@ -9,7 +9,6 @@ import subprocess
 import sys
 from pathlib import Path
 
-
 EXPECTED_SCHEMA_VERSION = "3.0.0"
 
 DEPRECATED_CONFIG_KEYS: dict[str, str] = {}
@@ -82,7 +81,7 @@ class UpgradeAssistant:
             return deprecated_found
 
         try:
-            with open(env_path, "r", encoding="utf-8") as f:
+            with open(env_path, encoding="utf-8") as f:
                 for line in f:
                     line = line.strip()
                     if not line or line.startswith("#"):
@@ -117,7 +116,7 @@ class UpgradeAssistant:
             try:
                 import json
 
-                with open(manifest_path, "r", encoding="utf-8") as f:
+                with open(manifest_path, encoding="utf-8") as f:
                     manifest = json.load(f)
                 sdk_version = manifest.get("sdk_version", "unknown")
                 if sdk_version != EXPECTED_SCHEMA_VERSION and sdk_version != "unknown":

@@ -308,9 +308,7 @@ class AIAssistant:
         for source_name, data in context.get("sources", {}).items():
             if isinstance(data, dict):
                 for key, value in data.items():
-                    if isinstance(value, str) and any(kw in value.lower() for kw in keywords):
-                        related.setdefault(source_name, {})[key] = value
-                    elif isinstance(value, (int, float)) and any(kw in key.lower() for kw in keywords):
+                    if (isinstance(value, str) and any(kw in value.lower() for kw in keywords)) or (isinstance(value, (int, float)) and any(kw in key.lower() for kw in keywords)):
                         related.setdefault(source_name, {})[key] = value
 
         return related

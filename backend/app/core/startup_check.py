@@ -26,7 +26,7 @@ _BANNER = """
 class CheckResult:
     """Result of a single startup check."""
 
-    __slots__ = ("name", "ok", "message", "instruction", "critical")
+    __slots__ = ("critical", "instruction", "message", "name", "ok")
 
     def __init__(
         self,

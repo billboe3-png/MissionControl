@@ -83,7 +83,13 @@ async def _run_powershell_ssh(
 
     def _exec() -> dict:
         client = paramiko.SSHClient()
-        client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        from app.core.config import get_settings
+
+        if get_settings().ssh_auto_add_host_keys:
+            client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        else:
+            client.load_system_host_keys()
+            client.set_missing_host_key_policy(paramiko.RejectPolicy())
         try:
             client.connect(
                 hostname=host,

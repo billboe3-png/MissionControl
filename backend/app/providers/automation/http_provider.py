@@ -59,6 +59,10 @@ class HTTPAutomationProvider(AutomationProvider):
             headers = request_data.get("headers", {})
             body = request_data.get("body")
             timeout = context.timeout_seconds
+            # Secure by default: TLS certificates are verified unless the step
+            # explicitly opts out (e.g. internal endpoints with self-signed
+            # certs). Never hard-code verify=False on a code-execution path.
+            verify_ssl = request_data.get("verify_ssl", True)
 
             if not url:
                 return StepResult(
@@ -71,7 +75,7 @@ class HTTPAutomationProvider(AutomationProvider):
             async with httpx.AsyncClient(
                 timeout=timeout,
                 follow_redirects=True,
-                verify=False,
+                verify=verify_ssl,
             ) as client:
                 response = await client.request(
                     method=method,

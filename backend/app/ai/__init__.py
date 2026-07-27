@@ -16,4 +16,4 @@ from app.ai.ai_engine import AIEngine
 from app.ai.ai_service import ai_service
 from app.ai.assistant import ai_assistant
 
-__all__ = ["AIEngine", "ai_service", "ai_assistant"]
+__all__ = ["AIEngine", "ai_assistant", "ai_service"]

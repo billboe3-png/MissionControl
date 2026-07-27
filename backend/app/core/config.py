@@ -164,6 +164,16 @@ class Settings(BaseSettings):
         alias="REMOTE_RETRY_COUNT",
     )
 
+    # When True, unknown SSH host keys are auto-accepted (paramiko
+    # AutoAddPolicy). This is convenient for first-time connections to
+    # managed home-lab hosts but is vulnerable to MITM. Default False:
+    # the client rejects unknown hosts and relies on the system known_hosts
+    # file. Set to True only for trusted, single-purpose automation hosts.
+    ssh_auto_add_host_keys: bool = Field(
+        default=False,
+        alias="SSH_AUTO_ADD_HOST_KEYS",
+    )
+
     remote_connection_pool_size: int = Field(
         default=5,
         alias="REMOTE_CONNECTION_POOL_SIZE",

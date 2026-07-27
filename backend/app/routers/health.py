@@ -8,7 +8,7 @@ agent state engine, automation, scheduler, AI, dashboard.
 
 import logging
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from fastapi import APIRouter, status
 from fastapi.responses import JSONResponse
@@ -32,13 +32,13 @@ def _check(name: str, fn) -> dict:
         if isinstance(result, dict):
             result["latency_ms"] = latency
             result["component"] = name
-            result["last_check"] = datetime.now(timezone.utc).isoformat()
+            result["last_check"] = datetime.now(UTC).isoformat()
             return result
         return {
             "component": name,
             "status": "ok" if result else "error",
             "latency_ms": latency,
-            "last_check": datetime.now(timezone.utc).isoformat(),
+            "last_check": datetime.now(UTC).isoformat(),
         }
     except Exception as e:
         latency = round((time.perf_counter() - start) * 1000, 2)
@@ -48,7 +48,7 @@ def _check(name: str, fn) -> dict:
             "status": "error",
             "latency_ms": latency,
             "details": str(e),
-            "last_check": datetime.now(timezone.utc).isoformat(),
+            "last_check": datetime.now(UTC).isoformat(),
         }
 
 
@@ -61,13 +61,13 @@ async def _check_async(name: str, fn) -> dict:
         if isinstance(result, dict):
             result["latency_ms"] = latency
             result["component"] = name
-            result["last_check"] = datetime.now(timezone.utc).isoformat()
+            result["last_check"] = datetime.now(UTC).isoformat()
             return result
         return {
             "component": name,
             "status": "ok" if result else "error",
             "latency_ms": latency,
-            "last_check": datetime.now(timezone.utc).isoformat(),
+            "last_check": datetime.now(UTC).isoformat(),
         }
     except Exception as e:
         latency = round((time.perf_counter() - start) * 1000, 2)
@@ -77,7 +77,7 @@ async def _check_async(name: str, fn) -> dict:
             "status": "error",
             "latency_ms": latency,
             "details": str(e),
-            "last_check": datetime.now(timezone.utc).isoformat(),
+            "last_check": datetime.now(UTC).isoformat(),
         }
 
 
@@ -118,10 +118,11 @@ def _check_agents() -> dict:
         from app.state import agent_state_engine  # noqa: F401
 
         return {"status": "ok", "details": "state_engine loaded"}
-    except Exception:
+    except Exception as e:
+        logger.warning("Agent state engine unavailable: %s", e)
         return {
-            "status": "ok",
-            "details": "state_engine not initialized (normal at startup)",
+            "status": "warning",
+            "details": f"state_engine unavailable: {e}",
         }
 
 
@@ -130,8 +131,12 @@ def _check_plugins() -> dict:
         from app.plugins.loader import PluginLoader  # noqa: F401
 
         return {"status": "ok", "details": "plugin_loader available"}
-    except Exception:
-        return {"status": "ok", "details": "plugin_loader not initialized"}
+    except Exception as e:
+        logger.warning("Plugin loader unavailable: %s", e)
+        return {
+            "status": "warning",
+            "details": f"plugin_loader unavailable: {e}",
+        }
 
 
 def _check_event_bus() -> dict:
@@ -148,8 +153,12 @@ def _check_heartbeat_service() -> dict:
         from app.heartbeat import HeartbeatService  # noqa: F401
 
         return {"status": "ok", "details": "heartbeat_service module available"}
-    except Exception:
-        return {"status": "ok", "details": "heartbeat_service not initialized"}
+    except Exception as e:
+        logger.warning("Heartbeat service unavailable: %s", e)
+        return {
+            "status": "warning",
+            "details": f"heartbeat_service unavailable: {e}",
+        }
 
 
 def _check_automation() -> dict:
@@ -172,8 +181,12 @@ def _check_ai() -> dict:
         from app.ai.ai_service import AIService  # noqa: F401
 
         return {"status": "ok", "details": "AI service module available"}
-    except Exception:
-        return {"status": "ok", "details": "AI service not initialized"}
+    except Exception as e:
+        logger.warning("AI service unavailable: %s", e)
+        return {
+            "status": "warning",
+            "details": f"AI service unavailable: {e}",
+        }
 
 
 def _check_dashboard() -> dict:
@@ -181,8 +194,12 @@ def _check_dashboard() -> dict:
         from app.services.dashboard_service import DashboardService  # noqa: F401
 
         return {"status": "ok", "details": "dashboard service available"}
-    except Exception:
-        return {"status": "ok", "details": "dashboard service not initialized"}
+    except Exception as e:
+        logger.warning("Dashboard service unavailable: %s", e)
+        return {
+            "status": "warning",
+            "details": f"dashboard service unavailable: {e}",
+        }
 
 
 def _check_disk_space() -> dict:
@@ -200,7 +217,8 @@ def _check_disk_space() -> dict:
             "details": f"{free_gb}GB free / {total_gb}GB total ({pct}% available)",
         }
     except Exception as e:
-        return {"status": "ok", "details": f"check failed: {e}"}
+        logger.warning("Disk space check failed: %s", e)
+        return {"status": "error", "details": f"check failed: {e}"}
 
 
 # ------------------------------------------------------------------ #
@@ -275,7 +293,7 @@ async def subsystem_health() -> JSONResponse:
         content={
             "status": overall,
             "component": "Mission Control",
-            "last_check": datetime.now(timezone.utc).isoformat(),
+            "last_check": datetime.now(UTC).isoformat(),
             "subsystems": checks,
         },
     )
