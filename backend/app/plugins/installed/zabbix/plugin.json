@@ -1,0 +1,23 @@
+{
+    "id": "zabbix",
+    "name": "Zabbix Monitoring",
+    "version": "1.0.0",
+    "description": "Zabbix monitoring integration plugin — inventory sync, problem tracking, event aggregation, and dashboard widgets.",
+    "author": "Mission Control",
+    "execution_target": "server",
+    "category": "monitoring",
+    "min_core_version": "3.0.0",
+    "permissions": [
+        "read:dashboard",
+        "read:integrations",
+        "manage:integrations"
+    ],
+    "dependencies": [],
+    "capabilities": [
+        "dashboard_widget",
+        "provider",
+        "background_sync",
+        "routes",
+        "navigation"
+    ]
+}

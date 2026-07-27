@@ -38,6 +38,7 @@ import ZabbixItemsPage from "./pages/zabbix/ItemsPage";
 import ZabbixMapsPage from "./pages/zabbix/MapsPage";
 import ZabbixDashboardsPage from "./pages/zabbix/DashboardsPage";
 import ZabbixHealthPage from "./pages/zabbix/HealthPage";
+import ZabbixServersPage from "./pages/monitoring/ZabbixServersPage";
 import HyperVOverviewPage from "./pages/hyperv/OverviewPage";
 import VirtualMachinesPage from "./pages/hyperv/VirtualMachinesPage";
 import NetworksPage from "./pages/hyperv/NetworksPage";
@@ -123,6 +124,7 @@ export default function App() {
                             <Route path="/monitoring/maps" element={<ZabbixMapsPage />} />
                             <Route path="/monitoring/dashboards" element={<ZabbixDashboardsPage />} />
                             <Route path="/monitoring/health" element={<ZabbixHealthPage />} />
+                            <Route path="/monitoring/servers" element={<ZabbixServersPage />} />
 
                             <Route path="/identity" element={<IdentityOverviewPage />} />
                             <Route path="/identity/active-directory" element={<ActiveDirectoryPage />} />

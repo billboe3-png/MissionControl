@@ -476,6 +476,146 @@ class LocalLLMProvider(AIProvider):
         }
 
 
+class LMStudioProvider(AIProvider):
+    """LM Studio local LLM provider (OpenAI-compatible API)."""
+
+    def __init__(self, base_url: str = "http://localhost:1234", model: str = "default"):
+        self._base_url = base_url.rstrip("/")
+        self._model = model
+
+    async def test_connection(self) -> dict:
+        try:
+            import httpx
+
+            async with httpx.AsyncClient(timeout=10) as client:
+                resp = await client.get(f"{self._base_url}/v1/models")
+                if resp.status_code == 200:
+                    return {"success": True, "message": "LM Studio connected"}
+                return {"success": False, "error": f"HTTP {resp.status_code}"}
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    async def complete(self, prompt: str, system_prompt: str = "") -> dict:
+        try:
+            import httpx
+
+            messages = []
+            if system_prompt:
+                messages.append({"role": "system", "content": system_prompt})
+            messages.append({"role": "user", "content": prompt})
+
+            payload = {"model": self._model, "messages": messages, "stream": False}
+
+            async with httpx.AsyncClient(timeout=120) as client:
+                resp = await client.post(f"{self._base_url}/v1/chat/completions", json=payload)
+                if resp.status_code == 200:
+                    data = resp.json()
+                    text = data["choices"][0]["message"]["content"]
+                    return {"success": True, "text": text, "error": None}
+                return {"success": False, "text": "", "error": f"HTTP {resp.status_code}"}
+        except Exception as e:
+            return {"success": False, "text": "", "error": str(e)}
+
+    async def get_models(self) -> dict:
+        try:
+            import httpx
+
+            async with httpx.AsyncClient(timeout=10) as client:
+                resp = await client.get(f"{self._base_url}/v1/models")
+                if resp.status_code == 200:
+                    data = resp.json()
+                    models = [m["id"] for m in data.get("data", [])]
+                    return {"success": True, "models": models}
+                return {"success": False, "models": [], "error": f"HTTP {resp.status_code}"}
+        except Exception as e:
+            return {"success": False, "models": [], "error": str(e)}
+
+    async def get_provider_info(self) -> dict:
+        return {
+            "name": "LM Studio",
+            "type": "lm_studio",
+            "model": self._model,
+            "base_url": self._base_url,
+            "offline_capable": True,
+        }
+
+
+class OpenRouterProvider(AIProvider):
+    """OpenRouter multi-model gateway provider."""
+
+    def __init__(self, api_key: str, model: str = "anthropic/claude-sonnet-4-20250514"):
+        self._api_key = api_key
+        self._model = model
+
+    async def test_connection(self) -> dict:
+        try:
+            import httpx
+
+            async with httpx.AsyncClient(timeout=10) as client:
+                resp = await client.get(
+                    "https://openrouter.ai/api/v1/models",
+                    headers={"Authorization": f"Bearer {self._api_key}"},
+                )
+                if resp.status_code == 200:
+                    return {"success": True, "message": "OpenRouter connected"}
+                return {"success": False, "error": f"HTTP {resp.status_code}"}
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    async def complete(self, prompt: str, system_prompt: str = "") -> dict:
+        try:
+            import httpx
+
+            messages = []
+            if system_prompt:
+                messages.append({"role": "system", "content": system_prompt})
+            messages.append({"role": "user", "content": prompt})
+
+            payload = {"model": self._model, "messages": messages}
+
+            async with httpx.AsyncClient(timeout=120) as client:
+                resp = await client.post(
+                    "https://openrouter.ai/api/v1/chat/completions",
+                    headers={
+                        "Authorization": f"Bearer {self._api_key}",
+                        "Content-Type": "application/json",
+                    },
+                    json=payload,
+                )
+                if resp.status_code == 200:
+                    data = resp.json()
+                    text = data["choices"][0]["message"]["content"]
+                    return {"success": True, "text": text, "error": None}
+                return {"success": False, "text": "", "error": f"HTTP {resp.status_code}"}
+        except Exception as e:
+            return {"success": False, "text": "", "error": str(e)}
+
+    async def get_models(self) -> dict:
+        try:
+            import httpx
+
+            async with httpx.AsyncClient(timeout=10) as client:
+                resp = await client.get(
+                    "https://openrouter.ai/api/v1/models",
+                    headers={"Authorization": f"Bearer {self._api_key}"},
+                )
+                if resp.status_code == 200:
+                    data = resp.json()
+                    models = [m["id"] for m in data.get("data", [])]
+                    return {"success": True, "models": models}
+                return {"success": False, "models": [], "error": f"HTTP {resp.status_code}"}
+        except Exception as e:
+            return {"success": False, "models": [], "error": str(e)}
+
+    async def get_provider_info(self) -> dict:
+        return {
+            "name": "OpenRouter",
+            "type": "openrouter",
+            "model": self._model,
+            "offline_capable": False,
+        }
+
+
 class RuleBasedProvider(AIProvider):
     """
     Built-in rule-based AI provider.
@@ -518,6 +658,8 @@ AI_PROVIDER_TYPES = {
     "azure_openai": AzureOpenAIProvider,
     "anthropic": AnthropicProvider,
     "local": LocalLLMProvider,
+    "lm_studio": LMStudioProvider,
+    "openrouter": OpenRouterProvider,
     "rule_based": RuleBasedProvider,
 }
 
@@ -574,6 +716,13 @@ def get_ai_provider() -> AIProvider:
                     _ai_provider = AnthropicProvider(api_key=api_key, model=model)
                 elif provider_type == "local":
                     _ai_provider = LocalLLMProvider(model=model)
+                elif provider_type == "lm_studio":
+                    _ai_provider = LMStudioProvider(
+                        base_url=profile.base_url or "http://localhost:1234",
+                        model=model,
+                    )
+                elif provider_type == "openrouter":
+                    _ai_provider = OpenRouterProvider(api_key=api_key, model=model)
                 else:
                     _ai_provider = RuleBasedProvider()
 

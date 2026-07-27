@@ -9,13 +9,13 @@ from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from app.core.config import get_settings
+from app.core.error_handlers import register_error_handlers
 from app.core.logging_config import (
     clear_context,
     generate_request_id,
     set_request_id,
     setup_logging,
 )
-from app.core.error_handlers import register_error_handlers
 
 _TESTING = os.getenv("TESTING", "0") == "1"
 
@@ -111,6 +111,7 @@ from app.routers import (  # noqa: E402
     hyperv,
     identity,
     integration,
+    marketplace,
     notes,
     parking_lot,
     plugin,
@@ -214,6 +215,7 @@ app.include_router(setup.router, prefix="/api/v1")
 app.include_router(auth.router, prefix="/api/v1")
 app.include_router(agent_token.router, prefix="/api/v1")
 app.include_router(plugin.router, prefix="/api/v1")
+app.include_router(marketplace.router, prefix="/api/v1")
 
 
 @app.get("/api/v1")
@@ -230,7 +232,7 @@ async def api_root() -> dict[str, str]:
 
 @app.on_event("startup")
 async def _startup_banner():
-    """Run startup validation and print status banner."""
+    """Run startup validation, load plugins, and print status banner."""
     from app.db.database import SessionLocal
     from app.services.setup_service import is_setup_required
 
@@ -240,7 +242,7 @@ async def _startup_banner():
 
     # Run comprehensive startup validation
     try:
-        from app.core.startup_check import run_all_checks, print_startup_report
+        from app.core.startup_check import print_startup_report, run_all_checks
 
         results = run_all_checks()
         print_startup_report(results)
@@ -267,4 +269,39 @@ async def _startup_banner():
             db.close()
     except Exception:
         print("  Setup Required: UNKNOWN (database not reachable)")
+
+    # Load and start server plugins
+    try:
+        from app.plugins.registry import plugin_registry
+
+        load_results = await plugin_registry.discover_and_load()
+        loaded = [s for s, r in load_results.items() if r == "loaded"]
+        if loaded:
+            logger.info("Plugins discovered: %s", ", ".join(loaded))
+            await plugin_registry.setup_all()
+            await plugin_registry.start_all()
+            route_count = await plugin_registry.register_routes(app)
+            logger.info(
+                "Plugins started: %d, routes registered: %d",
+                len(loaded),
+                route_count,
+            )
+            print(f"  Plugins: {len(loaded)} loaded, {route_count} routes")
+        else:
+            print("  Plugins: none discovered")
+    except Exception as exc:
+        logger.warning("Plugin loading skipped: %s", exc)
+        print("  Plugins: skipped (error)")
+
     print("")
+
+
+@app.on_event("shutdown")
+async def _shutdown_plugins():
+    """Gracefully stop all running plugins."""
+    try:
+        from app.plugins.registry import plugin_registry
+
+        await plugin_registry.stop_all()
+    except Exception:
+        pass

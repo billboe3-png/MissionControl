@@ -60,6 +60,7 @@ export const navigation: NavGroup[] = [
             { label: "Maps", path: "/monitoring/maps", icon: "🗺️" },
             { label: "Dashboards", path: "/monitoring/dashboards", icon: "📈" },
             { label: "Health", path: "/monitoring/health", icon: "❤️" },
+            { label: "Servers", path: "/monitoring/servers", icon: "⚙️" },
         ],
     },
     {

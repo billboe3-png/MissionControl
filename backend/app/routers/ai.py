@@ -17,6 +17,7 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.ai.ai_service import ai_service
+from app.ai.assistant import ai_assistant
 from app.core.auth_dependency import get_current_user
 from app.db import get_db
 from app.models.db.user import User
@@ -41,6 +42,10 @@ class RecommendationStatusResponse(BaseModel):
     status: str
     action_by: str | None = None
     action_at: str | None = None
+
+
+class AIQueryRequest(BaseModel):
+    question: str
 
 
 @router.get("/overview", summary="AI Operations Overview")
@@ -133,6 +138,24 @@ async def get_health_score(db: Session = Depends(get_db)):
 async def search(request: AISearchRequest, db: Session = Depends(get_db)):
     """Search infrastructure using natural language."""
     return await ai_service.search(request.query, db)
+
+
+@router.post("/query", summary="AI Assistant Query")
+async def query(request: AIQueryRequest, db: Session = Depends(get_db)):
+    """Ask the AI Operations Assistant a natural language question."""
+    return await ai_assistant.query(request.question, db)
+
+
+@router.get("/dashboard-cards", summary="AI Dashboard Cards")
+async def get_dashboard_cards(db: Session = Depends(get_db)):
+    """Get all AI dashboard widgets in a single call."""
+    return await ai_assistant.get_dashboard_cards(db)
+
+
+@router.get("/health-score-v2", summary="Infrastructure Health Score")
+async def get_health_score_v2(db: Session = Depends(get_db)):
+    """Get AI-calculated infrastructure health score."""
+    return await ai_assistant.get_health_score(db)
 
 
 @router.get("/history", summary="Analysis History")
