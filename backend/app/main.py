@@ -25,7 +25,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
 
     def __init__(
         self,
-        app,  # noqa: B008
+        app,
         default_limit: int = 60,
         auth_limit: int = 5,
         window: int = 60,
@@ -163,7 +163,7 @@ async def request_logging_middleware(request: Request, call_next):
     elapsed_ms = round((time.perf_counter() - start) * 1000, 1)
     response.headers["X-Request-ID"] = request_id
     logger.info(
-        "%s %s %s %s %sms",
+        "%s %s %s %sms",
         request.method,
         request.url.path,
         response.status_code,
