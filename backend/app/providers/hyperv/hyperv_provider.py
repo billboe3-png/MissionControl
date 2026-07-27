@@ -295,32 +295,37 @@ class HyperVPowerShellProvider(HyperVProvider):
         return {"connected": True, "item": data}
 
     async def start_vm(self, vm_id: str) -> dict:
-        result = await self._exec(f"Start-VM -Id '{vm_id}' -PassThru | Select-Object Name,State | ConvertTo-Json")
+        result = await self._exec(f"Get-VM -Id '{vm_id}' | Start-VM -PassThru | Select-Object Name,State | ConvertTo-Json")
         if not result["success"]:
             return {"success": False, "error": result["stderr"]}
         return {"success": True, "message": "VM started"}
 
-    async def stop_vm(self, vm_id: str, force: bool = False) -> dict:
+    async def stop_vm(self, vm_id: str, force: bool = True) -> dict:
         flag = "-Force" if force else ""
-        result = await self._exec(f"Stop-VM -Id '{vm_id}' {flag} -PassThru | Select-Object Name,State | ConvertTo-Json")
+        result = await self._exec(f"Get-VM -Id '{vm_id}' | Stop-VM {flag} -PassThru | Select-Object Name,State | ConvertTo-Json")
         if not result["success"]:
             return {"success": False, "error": result["stderr"]}
         return {"success": True, "message": "VM stopped"}
 
     async def restart_vm(self, vm_id: str) -> dict:
-        result = await self._exec(f"Restart-VM -Id '{vm_id}' -PassThru | Select-Object Name,State | ConvertTo-Json")
-        if not result["success"]:
-            return {"success": False, "error": result["stderr"]}
+        # Restart-VM can hang waiting for graceful shutdown; perform an
+        # explicit forced stop followed by start, which we know is reliable.
+        stopped = await self.stop_vm(vm_id, force=True)
+        if not stopped["success"]:
+            return {"success": False, "error": stopped.get("error", "stop failed during restart")}
+        started = await self.start_vm(vm_id)
+        if not started["success"]:
+            return {"success": False, "error": started.get("error", "start failed during restart")}
         return {"success": True, "message": "VM restarted"}
 
     async def pause_vm(self, vm_id: str) -> dict:
-        result = await self._exec(f"Suspend-VM -Id '{vm_id}' -PassThru | Select-Object Name,State | ConvertTo-Json")
+        result = await self._exec(f"Get-VM -Id '{vm_id}' | Suspend-VM -PassThru | Select-Object Name,State | ConvertTo-Json")
         if not result["success"]:
             return {"success": False, "error": result["stderr"]}
         return {"success": True, "message": "VM paused"}
 
     async def resume_vm(self, vm_id: str) -> dict:
-        result = await self._exec(f"Resume-VM -Id '{vm_id}' -PassThru | Select-Object Name,State | ConvertTo-Json")
+        result = await self._exec(f"Get-VM -Id '{vm_id}' | Resume-VM -PassThru | Select-Object Name,State | ConvertTo-Json")
         if not result["success"]:
             return {"success": False, "error": result["stderr"]}
         return {"success": True, "message": "VM resumed"}
