@@ -47,7 +47,7 @@ async def _run_powershell_winrm(
             timeout=timeout + 10,
         )
         stdout = result.std_out or ""
-        stderr = result.stderr or ""
+        stderr = result.std_err or ""
         if isinstance(stdout, bytes):
             stdout = stdout.decode("utf-8", errors="replace")
         if isinstance(stderr, bytes):
