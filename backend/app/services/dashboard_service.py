@@ -110,6 +110,20 @@ class DashboardService:
             "agents": agents,
             "automation": automation,
             "ai": ai,
+            "git": {
+                "available": False,
+                "repository_name": None,
+                "current_branch": None,
+                "latest_commit": None,
+                "commit_author": None,
+                "commit_date": None,
+                "working_tree_clean": False,
+                "ahead_of_origin": 0,
+                "behind_origin": 0,
+                "last_pull": None,
+                "remote_url": None,
+                "reason": "Git repository information is not collected by this deployment.",
+            },
         }
 
     async def _get_zabbix_data(self, db: Session) -> dict:

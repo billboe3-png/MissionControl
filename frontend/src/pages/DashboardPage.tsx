@@ -128,15 +128,15 @@ export default function DashboardPage() {
                                 <span className="sov-label">Git</span>
                                 <StatusBadge
                                     status={
-                                        data.git.available
-                                            ? data.git.working_tree_clean
+                                        data.git?.available
+                                            ? data.git?.working_tree_clean
                                                 ? "healthy"
                                                 : "warning"
                                             : "neutral"
                                     }
                                     label={
-                                        data.git.available
-                                            ? data.git.current_branch ?? "unknown"
+                                        data.git?.available
+                                            ? data.git?.current_branch ?? "unknown"
                                             : "unavailable"
                                     }
                                 />
