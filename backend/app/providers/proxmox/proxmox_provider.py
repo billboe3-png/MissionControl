@@ -573,7 +573,7 @@ class ProxmoxRESTProvider(ProxmoxProvider):
             "hostname": config.get("hostname", "mission-control"),
             "cores": config.get("cores", 2),
             "memory": config.get("memory", 4096),
-            "rootfs": f"{config.get('storage', 'local-lvm')}:rootfs={config.get('disk', 8)}",
+            "rootfs": f"{config.get('storage', 'local-lvm')}:{config.get('disk', 8)}",
         }
         if config.get("swap"):
             params["swap"] = config["swap"]
