@@ -507,6 +507,14 @@ async def console_ws(
                     await websocket.send_json({"type": "exit", "exit_code": chan.recv_exit_status()})
                     break
                 else:
+                    try:
+                        # Drain any pending bytes; non-blocking recv raises on
+                        # no data, which is expected and must be ignored.
+                        if chan.recv_ready():
+                            data = chan.recv(4096).decode("utf-8", errors="replace")
+                            await websocket.send_json({"type": "output", "data": data})
+                    except (OSError, paramiko.SSHException):
+                        pass
                     await asyncio.sleep(0.05)
 
         async def read_ws():

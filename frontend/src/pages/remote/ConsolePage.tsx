@@ -6,6 +6,7 @@ import "@xterm/xterm/css/xterm.css";
 import PageHeader from "../../components/common/PageHeader";
 import { useToast } from "../../contexts/ToastContext";
 import { hostsApi, HostData } from "../../services/remote";
+import { getStoredToken } from "../../services/auth";
 
 export default function ConsolePage() {
     const { showToast } = useToast();
@@ -66,9 +67,10 @@ export default function ConsolePage() {
         term.writeln("Connecting...");
 
         const proto = window.location.protocol === "https:" ? "wss:" : "ws:";
+        const token = getStoredToken();
         const host = hosts.find((h) => h.id === selectedHostId);
         const ws = new WebSocket(
-            `${proto}//${window.location.host}/api/v1/remote/console?host_id=${selectedHostId}`,
+            `${proto}//${window.location.host}/api/v1/remote/console?host_id=${selectedHostId}${token ? `&token=${encodeURIComponent(token)}` : ""}`,
         );
         wsRef.current = ws;
 
