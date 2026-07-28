@@ -669,31 +669,23 @@ class AgentService:
             items=[self._to_response(a) for a in agents],
         )
 
-    async def get_dashboard_summary(
-        self, db: Session, company_ids: list[int] | None = None
-    ) -> dict:
-        """Dashboard-friendly agent summary. Never raises.
-
-        When ``company_ids`` is provided, only agents belonging to those
-        companies are counted (tenant isolation).
-        """
+    async def get_dashboard_summary(self, db: Session) -> dict:
+        """Dashboard-friendly agent summary. Never raises."""
         try:
             from sqlalchemy import func, select
 
-            stmt = select(
-                func.count(Agent.id).label("total"),
-                func.count(Agent.id).filter(Agent.status == "online").label("online"),
-                func.avg(Agent.cpu_percent).filter(
-                    Agent.status == "online", Agent.cpu_percent.isnot(None)
-                ).label("avg_cpu"),
-                func.avg(Agent.memory_percent).filter(
-                    Agent.status == "online", Agent.memory_percent.isnot(None)
-                ).label("avg_mem"),
-            )
-            if company_ids is not None:
-                stmt = stmt.where(Agent.company_id.in_(company_ids))
-
-            row = db.execute(stmt).one()
+            row = db.execute(
+                select(
+                    func.count(Agent.id).label("total"),
+                    func.count(Agent.id).filter(Agent.status == "online").label("online"),
+                    func.avg(Agent.cpu_percent).filter(
+                        Agent.status == "online", Agent.cpu_percent.isnot(None)
+                    ).label("avg_cpu"),
+                    func.avg(Agent.memory_percent).filter(
+                        Agent.status == "online", Agent.memory_percent.isnot(None)
+                    ).label("avg_mem"),
+                )
+            ).one()
 
             total = row.total or 0
             online = row.online or 0

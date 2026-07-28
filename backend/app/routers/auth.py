@@ -12,7 +12,6 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.auth_dependency import get_current_user
-from app.core.tenant_scope import CompanyScope, get_company_scope
 from app.db import get_db
 from app.models.db.user import User
 from app.schemas.auth import (
@@ -103,15 +102,14 @@ def change_password(
 def list_users(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
-    scope: CompanyScope = Depends(get_company_scope),
 ):
-    """List users. Global admins see all; others see their tenant tree."""
+    """List all users. Global admins see all; others see their company."""
     require_role(current_user, "company_admin")
 
     stmt = select(User).order_by(User.email.asc())
 
-    if not scope.is_global:
-        stmt = stmt.where(User.company_id.in_(scope.company_ids))
+    if current_user.role != "global_admin" and current_user.company_id:
+        stmt = stmt.where(User.company_id == current_user.company_id)
 
     users = db.scalars(stmt).all()
     return [

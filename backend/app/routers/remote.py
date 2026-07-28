@@ -9,7 +9,6 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
 from app.core.auth_dependency import get_current_user
-from app.core.tenant_scope import CompanyScope, get_company_scope
 from app.db import get_db
 from app.schemas.bulk_command import (
     BulkExecuteRequest,
@@ -78,14 +77,8 @@ async def list_hosts(
     search: str | None = Query(None),
     db: Session = Depends(get_db),
     service: RemoteService = Depends(get_remote_service),
-    scope: CompanyScope = Depends(get_company_scope),
 ) -> RemoteHostListResponse:
-    result = await service.get_hosts(db, search)
-    if not scope.is_global:
-        ids = set(scope.company_ids)
-        result.items = [h for h in result.items if (h.company_id or -1) in ids]
-        result.count = len(result.items)
-    return result
+    return await service.get_hosts(db, search)
 
 
 @router.get("/hosts/{host_id}", response_model=RemoteHostResponse)
