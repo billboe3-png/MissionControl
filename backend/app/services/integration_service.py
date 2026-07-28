@@ -20,6 +20,10 @@ from app.providers.proxmox.provider_factory import reset_proxmox_provider
 from app.repositories.integration_profile_repository import (
     IntegrationProfileRepository,
 )
+from app.plugins.installed.official_unifi.bridge import (
+    delete_profile_controllers as _unifi_delete_controllers,
+    sync_profile_to_controllers as _unifi_sync_controllers,
+)
 from app.schemas.integration import (
     IntegrationProfileCreate,
     IntegrationProfileListResponse,
@@ -85,7 +89,7 @@ class IntegrationService:
         self, db: Session, data: IntegrationProfileCreate
     ) -> IntegrationProfileResponse:
         """Create a new integration profile with encrypted secrets."""
-        valid_types = ("zabbix", "active_directory", "microsoft_365", "hyperv", "proxmox", "veeam")
+        valid_types = ("zabbix", "active_directory", "microsoft_365", "hyperv", "proxmox", "veeam", "unifi")
         if data.integration_type not in valid_types:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -129,6 +133,8 @@ class IntegrationService:
             reset_proxmox_provider()
         if data.integration_type == "veeam":
             self._reset_veeam_singleton()
+        if data.integration_type == "unifi":
+            _unifi_sync_controllers(db, profile)
         return self._to_response(profile)
 
     async def update_profile(
@@ -208,6 +214,8 @@ class IntegrationService:
             reset_proxmox_provider()
         if profile.integration_type == "veeam":
             self._reset_veeam_singleton()
+        if profile.integration_type == "unifi":
+            _unifi_sync_controllers(db, profile)
         return self._to_response(profile)
 
     async def delete_profile(
@@ -229,6 +237,8 @@ class IntegrationService:
             reset_proxmox_provider()
         if existing and existing.integration_type == "veeam":
             self._reset_veeam_singleton()
+        if existing and existing.integration_type == "unifi":
+            _unifi_delete_controllers(db, profile_id)
 
     # ------------------------------------------------------------------ #
     # Actions                                                             #
@@ -254,6 +264,8 @@ class IntegrationService:
             reset_proxmox_provider()
         if profile.integration_type == "veeam":
             self._reset_veeam_singleton()
+        if profile.integration_type == "unifi":
+            _unifi_sync_controllers(db, profile)
         return self._to_response(profile)
 
     async def disable_profile(
@@ -276,6 +288,8 @@ class IntegrationService:
             reset_proxmox_provider()
         if profile.integration_type == "veeam":
             self._reset_veeam_singleton()
+        if profile.integration_type == "unifi":
+            _unifi_sync_controllers(db, profile)
         return self._to_response(profile)
 
     async def test_connection(
@@ -347,6 +361,8 @@ class IntegrationService:
             return await self._test_proxmox(profile)
         elif profile.integration_type == "veeam":
             return await self._test_veeam(profile)
+        elif profile.integration_type == "unifi":
+            return await self._test_unifi(profile)
         else:
             return {
                 "connected": False,
@@ -499,6 +515,40 @@ class IntegrationService:
         if provider is None:
             return {"connected": False, "error": "Veeam server URL or SSH connection is required"}
         return await provider.test_connection()
+
+    async def _test_unifi(
+        self, profile: IntegrationProfile
+    ) -> dict:
+        """Test UniFi Site Manager connection using the saved API key."""
+        from app.plugins.installed.official_unifi.api import UniFiApiClient
+
+        api_key = _decrypt(profile.encrypted_secret) or ""
+        if not api_key:
+            return {
+                "connected": False,
+                "error": "UniFi Site Manager API key is required",
+            }
+
+        client = UniFiApiClient(
+            url="https://unifi.ui.com",
+            api_key=api_key,
+            verify_ssl=profile.verify_ssl,
+            timeout=profile.timeout or 30,
+            controller_type="cloud",
+        )
+        try:
+            result = await client.test_connection()
+        finally:
+            await client.close()
+        if result.get("connected"):
+            return {
+                "connected": True,
+                "message": "Connected to UniFi Site Manager",
+            }
+        return {
+            "connected": False,
+            "error": result.get("error", "UniFi connection test failed"),
+        }
 
     # ------------------------------------------------------------------ #
     # Helpers                                                             #

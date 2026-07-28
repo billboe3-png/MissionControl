@@ -13,8 +13,9 @@ import M365ConfigModal from "../../components/modals/M365ConfigModal";
 import HypervConfigModal from "../../components/modals/HypervConfigModal";
 import ProxmoxConfigModal from "../../components/modals/ProxmoxConfigModal";
 import VeeamConfigModal from "../../components/modals/VeeamConfigModal";
+import UniFiConfigModal from "../../components/modals/UniFiConfigModal";
 
-type ConfigModalType = "zabbix" | "active_directory" | "microsoft_365" | "hyperv" | "proxmox" | "veeam" | null;
+type ConfigModalType = "zabbix" | "active_directory" | "microsoft_365" | "hyperv" | "proxmox" | "veeam" | "unifi" | null;
 
 const INTEGRATION_DEFS: {
     type: ConfigModalType;
@@ -57,6 +58,12 @@ const INTEGRATION_DEFS: {
         label: "Veeam Backup",
         icon: "💾",
         description: "Veeam B&R — backup jobs, repositories, sessions, restore points and server health.",
+    },
+    {
+        type: "unifi",
+        label: "UniFi Network",
+        icon: "📶",
+        description: "Ubiquiti UniFi Site Manager — sites, devices, clients, wireless and alerts.",
     },
 ];
 
@@ -371,6 +378,14 @@ export default function IntegrationsPage() {
             )}
             {modalType === "veeam" && (
                 <VeeamConfigModal
+                    profile={editingProfile}
+                    onSave={handleModalSave}
+                    onCancel={() => { setModalType(null); setEditingProfile(null); }}
+                    onError={(msg) => setError(msg)}
+                />
+            )}
+            {modalType === "unifi" && (
+                <UniFiConfigModal
                     profile={editingProfile}
                     onSave={handleModalSave}
                     onCancel={() => { setModalType(null); setEditingProfile(null); }}
