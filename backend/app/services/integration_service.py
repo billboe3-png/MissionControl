@@ -466,11 +466,14 @@ class IntegrationService:
         """
         from app.core.config import get_settings
         from app.core.security import CredentialCipher
-        from app.providers.veeam.provider_factory import _create_provider_for_profile
+        from app.providers.veeam.provider_factory import _build_provider
 
         settings = get_settings()
         cipher = CredentialCipher(settings.missioncontrol_secret_key)
-        provider = _create_provider_for_profile(profile, settings, cipher)
+        try:
+            provider = _build_provider(profile)
+        except ValueError:
+            return {"connected": False, "error": "Veeam server URL or SSH connection is required"}
         if provider is None:
             return {"connected": False, "error": "Veeam server URL or SSH connection is required"}
         return await provider.test_connection()
