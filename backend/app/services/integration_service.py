@@ -185,6 +185,21 @@ class IntegrationService:
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Integration profile not found",
             )
+
+        # If connection-identifying settings changed, clear the previously
+        # cached test result so the UI stops reporting a stale "Connected"
+        # status from the old target/host (e.g. after fixing an IP).
+        connection_fields = (
+            "base_url", "ssh_host", "ssh_port", "ssh_username",
+            "domain", "username", "verify_ssl", "timeout", "use_ssl",
+        )
+        if any(f in updates for f in connection_fields):
+            IntegrationProfileRepository.update(
+                db, profile_id, last_success=None, last_error=None,
+            )
+            profile.last_success = None
+            profile.last_error = None
+
         if profile.integration_type == "zabbix":
             self._reset_zabbix_singleton()
         if profile.integration_type == "hyperv":
