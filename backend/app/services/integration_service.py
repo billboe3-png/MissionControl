@@ -472,7 +472,14 @@ class IntegrationService:
         cipher = CredentialCipher(settings.missioncontrol_secret_key)
         try:
             provider = _build_provider(profile)
-        except ValueError:
+        except ValueError as e:
+            msg = str(e)
+            if "Decryption failed" in msg:
+                return {
+                    "connected": False,
+                    "error": "Stored Veeam credentials could not be decrypted with the current key. "
+                    "Re-save the SSH password for this integration to re-encrypt it.",
+                }
             return {"connected": False, "error": "Veeam server URL or SSH connection is required"}
         if provider is None:
             return {"connected": False, "error": "Veeam server URL or SSH connection is required"}
