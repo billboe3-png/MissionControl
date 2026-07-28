@@ -26,6 +26,9 @@ export default function ConsolePage() {
         hostsApi.list().then((d) => setHosts(d.items)).catch(() => {});
     }, []);
 
+    // Create the terminal once and wire keyboard input to the *current* socket
+    // via wsRef. Registering onData here (not inside handleConnect) avoids
+    // stale-closure / duplicate-listener bugs that broke interactive input.
     useEffect(() => {
         if (!termRef.current) return;
         const term = new Terminal({
@@ -43,10 +46,31 @@ export default function ConsolePage() {
         term.loadAddon(fit);
         term.open(termRef.current);
         fit.fit();
+        term.focus();
         termInstance.current = term;
         fitAddon.current = fit;
 
-        const onResize = () => fit.fit();
+        const onData = (data: string) => {
+            const ws = wsRef.current;
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({ type: "input", data }));
+            }
+        };
+        term.onData(onData);
+
+        const onResize = () => {
+            fit.fit();
+            const ws = wsRef.current;
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(
+                    JSON.stringify({
+                        type: "resize",
+                        width: term.cols,
+                        height: term.rows,
+                    }),
+                );
+            }
+        };
         window.addEventListener("resize", onResize);
 
         return () => {
@@ -68,7 +92,6 @@ export default function ConsolePage() {
 
         const proto = window.location.protocol === "https:" ? "wss:" : "ws:";
         const token = getStoredToken();
-        const host = hosts.find((h) => h.id === selectedHostId);
         const ws = new WebSocket(
             `${proto}//${window.location.host}/api/v1/remote/console?host_id=${selectedHostId}${token ? `&token=${encodeURIComponent(token)}` : ""}`,
         );
@@ -85,11 +108,13 @@ export default function ConsolePage() {
                 term.focus();
                 if (fitAddon.current) fitAddon.current.fit();
                 if (ws.readyState === WebSocket.OPEN) {
-                    ws.send(JSON.stringify({
-                        type: "resize",
-                        width: term.cols,
-                        height: term.rows,
-                    }));
+                    ws.send(
+                        JSON.stringify({
+                            type: "resize",
+                            width: term.cols,
+                            height: term.rows,
+                        }),
+                    );
                 }
             } else if (msg.type === "output") {
                 term.write(msg.data);
@@ -116,27 +141,7 @@ export default function ConsolePage() {
             setConnecting(false);
             setConnected(false);
         };
-
-        term.onData((data) => {
-            if (ws.readyState === WebSocket.OPEN) {
-                ws.send(JSON.stringify({ type: "input", data }));
-            }
-        });
-
-        const resizeHandler = () => {
-            if (fitAddon.current) fitAddon.current.fit();
-            if (ws.readyState === WebSocket.OPEN) {
-                ws.send(
-                    JSON.stringify({
-                        type: "resize",
-                        width: term.cols,
-                        height: term.rows,
-                    }),
-                );
-            }
-        };
-        window.addEventListener("resize", resizeHandler);
-    }, [selectedHostId, connected, hosts]);
+    }, [selectedHostId, connected]);
 
     const handleDisconnect = useCallback(() => {
         wsRef.current?.close();
@@ -148,6 +153,8 @@ export default function ConsolePage() {
             wsRef.current?.close();
         };
     }, []);
+
+    const focusTerminal = () => termInstance.current?.focus();
 
     return (
         <>
@@ -193,7 +200,10 @@ export default function ConsolePage() {
                     )}
                 </div>
             </div>
-            <div className="console-terminal-wrapper">
+            <div
+                className="console-terminal-wrapper"
+                onClick={focusTerminal}
+            >
                 <div ref={termRef} className="console-terminal" />
             </div>
         </>

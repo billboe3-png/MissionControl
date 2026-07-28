@@ -310,10 +310,22 @@ export default function ActiveDirectoryPage() {
                 </>
             )}
             {tab === "groups" && (
-                <DataTable columns={groupColumns} data={groups} emptyMessage="No groups found" />
+                <DataTable
+                    columns={groupColumns}
+                    data={[...groups].sort((a, b) =>
+                        (a.name ?? "").localeCompare(b.name ?? ""),
+                    )}
+                    emptyMessage="No groups found"
+                />
             )}
             {tab === "devices" && (
-                <DataTable columns={deviceColumns} data={devices} emptyMessage="No devices found" />
+                <DataTable
+                    columns={deviceColumns}
+                    data={[...devices].sort((a, b) =>
+                        (a.name ?? "").localeCompare(b.name ?? ""),
+                    )}
+                    emptyMessage="No devices found"
+                />
             )}
             {tab === "health" && health && (
                 <div className="ad-overview">
