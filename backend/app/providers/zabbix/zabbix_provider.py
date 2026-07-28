@@ -280,7 +280,12 @@ class ApiZabbixProvider(ZabbixProvider):
             gone in 7.0. Only code 2 means truly down; 0 (unknown) is the
             normal state for SNMP/ICMP/agentless hosts that are up and being
             monitored, so it is treated as available (not 'unavailable').
+
+            A disabled host is not monitored, so its availability is reported
+            as 'disabled' (neutral) rather than 'available'/'unavailable'.
             """
+            if host.get("status") not in ("0", 0):
+                return "disabled"
             for key in ("active_available", "passive_available",
                         "available", "available_snmp", "available_http",
                         "available_ipmi", "available_jmx"):
@@ -296,11 +301,12 @@ class ApiZabbixProvider(ZabbixProvider):
             ips = h.get("interfaces", [])
             groups = [g.get("name", "") for g in h.get("groups", [])]
             templates = [t.get("name", "") for t in h.get("parentTemplates", [])]
+            host_status = "enabled" if h.get("status") == "0" else "disabled"
             hosts.append({
                 "hostid": h.get("hostid", ""),
                 "host": h.get("host", ""),
                 "name": h.get("name", ""),
-                "status": "enabled" if h.get("status") == "0" else "disabled",
+                "status": host_status,
                 "available": _avail_status(h),
                 "interface": ips[0].get("ip", "") if ips else "",
                 "groups": groups,
@@ -308,7 +314,14 @@ class ApiZabbixProvider(ZabbixProvider):
             })
 
         enabled = sum(1 for h in hosts if h["status"] == "enabled")
-        available_count = sum(1 for h in hosts if h["available"] == "available")
+        # Availability only counts enabled hosts; disabled are neutral.
+        available_count = sum(
+            1 for h in hosts if h["status"] == "enabled" and h["available"] == "available"
+        )
+        disabled_count = sum(1 for h in hosts if h["status"] == "disabled")
+        unavailable_count = sum(
+            1 for h in hosts if h["status"] == "enabled" and h["available"] == "unavailable"
+        )
 
         return {
             "connected": True,
@@ -317,7 +330,7 @@ class ApiZabbixProvider(ZabbixProvider):
             "enabled_count": enabled,
             "disabled_count": len(hosts) - enabled,
             "available_count": available_count,
-            "unavailable_count": len(hosts) - available_count,
+            "unavailable_count": unavailable_count,
         }
 
     async def get_host_groups(self) -> dict:
