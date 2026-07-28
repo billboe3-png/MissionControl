@@ -104,6 +104,19 @@ export const navigation: NavGroup[] = [
         ],
     },
     {
+        label: "Networking",
+        icon: "📶",
+        items: [
+            { label: "UniFi Overview", path: "/unifi", icon: "📊" },
+            { label: "Devices", path: "/unifi/devices", icon: "🖧" },
+            { label: "Clients", path: "/unifi/clients", icon: "👥" },
+            { label: "Alerts", path: "/unifi/alerts", icon: "🚨" },
+            { label: "Wireless", path: "/unifi/wireless", icon: "📡" },
+            { label: "Controllers", path: "/unifi/controllers", icon: "🎛️" },
+            { label: "Sites", path: "/unifi/sites", icon: "🗺️" },
+        ],
+    },
+    {
         label: "AI Operations",
         icon: "🧠",
         items: [
