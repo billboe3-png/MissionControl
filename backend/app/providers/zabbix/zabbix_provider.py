@@ -258,7 +258,10 @@ class ApiZabbixProvider(ZabbixProvider):
             return {"connected": False, "error": "Session failed"}
 
         result = self._jsonrpc("host.get", {
-            "output": ["hostid", "host", "name", "status", "available"],
+            "output": [
+                "hostid", "host", "name", "status",
+                "active_available", "passive_available",
+            ],
             "selectInterfaces": ["ip"],
             "selectGroups": ["name"],
             "selectParentTemplates": ["name"],
@@ -267,6 +270,26 @@ class ApiZabbixProvider(ZabbixProvider):
 
         if not isinstance(result, list):
             return {"connected": False, "error": "Failed to retrieve hosts"}
+
+        def _avail_status(host: dict) -> str:
+            """Map Zabbix 7.0 availability.
+
+            `active_available` / `passive_available` use the codes:
+              0 = unknown, 1 = available, 2 = unavailable.
+            The legacy per-interface fields (available/available_snmp/...) are
+            gone in 7.0. Only code 2 means truly down; 0 (unknown) is the
+            normal state for SNMP/ICMP/agentless hosts that are up and being
+            monitored, so it is treated as available (not 'unavailable').
+            """
+            for key in ("active_available", "passive_available",
+                        "available", "available_snmp", "available_http",
+                        "available_ipmi", "available_jmx"):
+                val = host.get(key)
+                if val in (2, "2"):
+                    return "unavailable"
+                if val in (0, "0", 1, "1"):
+                    return "available"
+            return "available"
 
         hosts = []
         for h in result:
@@ -278,9 +301,7 @@ class ApiZabbixProvider(ZabbixProvider):
                 "host": h.get("host", ""),
                 "name": h.get("name", ""),
                 "status": "enabled" if h.get("status") == "0" else "disabled",
-                "available": (
-                    "available" if h.get("available") == "1" else "unavailable"
-                ),
+                "available": _avail_status(h),
                 "interface": ips[0].get("ip", "") if ips else "",
                 "groups": groups,
                 "templates": templates,

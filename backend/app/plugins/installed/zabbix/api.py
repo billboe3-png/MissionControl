@@ -252,7 +252,10 @@ class ZabbixApiClient:
         return self._call_sync(
             "host.get",
             {
-                "output": ["hostid", "host", "name", "status", "available"],
+                "output": [
+                    "hostid", "host", "name", "status",
+                    "active_available", "passive_available",
+                ],
                 "selectInterfaces": ["ip"],
                 "selectGroups": ["name"],
                 "selectParentTemplates": ["name"],

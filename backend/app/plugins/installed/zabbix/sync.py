@@ -52,7 +52,21 @@ class InventorySync:
             groups = json.dumps([g.get("name", "") for g in h.get("groups", [])])
             templates = json.dumps([t.get("name", "") for t in h.get("parentTemplates", [])])
             status = "enabled" if h.get("status") == "0" else "disabled"
-            available = "available" if h.get("available") == "1" else "unavailable"
+            # Zabbix 7.0 availability codes: 0=unknown, 1=available, 2=unavailable.
+            # The legacy per-interface 'available' field is gone. Only code 2
+            # means truly down; 0 (unknown) is normal for SNMP/ICMP/agentless
+            # hosts that are up and being monitored, so treat it as available.
+            _av = None
+            for _k in ("active_available", "passive_available", "available",
+                       "available_snmp", "available_http", "available_ipmi",
+                       "available_jmx"):
+                if h.get(_k) in (2, "2"):
+                    _av = "unavailable"
+                    break
+                if h.get(_k) in (0, "0", 1, "1"):
+                    _av = "available"
+                    break
+            available = _av if _av is not None else "available"
 
             stmt = pg_insert(ZabbixHost).values(
                 server_id=server_id,
