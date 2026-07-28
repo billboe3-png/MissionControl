@@ -113,8 +113,11 @@ class PluginRegistry:
                 for route_def in routes:
                     route_router = route_def.get("router")
                     if route_router is not None:
+                        # Each plugin router already declares its own prefix
+                        # (e.g. "/api/v1/plugins/unifi"); include it as-is so the
+                        # route path is not double-prefixed.
                         prefix = route_def.get("path", "")
-                        app.include_router(route_router, prefix=prefix)
+                        app.include_router(route_router)
                         registered += 1
                         logger.info(
                             "Plugin route registered: %s -> %s",
