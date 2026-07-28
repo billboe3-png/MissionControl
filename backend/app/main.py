@@ -72,10 +72,20 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         now = time.time()
         cutoff = now - self.window
 
-        limit = self.auth_limit if path == "/api/v1/auth/login" else self.default_limit
+        # Login is rate-limited per client + account (not just per IP). Behind
+        # the nginx reverse proxy every request appears to come from the proxy
+        # IP, so a plain per-IP bucket would lock out ALL users after a handful
+        # of attempts. Keying on the target email keeps each account's budget
+        # isolated and prevents one client from blocking everyone.
+        if path == "/api/v1/auth/login":
+            key = f"{ip}|login|{await self._login_identity(request)}"
+            limit = self.auth_limit
+        else:
+            key = ip
+            limit = self.default_limit
 
-        self._requests[ip] = [t for t in self._requests[ip] if t > cutoff]
-        timestamps = self._requests[ip]
+        self._requests[key] = [t for t in self._requests.get(key, []) if t > cutoff]
+        timestamps = self._requests[key]
 
         remaining = max(0, limit - len(timestamps))
 
@@ -95,6 +105,22 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         response.headers["X-RateLimit-Limit"] = str(limit)
         response.headers["X-RateLimit-Remaining"] = str(remaining - 1)
         return response
+
+    async def _login_identity(self, request: Request) -> str:
+        """Best-effort extraction of the login identifier for rate-limit keying.
+
+        Awaits (and caches) the request body so the downstream route can still
+        parse it. Falls back to an empty string if not parseable.
+        """
+        try:
+            body = await request.body()
+            import json as _json
+
+            data = _json.loads(body)
+            ident = data.get("email") or data.get("username") or ""
+            return str(ident).strip().lower()
+        except Exception:
+            return ""
 
 setup_logging(level="INFO")
 logger = logging.getLogger("missioncontrol")
