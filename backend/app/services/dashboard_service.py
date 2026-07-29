@@ -16,7 +16,6 @@ import logging
 from datetime import UTC, datetime
 
 from sqlalchemy.orm import Session
-
 from app.providers.health_provider import health_provider
 from app.providers.note_provider import note_provider
 from app.providers.parking_lot_provider import parking_lot_provider
@@ -42,7 +41,6 @@ class DashboardService:
         The orchestrator combines results without containing business logic.
         """
         logger.info("Loading dashboard data from domain services")
-
         health = await health_provider.get_health(db)
         projects = project_provider.get_project_data(db)
         tasks = task_provider.get_task_data(db)
@@ -60,6 +58,7 @@ class DashboardService:
         agents = await self._get_agent_data(db)
         ai = await self._get_ai_data(db)
         automation = await self._get_automation_data(db)
+        git = await self._get_git_data(db)
 
         return {
             "application": {
@@ -92,6 +91,8 @@ class DashboardService:
                 "docker_unhealthy": docker.get("unhealthy", 0),
                 "agents_online": agents["online"],
                 "agents_total": agents["total"],
+                "git_repos": git.get("repo_count", 0),
+                "git_dirty": git.get("dirty_repos", 0),
             },
             "health": health,
             "projects": projects,
@@ -110,21 +111,35 @@ class DashboardService:
             "agents": agents,
             "automation": automation,
             "ai": ai,
-            "git": {
-                "available": False,
-                "repository_name": None,
-                "current_branch": None,
-                "latest_commit": None,
-                "commit_author": None,
-                "commit_date": None,
-                "working_tree_clean": False,
-                "ahead_of_origin": 0,
-                "behind_origin": 0,
-                "last_pull": None,
-                "remote_url": None,
-                "reason": "Git repository information is not collected by this deployment.",
-            },
+            "git": git,
         }
+
+    async def _get_git_data(self, db: Session) -> dict:
+        """Get Git data, preferring plugin cache over live provider."""
+        try:
+            from app.plugins.registry import plugin_registry
+
+            if plugin_registry.has_plugin("git"):
+                return await plugin_registry.get_widget_data(
+                    "git", "git-summary"
+                )
+        except Exception:
+            pass
+
+        try:
+            from app.plugins.installed.git.cache import cache_manager
+
+            return cache_manager.get_summary(db)
+        except Exception as e:
+            logger.warning("Dashboard: Git data failed: %s", e)
+            return {
+                "repo_count": 0,
+                "branch_count": 0,
+                "commit_count": 0,
+                "remote_count": 0,
+                "dirty_repos": 0,
+                "healthy_repos": 0,
+            }
 
     async def _get_zabbix_data(self, db: Session) -> dict:
         """Get Zabbix data, preferring plugin cache over live provider."""

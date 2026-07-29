@@ -529,12 +529,16 @@ class IntegrationService:
                 "error": "UniFi Site Manager API key is required",
             }
 
+        is_cloud = profile.base_url in ("https://api.ui.com", "https://api.ui.com/", "https://unifi.ui.com", "https://unifi.ui.com/", "", None)
+        controller_url = "https://api.ui.com" if is_cloud else (profile.base_url or "")
+        controller_type = "cloud" if is_cloud else "local"
+
         client = UniFiApiClient(
-            url="https://unifi.ui.com",
+            url=controller_url,
             api_key=api_key,
             verify_ssl=profile.verify_ssl,
             timeout=profile.timeout or 30,
-            controller_type="cloud",
+            controller_type=controller_type,
         )
         try:
             result = await client.test_connection()
@@ -543,7 +547,7 @@ class IntegrationService:
         if result.get("connected"):
             return {
                 "connected": True,
-                "message": "Connected to UniFi Site Manager",
+                "message": f"Connected to UniFi{' Site Manager' if is_cloud else ' controller'}",
             }
         return {
             "connected": False,

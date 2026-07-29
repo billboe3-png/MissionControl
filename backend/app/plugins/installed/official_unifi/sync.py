@@ -108,7 +108,27 @@ class DeviceSync:
         "udm-se": "gateway",
         "usw-pro": "switch",
         "usw-lite": "switch",
+        "uos": "gateway",
+        "u7": "access_point",
+        "u6": "access_point",
+        "u5": "access_point",
     }
+
+    @staticmethod
+    def _classify_device_type(d: dict) -> str:
+        model = (d.get("model") or "").lower().strip()
+        # Try prefix matching (first word before space or dash)
+        for sep in (" ", "-"):
+            prefix = model.split(sep)[0]
+            if prefix in DeviceSync.DEVICE_TYPE_MAP:
+                return DeviceSync.DEVICE_TYPE_MAP[prefix]
+        # Fallback: full model match
+        if model in DeviceSync.DEVICE_TYPE_MAP:
+            return DeviceSync.DEVICE_TYPE_MAP[model]
+        # Cloud console detection
+        if d.get("isConsole") or d.get("productLine") == "console":
+            return "gateway"
+        return "unknown"
 
     def sync(self, session: Session, client: Any, controller_id: int) -> dict[str, int]:
         raw_devices = client.get_devices_sync()
@@ -136,7 +156,7 @@ class DeviceSync:
             mem = float(d.get("system_stats", {}).get("mem", 0) or 0)
             temp = float(d.get("system_stats", {}).get("temperatures", [{}])[0].get("value", 0) or 0) if d.get("system_stats", {}).get("temperatures") else 0
             site_id = str(d.get("site_id", d.get("site", "")))
-            dev_type = self.DEVICE_TYPE_MAP.get(model.lower().split("-")[0], "unknown")
+            dev_type = self._classify_device_type(d)
 
             stmt = select(UniFiDevice).where(
                 UniFiDevice.controller_id == controller_id,

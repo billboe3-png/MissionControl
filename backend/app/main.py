@@ -313,6 +313,32 @@ async def _startup_banner():
                 route_count,
             )
             print(f"  Plugins: {len(loaded)} loaded, {route_count} routes")
+
+            # Auto-register built-in plugins in marketplace registry
+            try:
+                from app.marketplace.registry import (
+                    InstalledPlugin,
+                    PluginHealth,
+                    PluginStatus,
+                    marketplace_registry,
+                )
+                for slug in loaded:
+                    if not marketplace_registry.get(slug):
+                        from app.services.plugin_marketplace_service import (
+                            plugin_marketplace_service,
+                        )
+                        info = plugin_marketplace_service.get_plugin_info(slug)
+                        installed = InstalledPlugin(
+                            plugin_id=slug,
+                            name=info["name"] if info else slug,
+                            version=info["version"] if info else "1.0.0",
+                            status=PluginStatus.ENABLED,
+                            health=PluginHealth.UNKNOWN,
+                            enabled=True,
+                        )
+                        marketplace_registry.register(installed)
+            except Exception:
+                pass
         else:
             print("  Plugins: none discovered")
     except Exception as exc:

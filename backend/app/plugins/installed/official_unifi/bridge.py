@@ -21,7 +21,7 @@ from app.plugins.installed.official_unifi.models import UniFiController
 
 logger = logging.getLogger("plugin.unifi.bridge")
 
-SITE_MANAGER_URL = "https://unifi.ui.com"
+SITE_MANAGER_URL = "https://api.ui.com"
 
 
 def _cipher() -> CredentialCipher:
@@ -46,21 +46,25 @@ def sync_profile_to_controllers(db: Session, profile: IntegrationProfile) -> Non
         select(UniFiController).where(UniFiController.name == name)
     ).scalar_one_or_none()
 
+    is_cloud = profile.base_url in (SITE_MANAGER_URL, SITE_MANAGER_URL + "/", "", None)
+    controller_url = SITE_MANAGER_URL if is_cloud else profile.base_url
+    controller_type = "cloud" if is_cloud else "local"
+
     if existing is None:
         controller = UniFiController(
             name=name,
-            url=SITE_MANAGER_URL,
+            url=controller_url,
             encrypted_api_key=_cipher().encrypt(api_key) if api_key else None,
-            controller_type="cloud",
+            controller_type=controller_type,
             verify_ssl=profile.verify_ssl,
             timeout=profile.timeout or 30,
             enabled=bool(profile.enabled),
         )
         db.add(controller)
     else:
-        existing.url = SITE_MANAGER_URL
+        existing.url = controller_url
         existing.encrypted_api_key = _cipher().encrypt(api_key) if api_key else None
-        existing.controller_type = "cloud"
+        existing.controller_type = controller_type
         existing.verify_ssl = profile.verify_ssl
         existing.timeout = profile.timeout or 30
         existing.enabled = bool(profile.enabled)
