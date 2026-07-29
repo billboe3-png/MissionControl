@@ -14,3 +14,7 @@ select = ["E", "F", "I", "UP", "B", "S", "SIM", "C4", "RUF"]
 # the SSH_AUTO_ADD_HOST_KEYS setting instead. The rest of the S rules (S110,
 # S311, S608, ...) remain active and valuable.
 extend-ignore = ["E501", "B008", "S507"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**/*.py" = ["S101", "PLR2004"]
+"scripts/**/*.py" = ["S101", "BLE001", "PLW1510", "SIM115", "TRY004", "RUF059"]
