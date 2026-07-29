@@ -60,6 +60,7 @@ export const navigation: NavGroup[] = [
             { label: "Maps", path: "/monitoring/maps", icon: "🗺️" },
             { label: "Dashboards", path: "/monitoring/dashboards", icon: "📈" },
             { label: "Health", path: "/monitoring/health", icon: "❤️" },
+            { label: "Servers", path: "/monitoring/servers", icon: "⚙️" },
         ],
     },
     {
@@ -100,6 +101,19 @@ export const navigation: NavGroup[] = [
             { label: "Sessions", path: "/veeam/sessions", icon: "📜" },
             { label: "Repositories", path: "/veeam/repositories", icon: "💾" },
             { label: "Servers", path: "/veeam/servers", icon: "🖥️" },
+        ],
+    },
+    {
+        label: "Networking",
+        icon: "📶",
+        items: [
+            { label: "UniFi Overview", path: "/unifi", icon: "📊" },
+            { label: "Devices", path: "/unifi/devices", icon: "🖧" },
+            { label: "Clients", path: "/unifi/clients", icon: "👥" },
+            { label: "Alerts", path: "/unifi/alerts", icon: "🚨" },
+            { label: "Wireless", path: "/unifi/wireless", icon: "📡" },
+            { label: "Controllers", path: "/unifi/controllers", icon: "🎛️" },
+            { label: "Sites", path: "/unifi/sites", icon: "🗺️" },
         ],
     },
     {

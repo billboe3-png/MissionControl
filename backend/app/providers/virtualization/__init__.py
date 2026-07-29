@@ -14,10 +14,10 @@ from .domain_models import (
 )
 
 __all__ = [
-    "VirtualizationProvider",
-    "VirtualMachine",
+    "Snapshot",
     "VirtualHost",
+    "VirtualMachine",
     "VirtualNetwork",
     "VirtualStorage",
-    "Snapshot",
+    "VirtualizationProvider",
 ]

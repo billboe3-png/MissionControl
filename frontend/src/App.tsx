@@ -38,6 +38,7 @@ import ZabbixItemsPage from "./pages/zabbix/ItemsPage";
 import ZabbixMapsPage from "./pages/zabbix/MapsPage";
 import ZabbixDashboardsPage from "./pages/zabbix/DashboardsPage";
 import ZabbixHealthPage from "./pages/zabbix/HealthPage";
+import ZabbixServersPage from "./pages/monitoring/ZabbixServersPage";
 import HyperVOverviewPage from "./pages/hyperv/OverviewPage";
 import VirtualMachinesPage from "./pages/hyperv/VirtualMachinesPage";
 import NetworksPage from "./pages/hyperv/NetworksPage";
@@ -84,6 +85,13 @@ import TriggersPage from "./pages/automation/TriggersPage";
 import AuditPage from "./pages/automation/AuditPage";
 import AgentsOverviewPage from "./pages/agents/AgentsOverviewPage";
 import AgentDetailPage from "./pages/agents/AgentDetailPage";
+import UniFiDashboardPage from "./pages/unifi/DashboardPage";
+import UniFiDevicesPage from "./pages/unifi/DevicesPage";
+import UniFiClientsPage from "./pages/unifi/ClientsPage";
+import UniFiAlertsPage from "./pages/unifi/AlertsPage";
+import UniFiWirelessPage from "./pages/unifi/WirelessPage";
+import UniFiControllersPage from "./pages/unifi/ControllersPage";
+import UniFiSitesPage from "./pages/unifi/SitesPage";
 
 export default function App() {
     return (
@@ -123,6 +131,7 @@ export default function App() {
                             <Route path="/monitoring/maps" element={<ZabbixMapsPage />} />
                             <Route path="/monitoring/dashboards" element={<ZabbixDashboardsPage />} />
                             <Route path="/monitoring/health" element={<ZabbixHealthPage />} />
+                            <Route path="/monitoring/servers" element={<ZabbixServersPage />} />
 
                             <Route path="/identity" element={<IdentityOverviewPage />} />
                             <Route path="/identity/active-directory" element={<ActiveDirectoryPage />} />
@@ -157,6 +166,15 @@ export default function App() {
                             <Route path="/veeam/repositories" element={<VeeamRepositoriesPage />} />
 
                             <Route path="/veeam/servers" element={<VeeamServersPage />} />
+
+                            {/* UniFi */}
+                            <Route path="/unifi" element={<UniFiDashboardPage />} />
+                            <Route path="/unifi/devices" element={<UniFiDevicesPage />} />
+                            <Route path="/unifi/clients" element={<UniFiClientsPage />} />
+                            <Route path="/unifi/alerts" element={<UniFiAlertsPage />} />
+                            <Route path="/unifi/wireless" element={<UniFiWirelessPage />} />
+                            <Route path="/unifi/controllers" element={<UniFiControllersPage />} />
+                            <Route path="/unifi/sites" element={<UniFiSitesPage />} />
 
                             <Route path="/settings" element={<GeneralPage />} />
                             <Route path="/settings/users" element={<UsersPage />} />

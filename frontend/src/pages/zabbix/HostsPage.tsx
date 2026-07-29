@@ -1,14 +1,17 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import PageHeader from "../../components/common/PageHeader";
 import StatusBadge from "../../components/common/StatusBadge";
 import DataTable, { Column } from "../../components/common/DataTable";
 import HostAvailabilityCard from "../../components/zabbix/HostAvailabilityCard";
 import { zabbixApi, ZabbixHost, ZabbixHostsResponse } from "../../services/zabbix";
 
+type StatusFilter = "all" | "enabled" | "disabled";
+
 export default function HostsPage() {
     const [data, setData] = useState<ZabbixHostsResponse | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [loading, setLoading] = useState(true);
+    const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
 
     useEffect(() => {
         zabbixApi.getHosts()
@@ -16,6 +19,12 @@ export default function HostsPage() {
             .catch((e) => setError(e.message))
             .finally(() => setLoading(false));
     }, []);
+
+    const filteredHosts = useMemo(() => {
+        const hosts = data?.hosts ?? [];
+        if (statusFilter === "all") return hosts;
+        return hosts.filter((h) => h.status === statusFilter);
+    }, [data, statusFilter]);
 
     if (error) return <div className="error-banner">{error}</div>;
     if (loading) return <div className="loading-bar" />;
@@ -32,7 +41,12 @@ export default function HostsPage() {
         {
             key: "available",
             header: "Availability",
-            render: (row) => <StatusBadge status={row.available === "available" ? "healthy" : "error"} label={row.available} />,
+            render: (row) => (
+                <StatusBadge
+                    status={row.available === "available" ? "healthy" : row.available === "unavailable" ? "error" : "neutral"}
+                    label={row.available}
+                />
+            ),
         },
     ];
 
@@ -49,7 +63,21 @@ export default function HostsPage() {
                     </div>
                 </div>
             </div>
-            <DataTable columns={columns} data={data?.hosts ?? []} emptyMessage="No hosts found" />
+            <div className="fleet-toolbar">
+                <select
+                    className="form-input fleet-filter"
+                    value={statusFilter}
+                    onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
+                >
+                    <option value="all">All Status</option>
+                    <option value="enabled">Enabled</option>
+                    <option value="disabled">Disabled</option>
+                </select>
+                <span className="refresh-indicator">
+                    {filteredHosts.length} of {data?.total_count ?? 0} shown
+                </span>
+            </div>
+            <DataTable columns={columns} data={filteredHosts} emptyMessage="No hosts found" />
         </>
     );
 }

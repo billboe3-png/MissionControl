@@ -16,7 +16,6 @@ import logging
 from datetime import UTC, datetime
 
 from sqlalchemy.orm import Session
-
 from app.providers.health_provider import health_provider
 from app.providers.note_provider import note_provider
 from app.providers.parking_lot_provider import parking_lot_provider
@@ -42,7 +41,6 @@ class DashboardService:
         The orchestrator combines results without containing business logic.
         """
         logger.info("Loading dashboard data from domain services")
-
         health = await health_provider.get_health(db)
         projects = project_provider.get_project_data(db)
         tasks = task_provider.get_task_data(db)
@@ -51,12 +49,16 @@ class DashboardService:
         parking_lot = parking_lot_provider.get_parking_lot_data(db)
         remote = await self._remote_provider.get_remote_data(db)
         zabbix = await self._get_zabbix_data(db)
+        veeam = await self._get_veeam_data(db)
+        unifi = await self._get_unifi_data(db)
+        docker = await self._get_docker_data(db)
         hyperv = await self._get_hyperv_data(db)
         proxmox = await self._get_proxmox_data(db)
         integrations = await self._get_integrations_data(db)
         agents = await self._get_agent_data(db)
         ai = await self._get_ai_data(db)
         automation = await self._get_automation_data(db)
+        git = await self._get_git_data(db)
 
         return {
             "application": {
@@ -76,8 +78,21 @@ class DashboardService:
                 "zabbix_hosts": zabbix.get("host_count", 0),
                 "zabbix_problems": zabbix.get("problem_count", 0),
                 "zabbix_critical": zabbix.get("critical_count", 0),
+                "veeam_servers": veeam.get("server_count", 0),
+                "veeam_jobs": veeam.get("job_count", 0),
+                "veeam_repositories": veeam.get("repository_count", 0),
+                "unifi_controllers": unifi.get("controller_count", 0),
+                "unifi_devices": unifi.get("device_count", 0),
+                "unifi_online_devices": unifi.get("online_devices", 0),
+                "unifi_clients": unifi.get("client_count", 0),
+                "docker_hosts": docker.get("host_count", 0),
+                "docker_containers": docker.get("container_count", 0),
+                "docker_running": docker.get("running", 0),
+                "docker_unhealthy": docker.get("unhealthy", 0),
                 "agents_online": agents["online"],
                 "agents_total": agents["total"],
+                "git_repos": git.get("repo_count", 0),
+                "git_dirty": git.get("dirty_repos", 0),
             },
             "health": health,
             "projects": projects,
@@ -87,16 +102,59 @@ class DashboardService:
             "parking_lot": parking_lot,
             "remote": remote,
             "zabbix": zabbix,
+            "veeam": veeam,
+            "unifi": unifi,
+            "docker": docker,
             "hyperv": hyperv,
             "proxmox": proxmox,
             "integrations": integrations,
             "agents": agents,
             "automation": automation,
             "ai": ai,
+            "git": git,
         }
 
+    async def _get_git_data(self, db: Session) -> dict:
+        """Get Git data, preferring plugin cache over live provider."""
+        try:
+            from app.plugins.registry import plugin_registry
+
+            if plugin_registry.has_plugin("git"):
+                return await plugin_registry.get_widget_data(
+                    "git", "git-summary"
+                )
+        except Exception:
+            pass
+
+        try:
+            from app.plugins.installed.git.cache import cache_manager
+
+            return cache_manager.get_summary(db)
+        except Exception as e:
+            logger.warning("Dashboard: Git data failed: %s", e)
+            return {
+                "repo_count": 0,
+                "branch_count": 0,
+                "commit_count": 0,
+                "remote_count": 0,
+                "dirty_repos": 0,
+                "healthy_repos": 0,
+            }
+
     async def _get_zabbix_data(self, db: Session) -> dict:
-        """Get Zabbix data via provider factory, never raise."""
+        """Get Zabbix data, preferring plugin cache over live provider."""
+        # Prefer plugin-provided data (cached from background sync)
+        try:
+            from app.plugins.registry import plugin_registry
+
+            if plugin_registry.has_plugin("zabbix"):
+                return await plugin_registry.get_widget_data(
+                    "zabbix", "zabbix-summary"
+                )
+        except Exception:
+            pass
+
+        # Fall back to direct provider call
         try:
             from app.providers.zabbix.provider_factory import get_zabbix_provider
 
@@ -111,6 +169,95 @@ class DashboardService:
                 "critical_count": 0,
                 "warning_count": 0,
                 "ok_count": 0,
+            }
+
+    async def _get_veeam_data(self, db: Session) -> dict:
+        """Get Veeam data, preferring plugin cache over live provider."""
+        try:
+            from app.plugins.registry import plugin_registry
+
+            if plugin_registry.has_plugin("official_veeam"):
+                return await plugin_registry.get_widget_data(
+                    "official_veeam", "veeam-summary"
+                )
+        except Exception:
+            pass
+
+        try:
+            from app.providers.veeam.provider_factory import get_veeam_provider
+
+            provider = get_veeam_provider(db)
+            return await provider.get_summary()
+        except Exception as e:
+            logger.warning("Dashboard: Veeam data failed: %s", e)
+            return {
+                "connected": False,
+                "server_count": 0,
+                "repository_count": 0,
+                "job_count": 0,
+                "restore_point_count": 0,
+                "total_space_bytes": 0,
+                "free_space_bytes": 0,
+            }
+
+    async def _get_unifi_data(self, db: Session) -> dict:
+        """Get UniFi data, preferring plugin cache over live provider."""
+        try:
+            from app.plugins.registry import plugin_registry
+
+            if plugin_registry.has_plugin("official_unifi"):
+                return await plugin_registry.get_widget_data(
+                    "official_unifi", "unifi-summary"
+                )
+        except Exception:
+            pass
+
+        try:
+            from app.plugins.installed.official_unifi.cache import cache_manager
+
+            return cache_manager.get_summary(db)
+        except Exception as e:
+            logger.warning("Dashboard: UniFi data failed: %s", e)
+            return {
+                "connected": False,
+                "controller_count": 0,
+                "site_count": 0,
+                "device_count": 0,
+                "online_devices": 0,
+                "offline_devices": 0,
+                "client_count": 0,
+                "alert_count": 0,
+                "wireless_network_count": 0,
+            }
+
+    async def _get_docker_data(self, db: Session) -> dict:
+        """Get Docker data, preferring plugin cache."""
+        try:
+            from app.plugins.registry import plugin_registry
+
+            if plugin_registry.has_plugin("official_docker"):
+                return await plugin_registry.get_widget_data(
+                    "official_docker", "docker-summary"
+                )
+        except Exception:
+            pass
+
+        try:
+            from app.plugins.installed.official_docker.cache import cache_manager
+
+            return cache_manager.get_summary(db)
+        except Exception as e:
+            logger.warning("Dashboard: Docker data failed: %s", e)
+            return {
+                "connected": False,
+                "host_count": 0,
+                "container_count": 0,
+                "running": 0,
+                "stopped": 0,
+                "unhealthy": 0,
+                "image_count": 0,
+                "volume_count": 0,
+                "network_count": 0,
             }
 
     async def _get_hyperv_data(self, db: Session) -> dict:

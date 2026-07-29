@@ -75,6 +75,6 @@ export default function HealthPage() {
 }
 
 function gitStatus(data: DashboardResponse): "healthy" | "warning" | "neutral" {
-    if (!data.git.available) return "neutral";
-    return data.git.working_tree_clean ? "healthy" : "warning";
+    if (!data.git?.available) return "neutral";
+    return data.git?.working_tree_clean ? "healthy" : "warning";
 }

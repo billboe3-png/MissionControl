@@ -1,13 +1,13 @@
 {
-    "id": "official-veeam",
+    "id": "official_veeam",
     "name": "Veeam Backup & Replication",
-    "version": "3.2.0",
-    "description": "Veeam B&R integration: jobs, sessions, repositories, capacity tier, and backup status monitoring",
+    "version": "4.0.0",
+    "description": "Veeam B&R integration: jobs, repositories, restore points, capacity, and backup status monitoring",
     "author": "Mission Control",
     "execution_target": "server",
     "category": "backup_recovery",
     "min_core_version": "3.0.0",
     "permissions": ["read:dashboard", "read:backup", "manage:backup"],
     "dependencies": [],
-    "capabilities": ["dashboard_widget", "rest_api", "navigation", "settings", "provider"]
+    "capabilities": ["dashboard_widget", "rest_api", "navigation", "settings", "background_sync"]
 }

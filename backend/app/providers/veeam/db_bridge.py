@@ -32,7 +32,13 @@ def detect_db_type(ssh_host: str, ssh_port: int, ssh_username: str, ssh_password
     """
     try:
         client = paramiko.SSHClient()
-        client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        from app.core.config import get_settings
+
+        if get_settings().ssh_auto_add_host_keys:
+            client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        else:
+            client.load_system_host_keys()
+            client.set_missing_host_key_policy(paramiko.RejectPolicy())
         client.connect(ssh_host, port=ssh_port, username=ssh_username, password=ssh_password, timeout=10)
         try:
             # Check which tools exist
@@ -106,7 +112,13 @@ def detect_db_type(ssh_host: str, ssh_port: int, ssh_username: str, ssh_password
 def _ssh_connect(ssh_host: str, ssh_port: int, ssh_username: str, ssh_password: str) -> paramiko.SSHClient:
     """Create and return a connected SSH client."""
     client = paramiko.SSHClient()
-    client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+    from app.core.config import get_settings
+
+    if get_settings().ssh_auto_add_host_keys:
+        client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+    else:
+        client.load_system_host_keys()
+        client.set_missing_host_key_policy(paramiko.RejectPolicy())
     client.connect(ssh_host, port=ssh_port, username=ssh_username, password=ssh_password, timeout=15)
     return client
 

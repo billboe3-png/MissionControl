@@ -26,7 +26,7 @@ _BANNER = """
 class CheckResult:
     """Result of a single startup check."""
 
-    __slots__ = ("name", "ok", "message", "instruction", "critical")
+    __slots__ = ("critical", "instruction", "message", "name", "ok")
 
     def __init__(
         self,
@@ -192,7 +192,8 @@ def check_postgres_connectivity() -> CheckResult:
         from app.core.config import get_settings
 
         settings = get_settings()
-        conn = psycopg.connect(settings.database_url)
+        dsn = settings.database_url.replace("postgresql+psycopg://", "postgresql://")
+        conn = psycopg.connect(dsn)
         with conn.cursor() as cur:
             cur.execute("SELECT 1")
             cur.fetchone()
@@ -260,7 +261,8 @@ def check_database_schema() -> CheckResult:
         from app.core.config import get_settings
 
         settings = get_settings()
-        conn = psycopg.connect(settings.database_url)
+        dsn = settings.database_url.replace("postgresql+psycopg://", "postgresql://")
+        conn = psycopg.connect(dsn)
         with conn.cursor() as cur:
             cur.execute(
                 "SELECT EXISTS(SELECT 1 FROM information_schema.tables "
@@ -320,7 +322,7 @@ def check_write_permissions() -> CheckResult:
                 "Ensure the application has write access "
                 "to temp and config directories."
             ),
-            critical=True,
+            critical=False,
         )
 
     return CheckResult("Write Permissions", True, "writable")

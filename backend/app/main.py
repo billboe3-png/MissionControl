@@ -9,13 +9,13 @@ from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from app.core.config import get_settings
+from app.core.error_handlers import register_error_handlers
 from app.core.logging_config import (
     clear_context,
     generate_request_id,
     set_request_id,
     setup_logging,
 )
-from app.core.error_handlers import register_error_handlers
 
 _TESTING = os.getenv("TESTING", "0") == "1"
 
@@ -25,7 +25,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
 
     def __init__(
         self,
-        app,  # noqa: B008
+        app,
         default_limit: int = 60,
         auth_limit: int = 5,
         window: int = 60,
@@ -72,10 +72,20 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         now = time.time()
         cutoff = now - self.window
 
-        limit = self.auth_limit if path == "/api/v1/auth/login" else self.default_limit
+        # Login is rate-limited per client + account (not just per IP). Behind
+        # the nginx reverse proxy every request appears to come from the proxy
+        # IP, so a plain per-IP bucket would lock out ALL users after a handful
+        # of attempts. Keying on the target email keeps each account's budget
+        # isolated and prevents one client from blocking everyone.
+        if path == "/api/v1/auth/login":
+            key = f"{ip}|login|{await self._login_identity(request)}"
+            limit = self.auth_limit
+        else:
+            key = ip
+            limit = self.default_limit
 
-        self._requests[ip] = [t for t in self._requests[ip] if t > cutoff]
-        timestamps = self._requests[ip]
+        self._requests[key] = [t for t in self._requests.get(key, []) if t > cutoff]
+        timestamps = self._requests[key]
 
         remaining = max(0, limit - len(timestamps))
 
@@ -96,6 +106,22 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         response.headers["X-RateLimit-Remaining"] = str(remaining - 1)
         return response
 
+    async def _login_identity(self, request: Request) -> str:
+        """Best-effort extraction of the login identifier for rate-limit keying.
+
+        Awaits (and caches) the request body so the downstream route can still
+        parse it. Falls back to an empty string if not parseable.
+        """
+        try:
+            body = await request.body()
+            import json as _json
+
+            data = _json.loads(body)
+            ident = data.get("email") or data.get("username") or ""
+            return str(ident).strip().lower()
+        except Exception:
+            return ""
+
 setup_logging(level="INFO")
 logger = logging.getLogger("missioncontrol")
 from app.routers import (  # noqa: E402
@@ -111,6 +137,7 @@ from app.routers import (  # noqa: E402
     hyperv,
     identity,
     integration,
+    marketplace,
     notes,
     parking_lot,
     plugin,
@@ -162,7 +189,7 @@ async def request_logging_middleware(request: Request, call_next):
     elapsed_ms = round((time.perf_counter() - start) * 1000, 1)
     response.headers["X-Request-ID"] = request_id
     logger.info(
-        "%s %s %s %s %sms",
+        "%s %s %s %sms",
         request.method,
         request.url.path,
         response.status_code,
@@ -214,6 +241,7 @@ app.include_router(setup.router, prefix="/api/v1")
 app.include_router(auth.router, prefix="/api/v1")
 app.include_router(agent_token.router, prefix="/api/v1")
 app.include_router(plugin.router, prefix="/api/v1")
+app.include_router(marketplace.router, prefix="/api/v1")
 
 
 @app.get("/api/v1")
@@ -230,7 +258,7 @@ async def api_root() -> dict[str, str]:
 
 @app.on_event("startup")
 async def _startup_banner():
-    """Run startup validation and print status banner."""
+    """Run startup validation, load plugins, and print status banner."""
     from app.db.database import SessionLocal
     from app.services.setup_service import is_setup_required
 
@@ -240,7 +268,7 @@ async def _startup_banner():
 
     # Run comprehensive startup validation
     try:
-        from app.core.startup_check import run_all_checks, print_startup_report
+        from app.core.startup_check import print_startup_report, run_all_checks
 
         results = run_all_checks()
         print_startup_report(results)
@@ -267,4 +295,65 @@ async def _startup_banner():
             db.close()
     except Exception:
         print("  Setup Required: UNKNOWN (database not reachable)")
+
+    # Load and start server plugins
+    try:
+        from app.plugins.registry import plugin_registry
+
+        load_results = await plugin_registry.discover_and_load()
+        loaded = [s for s, r in load_results.items() if r == "loaded"]
+        if loaded:
+            logger.info("Plugins discovered: %s", ", ".join(loaded))
+            await plugin_registry.setup_all()
+            await plugin_registry.start_all()
+            route_count = await plugin_registry.register_routes(app)
+            logger.info(
+                "Plugins started: %d, routes registered: %d",
+                len(loaded),
+                route_count,
+            )
+            print(f"  Plugins: {len(loaded)} loaded, {route_count} routes")
+
+            # Auto-register built-in plugins in marketplace registry
+            try:
+                from app.marketplace.registry import (
+                    InstalledPlugin,
+                    PluginHealth,
+                    PluginStatus,
+                    marketplace_registry,
+                )
+                for slug in loaded:
+                    if not marketplace_registry.get(slug):
+                        from app.services.plugin_marketplace_service import (
+                            plugin_marketplace_service,
+                        )
+                        info = plugin_marketplace_service.get_plugin_info(slug)
+                        installed = InstalledPlugin(
+                            plugin_id=slug,
+                            name=info["name"] if info else slug,
+                            version=info["version"] if info else "1.0.0",
+                            status=PluginStatus.ENABLED,
+                            health=PluginHealth.UNKNOWN,
+                            enabled=True,
+                        )
+                        marketplace_registry.register(installed)
+            except Exception:
+                pass
+        else:
+            print("  Plugins: none discovered")
+    except Exception as exc:
+        logger.warning("Plugin loading skipped: %s", exc)
+        print("  Plugins: skipped (error)")
+
     print("")
+
+
+@app.on_event("shutdown")
+async def _shutdown_plugins():
+    """Gracefully stop all running plugins."""
+    try:
+        from app.plugins.registry import plugin_registry
+
+        await plugin_registry.stop_all()
+    except Exception:
+        pass

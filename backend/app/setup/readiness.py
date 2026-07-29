@@ -10,7 +10,6 @@ import subprocess
 import sys
 from pathlib import Path
 
-
 DIMENSION_WEIGHTS = {
     "installation": 15,
     "configuration": 10,
@@ -81,7 +80,7 @@ class ReadinessChecker:
         env_file = self._project_root / ".env"
         if env_file.exists():
             try:
-                with open(env_file, "r", encoding="utf-8") as f:
+                with open(env_file, encoding="utf-8") as f:
                     content = f.read()
                 has_secret = "SECRET_KEY" in content and "change-me" not in content.lower().split("secret_key")[1][:50] if "SECRET_KEY" in content else False
                 checks.append({"label": "SECRET_KEY configured", "pass": has_secret})
@@ -182,7 +181,7 @@ class ReadinessChecker:
             try:
                 import json
 
-                with open(manifest_path, "r", encoding="utf-8") as f:
+                with open(manifest_path, encoding="utf-8") as f:
                     data = json.load(f)
                 if "name" in data and "version" in data:
                     valid += 1
@@ -209,7 +208,7 @@ class ReadinessChecker:
         secret_ok = False
         if env_file.exists():
             try:
-                with open(env_file, "r", encoding="utf-8") as f:
+                with open(env_file, encoding="utf-8") as f:
                     for line in f:
                         if line.startswith("SECRET_KEY="):
                             value = line.split("=", 1)[1].strip().strip("\"'")
@@ -222,7 +221,7 @@ class ReadinessChecker:
         rate_limit_ok = False
         if env_file.exists():
             try:
-                with open(env_file, "r", encoding="utf-8") as f:
+                with open(env_file, encoding="utf-8") as f:
                     content = f.read()
                 rate_limit_ok = "RATE_LIMIT" in content
             except OSError:
@@ -232,7 +231,7 @@ class ReadinessChecker:
         tls_ready = os.getenv("TLS_CERT_PATH") or os.getenv("SSL_CERT_FILE") is not None
         if not tls_ready and env_file.exists():
             try:
-                with open(env_file, "r", encoding="utf-8") as f:
+                with open(env_file, encoding="utf-8") as f:
                     content = f.read()
                 tls_ready = "TLS_CERT" in content or "SSL_" in content
             except OSError:

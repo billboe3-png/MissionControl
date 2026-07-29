@@ -30,6 +30,9 @@ services:
     environment:
       DOCKER_HOST: unix:///var/run/docker.sock
       MISSIONCONTROL_SECRET_KEY: ${MISSIONCONTROL_SECRET_KEY:?MISSIONCONTROL_SECRET_KEY is required. Add it to your .env file.}
+      # Accept unknown SSH host keys so the Veeam SSH+PostgreSQL fallback
+      # bridge can connect (Veeam B&R REST /api/v1/jobs 500s on v13).
+      SSH_AUTO_ADD_HOST_KEYS: "true"
 
     healthcheck:
       test:
@@ -91,7 +94,7 @@ services:
       - "80:80"
 
     volumes:
-      - ./nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./nginx/dev.conf:/etc/nginx/conf.d/default.conf:ro
 
     healthcheck:
       test:

@@ -88,7 +88,16 @@ class SSHProvider(RemoteBaseProvider):
             connect_timeout = _get_timeouts()["connect"]
 
         client = paramiko.SSHClient()
-        client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        # Secure by default: reject unknown hosts (mitigates MITM). Only
+        # auto-accept when the operator has explicitly opted in via
+        # SSH_AUTO_ADD_HOST_KEYS for trusted single-purpose hosts.
+        from app.core.config import get_settings
+
+        if get_settings().ssh_auto_add_host_keys:
+            client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        else:
+            client.load_system_host_keys()
+            client.set_missing_host_key_policy(paramiko.RejectPolicy())
 
         pkey = None
         if ssh_key:

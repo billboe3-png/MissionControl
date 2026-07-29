@@ -1,4 +1,5 @@
-"""
+# ruff: noqa: S608
+"""\
 SQL Query Builders for Veeam PostgreSQL and MSSQL Backends.
 
 Provides identical query logic in both SQL dialects so the providers
@@ -7,6 +8,12 @@ can issue the correct syntax for the detected database engine.
 MSSQL supports two column naming conventions:
 - PascalCase (default, used by CORHQVEEAM)
 - snake_case (used by some servers like ERFRF where the DB uses lowercase names)
+
+NOTE: Every SQL string here is assembled only from module-level constants
+(_NORM_NAME_*, _WHERE_FILTER_PG, _mssql_where) and the `days` parameter,
+which job_stats_daily_sql coerces to int() before interpolation. No
+caller-supplied string is ever concatenated into these queries, so the
+S608 "possible injection" warnings are false positives for this builder.
 """
 
 # ── Common WHERE filter (excludes system/internal jobs) ─────────────
@@ -140,7 +147,14 @@ ORDER BY MAX(js.creation_time) DESC"""
 
 
 def job_stats_daily_sql(days: int = 7, db_type: str = "postgresql", column_case: str = "pascal") -> str:
-    """Per-job per-day transfer stats."""
+    """Per-job per-day transfer stats.
+
+    ``days`` is the only caller-supplied value interpolated into SQL. It is
+    coerced to int so a non-numeric value can never break out of the literal
+    (the API already validates it as an int Query, but we defensively coerce
+    here too). All other fragments are module-level constants.
+    """
+    days = int(days)  # coerced to int; remaining fragments are module constants
     if db_type == "mssql":
         if column_case == "snake":
             norm = _NORM_NAME_MSSQL_SNAKE

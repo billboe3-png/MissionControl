@@ -32,6 +32,12 @@ def _build_provider(profile) -> VeeamProvider:
     timeout = profile.timeout or 30
     verify_ssl = profile.verify_ssl if profile.verify_ssl is not None else True
 
+    # SSH/PowerShell bridge connection details (shared by both providers)
+    ssh_host = profile.ssh_host or ""
+    ssh_port = profile.ssh_port or 22
+    ssh_username = profile.ssh_username or ""
+    ssh_password = cipher.decrypt(profile.ssh_password_encrypted) if profile.ssh_password_encrypted else ""
+
     # REST API provider
     if base_url and username:
         from .veeam_provider import VeeamRESTProvider
@@ -42,13 +48,13 @@ def _build_provider(profile) -> VeeamProvider:
             password=password,
             timeout=timeout,
             verify_ssl=verify_ssl,
+            ssh_host=ssh_host,
+            ssh_port=ssh_port,
+            ssh_username=ssh_username,
+            ssh_password=ssh_password,
         )
 
     # PowerShell provider (SSH bridge)
-    ssh_host = profile.ssh_host or ""
-    ssh_port = profile.ssh_port or 22
-    ssh_username = profile.ssh_username or ""
-    ssh_password = cipher.decrypt(profile.ssh_password_encrypted) if profile.ssh_password_encrypted else ""
     if ssh_host and ssh_username:
         from .powershell_provider import VeeamPowerShellProvider
 
