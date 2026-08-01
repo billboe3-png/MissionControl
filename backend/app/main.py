@@ -1,6 +1,7 @@
 import logging
 import os
 import time
+import asyncio
 from collections import defaultdict
 
 from fastapi import FastAPI, Request
@@ -344,6 +345,29 @@ async def _startup_banner():
     except Exception as exc:
         logger.warning("Plugin loading skipped: %s", exc)
         print("  Plugins: skipped (error)")
+
+    # Mark stale agents offline on a fixed interval
+    try:
+        from app.services.agent_service import AgentService
+
+        agent_service = AgentService()
+
+        async def _stale_sweeper():
+            while True:
+                try:
+                    db = SessionLocal()
+                    try:
+                        await agent_service.mark_stale_agents_offline(db)
+                    finally:
+                        db.close()
+                except Exception as exc:
+                    logger.warning("Stale agent sweep failed: %s", exc)
+                await asyncio.sleep(60)
+
+        _startup_task = asyncio.create_task(_stale_sweeper())
+        logger.info("Stale-agent sweeper started")
+    except Exception as exc:
+        logger.warning("Stale-agent sweaper failed to start: %s", exc)
 
     print("")
 

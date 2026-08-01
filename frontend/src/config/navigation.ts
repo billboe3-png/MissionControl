@@ -8,10 +8,18 @@ export const navigation: NavGroup[] = [
         defaultOpen: true,
     },
     {
+        label: "Work Context",
+        icon: "📋",
+        items: [
+            { label: "Resume", path: "/resume", icon: "📝" },
+            { label: "Projects", path: "/projects", icon: "📁" },
+        ],
+        defaultOpen: true,
+    },
+    {
         label: "Tenants",
         icon: "🏢",
         items: [
-            { label: "Projects", path: "/projects", icon: "📁" },
             { label: "Companies", path: "/companies", icon: "🏢" },
         ],
     },
