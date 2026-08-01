@@ -153,10 +153,12 @@ class VeeamPlugin(AgentPlugin):
             return None
         url = f"{self._api_base.rstrip('/')}{path}"
         try:
+            headers = {"x-api-version": "1.3-rev1"}
             async with httpx.AsyncClient(verify=False, timeout=30) as client:
                 resp = await client.get(
                     url,
                     auth=(self._username, self._password or ""),
+                    headers=headers,
                 )
             logger.info("Veeam REST %s -> %s", url, resp.status_code)
             if resp.status_code == 200:
@@ -185,11 +187,13 @@ class VeeamPlugin(AgentPlugin):
             return {"success": False, "error": "httpx not installed"}
         url = f"{self._api_base.rstrip('/')}{path}"
         try:
+            headers = {"x-api-version": "1.3-rev1"}
             async with httpx.AsyncClient(verify=False, timeout=30) as client:
                 resp = await client.post(
                     url,
                     json=payload,
                     auth=(self._username, self._password or ""),
+                    headers=headers,
                 )
             return {
                 "success": resp.status_code in (200, 202),
