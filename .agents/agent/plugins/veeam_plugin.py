@@ -49,6 +49,10 @@ class VeeamPlugin(AgentPlugin):
         self._ssh_target = None
         return True
 
+    def reinitialize(self) -> None:
+        """Allow agent to reload integration profiles from updated context."""
+        self._configured_from_context = False
+
     async def _configure_from_context(self) -> None:
         """Load or reload integration profile settings."""
         profiles = (
@@ -145,6 +149,7 @@ class VeeamPlugin(AgentPlugin):
         try:
             import httpx
         except ImportError:
+            logger.warning("httpx not installed for Veeam REST calls")
             return None
         url = f"{self._api_base.rstrip('/')}{path}"
         try:
@@ -153,13 +158,22 @@ class VeeamPlugin(AgentPlugin):
                     url,
                     auth=(self._username, self._password or ""),
                 )
+            logger.info("Veeam REST %s -> %s", url, resp.status_code)
             if resp.status_code == 200:
                 try:
-                    return resp.json()
+                    parsed = resp.json()
+                    if isinstance(parsed, dict):
+                        logger.info("Veeam REST %s data keys=%s count=%s", url, sorted(parsed.keys()), len(parsed.get("data", parsed)) if isinstance(parsed.get("data"), list) else "n/a")
+                    elif isinstance(parsed, list):
+                        logger.info("Veeam REST %s items=%s", url, len(parsed))
+                    return parsed
                 except Exception:
+                    logger.info("Veeam REST %s text=%s", url, resp.text[:200])
                     return resp.text
+            logger.warning("Veeam REST %s body=%s", url, resp.text[:500])
             return None
-        except Exception:
+        except Exception as exc:
+            logger.warning("Veeam REST %s failed: %s", url, exc)
             return None
 
     async def _rest_post(self, path: str, payload: dict[str, Any]) -> dict[str, Any]:
