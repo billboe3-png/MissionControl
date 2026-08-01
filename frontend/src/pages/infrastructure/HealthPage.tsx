@@ -31,7 +31,7 @@ export default function HealthPage() {
   useEffect(() => {
     const load = async () => {
       try {
-        const data = await api.get<{ subsystems: Record<string, SubsystemCheck> }>("/health/subsystems");
+        const data = await api.getSubsystems();
         setSubsystems(data.subsystems ?? {});
       } catch (e) {
         setError(e instanceof Error ? e.message : "Failed to load");
