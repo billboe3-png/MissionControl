@@ -59,11 +59,13 @@ def list_hyperv_hosts(db: Session) -> list[dict]:
     )
 
     profiles = IntegrationProfileRepository.get_all_enabled_by_type(db, "hyperv")
-    hosts = [
+    remote_hosts = [
         {"id": p.id, "name": p.name, "host": p.base_url or "unknown"}
         for p in profiles
+        if p.base_url and p.base_url.lower() not in {"localhost", "127.0.0.1", "::1"}
     ]
 
+    agent_hosts: list[dict] = []
     try:
         from app.models.db.agent import Agent
         from app.models.db.agent_remote_target import AgentRemoteTarget
@@ -83,12 +85,20 @@ def list_hyperv_hosts(db: Session) -> list[dict]:
                 try:
                     full_inv = json.loads(agent.inventory_json)
                     remote = full_inv.get("remote_targets", {})
-                    inv = remote.get(f"target-{target.id}", {}).get("inventory", {})
+                    target_data = remote.get(f"target-{target.id}", {})
+                    inv = target_data.get("inventory", {})
                 except (json.JSONDecodeError, TypeError):
                     pass
             hyperv = inv.get("hyperv")
+            if not hyperv:
+                try:
+                    full_inv = json.loads(agent.inventory_json)
+                    plugins = full_inv.get("plugins", {})
+                    hyperv = plugins.get("hyperv")
+                except (json.JSONDecodeError, TypeError):
+                    pass
             if hyperv and hyperv.get("vm_count", 0) > 0:
-                hosts.append({
+                agent_hosts.append({
                     "id": -target.id,
                     "name": f"{target.name} (Agent)",
                     "host": target.hostname,
@@ -96,20 +106,49 @@ def list_hyperv_hosts(db: Session) -> list[dict]:
     except Exception as e:
         logger.debug("Could not load agent targets for host list: %s", e)
 
-    return hosts
+    local_hosts: list[dict] = []
+    try:
+        from app.models.db.agent import Agent
+        local_agents = (
+            db.query(Agent)
+            .filter(Agent.status != "offline", Agent.inventory_json.isnot(None))
+            .all()
+        )
+        for agent in local_agents:
+            try:
+                full_inv = json.loads(agent.inventory_json)
+                hyperv = full_inv.get("plugins", {}).get("hyperv")
+            except (json.JSONDecodeError, TypeError):
+                hyperv = None
+            if hyperv and hyperv.get("vm_count", 0) > 0:
+                host_id = -(1000 + agent.id)
+                if not any(h.get("id") == host_id for h in agent_hosts):
+                    local_hosts.append({
+                        "id": host_id,
+                        "name": f"{agent.name} (Local)",
+                        "host": agent.name,
+                    })
+    except Exception as e:
+        logger.debug("Could not load local agent hosts for host list: %s", e)
+
+    return local_hosts + agent_hosts + remote_hosts
 
 
 def get_hyperv_provider(db: Session | None = None, host_id: int | None = None) -> HyperVProvider:
     """Return the Hyper-V provider for a given host_id.
 
-    If host_id is positive: loads (or caches) the provider for that IntegrationProfile.
-    If host_id is negative: loads from agent remote target inventory.
-    If host_id is None: returns the default (first available) provider.
+    Positive host_id: IntegrationProfile-backed provider.
+    Negative host_id in (-999, 0): agent remote target inventory.
+    Negative host_id <= -1000: local agent host inventory, mapped as -(1000 + agent.id).
+    None: default provider.
     Falls back to mock when no profile exists.
     """
     global _default_provider
 
     if host_id is not None:
+        if host_id <= -1000:
+            return _get_local_agent_provider(db, -(1000 + host_id))
+
         if host_id < 0:
             return _get_agent_provider(db, -host_id)
 
@@ -165,7 +204,10 @@ def get_hyperv_provider(db: Session | None = None, host_id: int | None = None) -
 
 
 def _get_agent_provider(db: Session | None, target_id: int) -> HyperVProvider:
-    """Build an AgentHyperVProvider from stored remote target inventory."""
+    """Build an AgentHyperVProvider from stored remote target inventory.
+
+    Falls back to local agent inventory when remote target inventory is missing.
+    """
     from app.models.db.agent import Agent
     from app.models.db.agent_remote_target import AgentRemoteTarget
 
@@ -189,6 +231,13 @@ def _get_agent_provider(db: Session | None, target_id: int) -> HyperVProvider:
         raise ValueError(f"Invalid inventory JSON for target {target_id}") from exc
 
     hyperv = inv.get("hyperv")
+    if not hyperv:
+        try:
+            full_inv = json.loads(agent.inventory_json)
+            plugins = full_inv.get("plugins", {})
+            hyperv = plugins.get("hyperv")
+        except (json.JSONDecodeError, TypeError):
+            pass
     if not hyperv:
         raise ValueError(f"No Hyper-V inventory collected for target {target_id}")
 
@@ -233,6 +282,70 @@ def _get_agent_provider(db: Session | None, target_id: int) -> HyperVProvider:
         target_hostname=target.hostname,
         agent_id=agent.id,
         target_id=target.id,
+        dispatch_cmd=_dispatch_on_agent,
+    )
+
+
+def _get_local_agent_provider(db: Session | None, agent_id: int) -> HyperVProvider:
+    """Build an AgentHyperVProvider for the agent's own local host.
+
+    Uses the same agent-relayed dispatch path as remote targets so
+    local VM actions work through the agent command queue.
+    """
+    from app.models.db.agent import Agent
+
+    if db is None:
+        raise ValueError("Database session required for local agent provider")
+
+    agent = db.query(Agent).filter(Agent.id == agent_id).first()
+    if agent is None or not agent.inventory_json:
+        raise ValueError(f"Agent {agent_id} inventory not available")
+
+    import json
+    try:
+        full_inv = json.loads(agent.inventory_json)
+        hyperv = full_inv.get("plugins", {}).get("hyperv")
+    except (json.JSONDecodeError, TypeError) as exc:
+        raise ValueError(f"Invalid inventory JSON for agent {agent_id}") from exc
+
+    if not hyperv:
+        raise ValueError(f"No local Hyper-V inventory collected for agent {agent_id}")
+
+    async def _dispatch_on_agent(command_str: str) -> dict:
+        from fastapi import HTTPException
+        from app.schemas.agent import AgentCommandDispatchRequest
+        from app.services.agent_service import agent_service
+
+        if agent.status != "online":
+            return {
+                "success": False,
+                "error": f"Agent '{agent.name}' is {agent.status}, cannot dispatch command",
+            }
+        req = AgentCommandDispatchRequest(
+            agent_id=agent.id,
+            command_type="execute",
+            command=command_str,
+            timeout=120,
+        )
+        try:
+            result = await agent_service.dispatch_command(db, req)
+            return {
+                "success": True,
+                "command_id": result.id,
+                "message": f"Command dispatched to agent (id={result.id})",
+            }
+        except HTTPException as e:
+            return {"success": False, "error": e.detail}
+        except Exception as e:
+            logger.exception("Failed to dispatch command to agent %s", agent.id)
+            return {"success": False, "error": str(e)}
+
+    from .agent_provider import AgentHyperVProvider
+    return AgentHyperVProvider(
+        hyperv,
+        target_hostname=agent.name or full_inv.get("system", {}).get("hostname", ""),
+        agent_id=agent.id,
+        target_id=agent.id,
         dispatch_cmd=_dispatch_on_agent,
     )
 

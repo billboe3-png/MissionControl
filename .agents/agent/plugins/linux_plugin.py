@@ -15,7 +15,7 @@ class LinuxPlugin(AgentPlugin):
     """Linux-specific inventory and management plugin."""
 
     name = "linux"
-    version = "1.0.0"
+    version = "3.0.0-rc1"
     description = "Linux system management plugin"
     platform_required = "linux"
 

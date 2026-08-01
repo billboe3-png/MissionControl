@@ -12,7 +12,7 @@ class DockerPlugin(AgentPlugin):
     """Docker management plugin."""
 
     name = "docker"
-    version = "1.0.0"
+    version = "3.0.0-rc1"
     description = "Docker container management plugin"
     platform_required = None
 

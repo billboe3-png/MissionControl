@@ -21,10 +21,16 @@ export interface Agent {
     tags: string | null;
     notes: string | null;
     active_plugins: string | null;
+    enabled_plugins: string | null;
+    api_key_masked: string | null;
     created_at: string | null;
     updated_at: string | null;
     registered_at: string | null;
 }
+
+export type SiteRecord = {
+  timezone?: string | null;
+};
 
 export interface AgentListResponse {
     count: number;
@@ -73,10 +79,16 @@ export interface AgentInventory {
 
 export interface AgentUpdate {
     name?: string;
+    hostname?: string;
+    operating_system?: string | null;
+    os_version?: string | null;
+    ip_address?: string | null;
+    agent_version?: string | null;
     enabled?: boolean;
     tags?: string | null;
     notes?: string | null;
     heartbeat_interval?: number;
+    enabled_plugins?: string | null;
 }
 
 export interface AgentDispatchCommand {
@@ -155,4 +167,55 @@ export const agentsApi = {
             `${API}/${agentId}/inventory`
         );
     },
+
+    async downloadBundle(agentId: number, platform: "linux" | "windows"): Promise<Blob> {
+        return apiClient<Blob>(
+            `${API}/${agentId}/bundles/download?platform=${encodeURIComponent(platform)}`,
+            { method: "POST" }
+        );
+    },
+
+    async create(data: AgentUpdate & { hostname: string }): Promise<Agent> {
+        return apiClient<Agent>(API, {
+            method: "POST",
+            json: data,
+        });
+    },
+
+    async revealApiKey(agentId: number): Promise<{ api_key: string }> {
+        return await apiClient<{ api_key: string }>(`${API}/${agentId}/api-key`);
+    },
+};
+
+export type AgentUpdateInput = AgentUpdate & { hostname: string; operating_system?: string | null; os_version?: string | null; ip_address?: string | null; agent_version?: string | null };
+
+export const downloadAgentBundle = async (
+    agentId: number,
+    platform: "linux" | "windows"
+): Promise<void> => {
+    const token = localStorage.getItem("mc_token");
+    const headers: Record<string, string> = {};
+    if (token) {
+        headers["Authorization"] = `Bearer ${token}`;
+    }
+    let path: string;
+    if (agentId && agentId > 0) {
+        path = `/api/v1/agents/${agentId}/bundles/download?platform=${encodeURIComponent(platform)}`;
+    } else {
+        path = `/api/v1/agents/bundles/download?platform=${encodeURIComponent(platform)}`;
+    }
+    const response = await fetch(path, { method: "POST", headers, credentials: "same-origin", cache: "no-store" });
+    if (!response.ok) {
+        const detail = await response.json().catch(() => null);
+        throw new Error(detail?.detail ?? `Request failed (${response.status})`);
+    }
+    const blob = await response.blob();
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `mission-control-agent-${platform}-${agentId}-${Date.now()}.zip`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    window.URL.revokeObjectURL(url);
 };

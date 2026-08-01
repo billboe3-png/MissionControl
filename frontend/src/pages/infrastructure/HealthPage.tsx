@@ -37,11 +37,11 @@ export default function HealthPage() {
         },
         {
             label: "Docker",
-            status: data.docker.container_count > 0 ? ("healthy" as const) : ("neutral" as const),
+            status: data.docker?.available ? ("healthy" as const) : ("neutral" as const),
         },
         {
             label: "Git",
-            status: gitStatus(data),
+            status: data.git?.available ? ("healthy" as const) : ("neutral" as const),
         },
         {
             label: "Projects",

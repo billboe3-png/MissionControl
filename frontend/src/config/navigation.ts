@@ -129,13 +129,6 @@ export const navigation: NavGroup[] = [
         ],
     },
     {
-        label: "Agents",
-        icon: "🤖",
-        items: [
-            { label: "Overview", path: "/agents", icon: "📊" },
-        ],
-    },
-    {
         label: "Fleet Workspace",
         icon: "🚁",
         items: [
@@ -166,6 +159,7 @@ export const navigation: NavGroup[] = [
         items: [
             { label: "General", path: "/settings", icon: "🔧" },
             { label: "Users", path: "/settings/users", icon: "👥" },
+            { label: "Agents", path: "/agents", icon: "🤖" },
             { label: "Integrations", path: "/settings/integrations", icon: "🔌" },
             { label: "Appearance", path: "/settings/appearance", icon: "🎨" },
             { label: "My Dashboard", path: "/settings/dashboard", icon: "📊" },

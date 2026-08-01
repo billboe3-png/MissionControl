@@ -15,26 +15,50 @@ from sqlalchemy.orm import Session
 logger = logging.getLogger(__name__)
 
 
+async def _safe_call(name: str, coro_factory) -> tuple[str, Any | None, str | None]:
+    try:
+        return name, await asyncio.wait_for(coro_factory(), timeout=8), None
+    except asyncio.TimeoutError:
+        logger.debug("Veeam provider %s timed out", name)
+        return name, None, f"{name}: timeout"
+    except Exception as exc:
+        logger.debug("Veeam provider %s error: %s", name, exc)
+        return name, None, str(exc)
+
+
 class VeeamService:
     """Thin service layer over one or more Veeam B&R providers."""
 
     def _get_providers(
         self, db: Session | None = None
     ) -> list[tuple[str, Any]]:
-        from app.providers.veeam.provider_factory import get_all_veeam_providers
+        from app.providers.veeam.provider_factory import (
+            get_all_veeam_providers,
+            get_agent_local_veeam_provider,
+        )
 
-        return get_all_veeam_providers(db)
+        providers = get_all_veeam_providers(db)
+        try:
+            local = get_agent_local_veeam_provider(db)
+            if local is not None:
+                providers.append(("CORHQROBERTB (Agent)", local))
+        except Exception as exc:
+            logger.debug("Agent-local Veeam provider unavailable: %s", exc)
+        return providers
 
     async def get_summary(self, db: Session | None = None) -> dict:
         providers = self._get_providers(db)
         if len(providers) == 1:
             name, p = providers[0]
-            return await p.get_summary()
+            return await asyncio.wait_for(p.get_summary(), timeout=8)
 
         async def _fetch(name: str, p: Any) -> tuple[str, dict, str | None]:
             try:
-                data = await p.get_summary()
+                data = await asyncio.wait_for(p.get_summary(), timeout=8)
                 return name, data, None
+            except asyncio.TimeoutError:
+                logger.debug("Veeam provider %s timed out", name)
+                return name, {}, f"{name}: timeout"
             except Exception as exc:
                 logger.exception("Failed to get summary from %s", name)
                 return name, {}, str(exc)
@@ -97,11 +121,11 @@ class VeeamService:
         providers = self._get_providers(db)
         if len(providers) == 1:
             name, p = providers[0]
-            return await p.get_health()
+            return await asyncio.wait_for(p.get_health(), timeout=8)
 
         async def _fetch(name: str, p: Any) -> tuple[str, dict, str | None]:
             try:
-                h = await p.get_health()
+                h = await asyncio.wait_for(p.get_health(), timeout=8)
                 h["server_name"] = name
                 return name, h, None
             except Exception as exc:
@@ -116,11 +140,11 @@ class VeeamService:
         providers = self._get_providers(db)
         if len(providers) == 1:
             name, p = providers[0]
-            return await p.get_jobs()
+            return await asyncio.wait_for(p.get_jobs(), timeout=8)
 
         async def _fetch(name: str, p: Any) -> tuple[str, dict, str | None]:
             try:
-                data = await p.get_jobs()
+                data = await asyncio.wait_for(p.get_jobs(), timeout=8)
                 return name, data, None
             except Exception as exc:
                 logger.exception("Failed to get jobs from %s", name)
@@ -157,11 +181,11 @@ class VeeamService:
         providers = self._get_providers(db)
         if len(providers) == 1:
             name, p = providers[0]
-            return await p.get_sessions()
+            return await asyncio.wait_for(p.get_sessions(), timeout=8)
 
         async def _fetch(name: str, p: Any) -> tuple[str, dict, str | None]:
             try:
-                data = await p.get_sessions()
+                data = await asyncio.wait_for(p.get_sessions(), timeout=8)
                 return name, data, None
             except Exception as exc:
                 logger.exception("Failed to get sessions from %s", name)
@@ -190,11 +214,11 @@ class VeeamService:
         providers = self._get_providers(db)
         if len(providers) == 1:
             name, p = providers[0]
-            return await p.get_repositories()
+            return await asyncio.wait_for(p.get_repositories(), timeout=8)
 
         async def _fetch(name: str, p: Any) -> tuple[str, dict, str | None]:
             try:
-                data = await p.get_repositories()
+                data = await asyncio.wait_for(p.get_repositories(), timeout=8)
                 return name, data, None
             except Exception as exc:
                 logger.exception("Failed to get repos from %s", name)
@@ -221,11 +245,11 @@ class VeeamService:
         providers = self._get_providers(db)
         if len(providers) == 1:
             name, p = providers[0]
-            return await p.get_managed_servers()
+            return await asyncio.wait_for(p.get_managed_servers(), timeout=8)
 
         async def _fetch(name: str, p: Any) -> tuple[str, dict, str | None]:
             try:
-                data = await p.get_managed_servers()
+                data = await asyncio.wait_for(p.get_managed_servers(), timeout=8)
                 return name, data, None
             except Exception as exc:
                 logger.exception("Failed to get managed servers from %s", name)
@@ -254,11 +278,11 @@ class VeeamService:
         providers = self._get_providers(db)
         if len(providers) == 1:
             name, p = providers[0]
-            return await p.get_restore_points(vm_id)
+            return await asyncio.wait_for(p.get_restore_points(vm_id), timeout=8)
 
         async def _fetch(name: str, p: Any) -> tuple[str, dict, str | None]:
             try:
-                data = await p.get_restore_points(vm_id)
+                data = await asyncio.wait_for(p.get_restore_points(vm_id), timeout=8)
                 return name, data, None
             except Exception as exc:
                 return name, {}, str(exc)
@@ -284,11 +308,11 @@ class VeeamService:
         providers = self._get_providers(db)
         if len(providers) == 1:
             name, p = providers[0]
-            return await p.get_license()
+            return await asyncio.wait_for(p.get_license(), timeout=8)
 
         async def _fetch(name: str, p: Any) -> tuple[str, dict, str | None]:
             try:
-                data = await p.get_license()
+                data = await asyncio.wait_for(p.get_license(), timeout=8)
                 data["server_name"] = name
                 return name, data, None
             except Exception:
@@ -305,11 +329,11 @@ class VeeamService:
         providers = self._get_providers(db)
         if len(providers) == 1:
             name, p = providers[0]
-            return await p.get_session_stats()
+            return await asyncio.wait_for(p.get_session_stats(), timeout=8)
 
         async def _fetch(name: str, p: Any) -> tuple[str, dict, str | None]:
             try:
-                data = await p.get_session_stats()
+                data = await asyncio.wait_for(p.get_session_stats(), timeout=8)
                 return name, data, None
             except Exception as exc:
                 logger.exception("Failed to get session stats from %s", name)
@@ -341,11 +365,11 @@ class VeeamService:
         providers = self._get_providers(db)
         if len(providers) == 1:
             name, p = providers[0]
-            return await p.get_job_stats()
+            return await asyncio.wait_for(p.get_job_stats(), timeout=8)
 
         async def _fetch(name: str, p: Any) -> tuple[str, dict, str | None]:
             try:
-                data = await p.get_job_stats()
+                data = await asyncio.wait_for(p.get_job_stats(), timeout=8)
                 return name, data, None
             except Exception as exc:
                 logger.exception("Failed to get job stats from %s", name)

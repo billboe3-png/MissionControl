@@ -4,6 +4,7 @@ import {
     integrationsApi,
     IntegrationProfile,
 } from "../../services/integrations";
+import AgentSelector from "../common/AgentSelector";
 
 interface M365ConfigModalProps {
     profile: IntegrationProfile | null;
@@ -26,6 +27,7 @@ export default function M365ConfigModal({
         profile?.authority_url ?? "https://login.microsoftonline.com",
     );
     const [timeout, setTimeout_] = useState(String(profile?.timeout ?? 30));
+    const [agentId, setAgentId] = useState<number | null>(profile?.agent_id ?? null);
     const [loading, setLoading] = useState(false);
 
     const isEditing = profile !== null;
@@ -35,25 +37,23 @@ export default function M365ConfigModal({
         setLoading(true);
 
         try {
+            const payload: Record<string, unknown> = {
+                name,
+                tenant_id: tenantId,
+                client_id: clientId,
+                authority_url: authorityUrl,
+                timeout: parseInt(timeout, 10) || 30,
+                agent_id: agentId || null,
+            };
+            if (clientSecret) payload.client_secret = clientSecret;
+
             if (isEditing) {
-                await integrationsApi.update(profile.id, {
-                    name,
-                    tenant_id: tenantId,
-                    client_id: clientId,
-                    client_secret: clientSecret || undefined,
-                    authority_url: authorityUrl,
-                    timeout: parseInt(timeout, 10) || 30,
-                });
+                await integrationsApi.update(profile!.id, payload);
             } else {
                 await integrationsApi.create({
-                    name,
                     integration_type: "microsoft_365",
-                    tenant_id: tenantId,
-                    client_id: clientId,
-                    client_secret: clientSecret,
-                    authority_url: authorityUrl,
-                    timeout: parseInt(timeout, 10) || 30,
-                });
+                    ...payload,
+                } as Parameters<typeof integrationsApi.create>[0]);
             }
             onSave();
         } catch (err) {
@@ -84,6 +84,8 @@ export default function M365ConfigModal({
                             autoFocus
                         />
                     </div>
+
+                    <AgentSelector value={agentId} onChange={setAgentId} />
 
                     <div className="form-group">
                         <label htmlFor="m365-tenant">Tenant ID</label>

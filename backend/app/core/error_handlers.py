@@ -70,7 +70,6 @@ async def http_exception_handler(request: Request, exc) -> JSONResponse:
     """Handle HTTPException with consistent format."""
     status_code = exc.status_code
     detail = exc.detail if hasattr(exc, "detail") else str(exc)
-
     logger.warning(
         "HTTP %s %s -> %s: %s",
         request.method,
@@ -81,11 +80,7 @@ async def http_exception_handler(request: Request, exc) -> JSONResponse:
 
     return JSONResponse(
         status_code=status_code,
-        content=ErrorResponse.create(
-            status_code=status_code,
-            message=detail,
-            path=request.url.path,
-        ),
+        content={"detail": detail},
     )
 
 
@@ -171,12 +166,7 @@ async def not_found_handler(request: Request, exc) -> JSONResponse:
     """Handle 404 Not Found."""
     return JSONResponse(
         status_code=status.HTTP_404_NOT_FOUND,
-        content=ErrorResponse.create(
-            status_code=404,
-            message=f"Endpoint not found: {request.url.path}",
-            error_code="not_found",
-            path=request.url.path,
-        ),
+        content={"detail": f"Endpoint not found: {request.url.path}"},
     )
 
 

@@ -19,7 +19,7 @@ class ApplicationService:
         return {
             "name": "Mission Control",
             "tagline": "The Daily Workspace for IT Operations",
-            "version": "3.0.0",
+            "version": "3.0.0-rc1",
         }
 
     async def generated(self) -> str:

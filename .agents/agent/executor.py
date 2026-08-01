@@ -84,7 +84,7 @@ class CommandExecutor:
         """Execute a shell command."""
         system = platform.system()
         if system == "Windows":
-            shell_cmd = ["cmd", "/c", command]
+            shell_cmd = ["powershell", "-ExecutionPolicy", "Bypass", "-Command", command]
         else:
             shell_cmd = ["bash", "-c", command]
 

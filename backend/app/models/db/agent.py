@@ -169,6 +169,12 @@ class Agent(Base):
         nullable=True,
     )
 
+    enabled_plugins: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
+        comment="Comma-separated plugins enabled by the user/server.",
+    )
+
     # ------------------------------------------------------------------ #
     # Timestamps                                                          #
     # ------------------------------------------------------------------ #

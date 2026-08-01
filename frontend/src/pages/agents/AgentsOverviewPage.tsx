@@ -4,7 +4,7 @@ import PageHeader from "../../components/common/PageHeader";
 import StatusBadge from "../../components/common/StatusBadge";
 import SearchInput from "../../components/common/SearchInput";
 import EmptyState from "../../components/common/EmptyState";
-import { agentsApi, Agent } from "../../services/agents";
+import { agentsApi, Agent, downloadAgentBundle } from "../../services/agents";
 
 type SortKey = "name" | "hostname" | "status" | "os" | "version" | "cpu" | "memory" | "disk" | "heartbeat" | "health";
 type SortDir = "asc" | "desc";
@@ -19,6 +19,14 @@ function formatUptime(dateStr: string | null): string {
     if (hours < 24) return `${hours}h ago`;
     const days = Math.floor(hours / 24);
     return `${days}d ago`;
+}
+
+function formatDateTimeUtc(iso: string | null | undefined): string {
+    if (!iso) return "Never";
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return iso || "Never";
+    const pad = (v: number) => `${v}`.padStart(2, "0");
+    return `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())} ${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}:${pad(d.getUTCSeconds())} UTC`;
 }
 
 function sortAgents(agents: Agent[], key: SortKey, dir: SortDir): Agent[] {
@@ -66,6 +74,13 @@ export default function AgentsOverviewPage() {
     const [sortDir, setSortDir] = useState<SortDir>("asc");
     const [statusFilter, setStatusFilter] = useState<string>("all");
     const [selected, setSelected] = useState<Set<number>>(new Set());
+    const [downloadSelections, setDownloadSelections] = useState<Record<number, string>>({});
+    const [globalDownload, setGlobalDownload] = useState<string>("");
+    const [editingAgentId, setEditingAgentId] = useState<number | null>(null);
+    const [editingAgentName, setEditingAgentName] = useState<string>("");
+    const [updatingAgentId, setUpdatingAgentId] = useState<number | null>(null);
+    const [revealedApiKey, setRevealedApiKey] = useState<Record<number, string>>({});
+    const [revealingApiKey, setRevealingApiKey] = useState<Record<number, boolean>>({});
 
     const load = useCallback(async () => {
         try {
@@ -107,6 +122,72 @@ export default function AgentsOverviewPage() {
             setSelected(new Set());
         } else {
             setSelected(new Set(filtered.map((a) => a.id)));
+        }
+    };
+
+    const handleDownload = async (agentId: number, platform: "linux" | "windows") => {
+        setDownloadSelections((prev) => ({ ...prev, [agentId]: platform }));
+        try {
+            await downloadAgentBundle(agentId, platform);
+        } catch (e) {
+            alert(e instanceof Error ? e.message : "Download failed");
+        } finally {
+            setDownloadSelections((prev) => {
+                const next = { ...prev };
+                delete next[agentId];
+                return next;
+            });
+        }
+    };
+
+    const startRename = (agent: Agent) => {
+        setEditingAgentId(agent.id);
+        setEditingAgentName(agent.name);
+    };
+
+    const cancelRename = () => {
+        setEditingAgentId(null);
+        setEditingAgentName("");
+    };
+
+    const saveRename = async (agent: Agent) => {
+        const trimmed = editingAgentName.trim();
+        if (!trimmed || trimmed === agent.name) {
+            cancelRename();
+            if (trimmed && trimmed !== agent.name) {
+                await load();
+            }
+            return;
+        }
+        setUpdatingAgentId(agent.id);
+        try {
+            const updated = await agentsApi.update(agent.id, { name: trimmed });
+            setAgents((prev) => prev.map((a) => (a.id === agent.id ? updated : a)));
+        } catch (e) {
+            alert(e instanceof Error ? e.message : "Rename failed");
+        } finally {
+            setUpdatingAgentId(null);
+            setEditingAgentId(null);
+            setEditingAgentName("");
+        }
+    };
+
+    const handleRenameKeyDown = (agent: Agent, event: React.KeyboardEvent<HTMLInputElement>) => {
+        if (event.key === "Enter") {
+            saveRename(agent);
+        } else if (event.key === "Escape") {
+            cancelRename();
+        }
+    };
+
+    const handleGlobalDownload = async (platform: "linux" | "windows") => {
+        setGlobalDownload(platform);
+        try {
+            await downloadAgentBundle(0, platform);
+        } catch (e) {
+            alert(e instanceof Error ? e.message : "Download failed");
+        } finally {
+            setGlobalDownload("");
         }
     };
 
@@ -197,6 +278,25 @@ export default function AgentsOverviewPage() {
                 </select>
             </div>
 
+            <div className="data-table-wrapper" style={{ marginBottom: 12 }}>
+                <div style={{ display: "flex", gap: 10, alignItems: "center", justifyContent: "space-between" }}>
+                    <div style={{ fontWeight: 600 }}>Agent Bundle Downloads</div>
+                    <div style={{ display: "flex", gap: 10 }}>
+                        <button className="btn btn-primary" onClick={() => handleGlobalDownload("linux")}>
+                            Download Linux bundle
+                        </button>
+                        <button className="btn btn-primary" onClick={() => handleGlobalDownload("windows")}>
+                            Download Windows bundle
+                        </button>
+                    </div>
+                </div>
+                {globalDownload && (
+                    <div className="fleet-download-status" style={{ marginTop: 10 }}>
+                        Downloading {globalDownload} bundle…
+                    </div>
+                )}
+            </div>
+
             {filtered.length === 0 && !error ? (
                 <EmptyState
                     icon="🤖"
@@ -246,6 +346,7 @@ export default function AgentsOverviewPage() {
                                     Last Heartbeat <SortIcon col="heartbeat" />
                                 </th>
                                 <th>Plugins</th>
+                                <th>API Key</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -262,13 +363,38 @@ export default function AgentsOverviewPage() {
                                         />
                                     </td>
                                     <td>
-                                        <Link to={`/agents/${agent.id}`} className="fleet-agent-link">
-                                            <StatusBadge
-                                                status={agent.status === "online" ? "healthy" : "error"}
-                                                label={agent.status}
-                                            />
-                                            <span className="fleet-agent-name">{agent.name}</span>
-                                        </Link>
+                                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                                            <Link to={`/agents/${agent.id}`} className="fleet-agent-link" style={{ flex: 1, minWidth: 0 }}>
+                                                <StatusBadge
+                                                    status={agent.status === "online" ? "healthy" : "error"}
+                                                    label={agent.status}
+                                                />
+                                                {editingAgentId === agent.id ? (
+                                                    <input
+                                                        className="form-input"
+                                                        style={{ marginLeft: 8, width: 220 }}
+                                                        value={editingAgentName}
+                                                        onChange={(e) => setEditingAgentName(e.target.value)}
+                                                        onBlur={() => saveRename(agent)}
+                                                        onKeyDown={(e) => handleRenameKeyDown(agent, e)}
+                                                        autoFocus
+                                                        disabled={updatingAgentId === agent.id}
+                                                    />
+                                                ) : (
+                                                    <span className="fleet-agent-name">{agent.name}</span>
+                                                )}
+                                            </Link>
+                                            {editingAgentId !== agent.id && (
+                                                <button
+                                                    className="btn btn-link"
+                                                    style={{ padding: "2px 8px" }}
+                                                    onClick={() => startRename(agent)}
+                                                    title="Rename agent"
+                                                >
+                                                    Rename
+                                                </button>
+                                            )}
+                                        </div>
                                     </td>
                                     <td className="mono">{agent.hostname}</td>
                                     <td>{agent.operating_system ?? "—"}</td>
@@ -314,6 +440,48 @@ export default function AgentsOverviewPage() {
                                         {formatUptime(agent.last_heartbeat)}
                                     </td>
                                     <td>{agent.active_plugins ?? "—"}</td>
+                                    <td>
+                                        <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                                            <code className="mono">
+                                                {revealedApiKey[agent.id] || agent.api_key_masked || "mc_agent_…"}
+                                            </code>
+                                            {!revealedApiKey[agent.id] && (
+                                                <button
+                                                    className="btn btn-link"
+                                                    onClick={async () => {
+                                                        setRevealingApiKey((prev) => ({ ...prev, [agent.id]: true }));
+                                                        try {
+                                                            const res = await agentsApi.revealApiKey(agent.id);
+                                                            setRevealedApiKey((prev) => ({ ...prev, [agent.id]: res.api_key }));
+                                                        } catch (e) {
+                                                            alert(e instanceof Error ? e.message : "Failed to load API key");
+                                                        } finally {
+                                                            setRevealingApiKey((prev) => ({ ...prev, [agent.id]: false }));
+                                                        }
+                                                    }}
+                                                    disabled={revealingApiKey[agent.id]}
+                                                >
+                                                    {revealingApiKey[agent.id] ? "Loading…" : "Show"}
+                                                </button>
+                                            )}
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <select
+                                            className="form-input"
+                                            value={downloadSelections[agent.id] ?? ""}
+                                            onChange={(e) => {
+                                                const value = e.target.value;
+                                                if (value === "linux" || value === "windows") {
+                                                    handleDownload(agent.id, value);
+                                                }
+                                            }}
+                                        >
+                                            <option value="">Download agent…</option>
+                                            <option value="linux">Linux bundle</option>
+                                            <option value="windows">Windows bundle</option>
+                                        </select>
+                                    </td>
                                 </tr>
                             ))}
                         </tbody>

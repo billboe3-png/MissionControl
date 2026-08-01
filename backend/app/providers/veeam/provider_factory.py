@@ -8,6 +8,7 @@ Falls back to mock when no profile is configured.
 
 import json
 import logging
+from typing import Any
 
 from sqlalchemy.orm import Session
 
@@ -186,7 +187,10 @@ def _get_target_inventory(agent, target_id: int) -> dict:
         full_inv = json.loads(agent.inventory_json)
         remote = full_inv.get("remote_targets", {})
         target_data = remote.get(f"target-{target_id}", {})
-        return target_data.get("inventory", {})
+        inv = target_data.get("inventory", {})
+        if inv:
+            return inv
+        return full_inv.get("plugins", {}).get("veeam", {})
     except (json.JSONDecodeError, TypeError):
         return {}
 
@@ -265,6 +269,38 @@ def reset_veeam_provider(host_id: int | None = None) -> None:
     else:
         _providers.clear()
         _default_provider = None
+
+
+def get_agent_local_veeam_provider(db: Session | None = None) -> Any | None:
+    """Build an AgentLocalVeeamProvider from the most recent agent Veeam inventory."""
+    from .agent_local_provider import AgentLocalVeeamProvider
+
+    if db is None:
+        return None
+    try:
+        from app.models.db.agent import Agent
+
+        agents = db.query(Agent).all()
+        for agent in agents:
+            if not agent.inventory_json:
+                continue
+            try:
+                inv = agent.inventory_json
+                if isinstance(inv, str):
+                    import json
+
+                    inv = json.loads(inv)
+                veeam = inv.get("plugins", {}).get("veeam")
+                if veeam and isinstance(veeam, dict) and ("jobs" in veeam or "license" in veeam):
+                    return AgentLocalVeeamProvider(
+                        veeam_inventory=veeam,
+                        target_hostname=agent.hostname or agent.name,
+                    )
+            except Exception:
+                continue
+    except Exception:
+        pass
+    return None
 
 
 def get_all_veeam_providers(db: Session) -> list[tuple[str, VeeamProvider]]:

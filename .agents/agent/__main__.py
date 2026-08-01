@@ -54,7 +54,7 @@ def parse_args() -> argparse.Namespace:
         "--log-level",
         type=str,
         choices=["DEBUG", "INFO", "WARNING", "ERROR"],
-        default="INFO",
+        default=None,
         help="Log level",
     )
     parser.add_argument(
@@ -70,8 +70,25 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
+def _bootstrap_sys_path() -> None:
+    """Ensure the local agent package takes precedence over any site-packages copy."""
+    import sys
+    from pathlib import Path
+    candidates = [
+        Path(__file__).resolve().parent,
+        Path.cwd() / "agent",
+        Path.cwd(),
+    ]
+    for candidate in candidates:
+        candidate_str = str(candidate)
+        if candidate_str not in sys.path:
+            sys.path.insert(0, candidate_str)
+
+
 def main() -> None:
     """Main entry point."""
+    _bootstrap_sys_path()
+
     args = parse_args()
 
     config_kwargs = {}

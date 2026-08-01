@@ -14,7 +14,7 @@ class WindowsPlugin(AgentPlugin):
     """Windows-specific inventory and management plugin."""
 
     name = "windows"
-    version = "1.0.0"
+    version = "3.0.0-rc1"
     description = "Windows system management plugin"
     platform_required = "windows"
 

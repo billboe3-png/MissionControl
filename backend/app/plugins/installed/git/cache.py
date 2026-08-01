@@ -131,6 +131,7 @@ def get_summary(session: Session) -> dict[str, Any]:
     ).scalar() or 0
 
     return {
+        "available": repo_count > 0,
         "repo_count": repo_count,
         "branch_count": branch_count,
         "commit_count": commit_count,

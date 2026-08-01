@@ -1,9 +1,11 @@
 """Mission Control Agent - Heartbeat system."""
 
+import base64
 import logging
 import platform
 import socket
 import time
+from pathlib import Path
 
 import psutil
 
@@ -121,6 +123,14 @@ class HeartbeatManager:
         except Exception:
             metrics["uptime_seconds"] = 0
 
+        try:
+            s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            s.connect(("8.8.8.8", 80))
+            metrics["ip_address"] = s.getsockname()[0]
+            s.close()
+        except Exception:
+            metrics["ip_address"] = None
+
         return metrics
 
     @staticmethod
@@ -208,6 +218,7 @@ class HeartbeatManager:
             "memory_percent": memory_percent if memory_percent is not None else system_metrics.get("memory_percent"),
             "swap_percent": system_metrics.get("swap_percent"),
             "disk_percent": disk_percent if disk_percent is not None else system_metrics.get("disk_percent"),
+            "ip_address": system_metrics.get("ip_address"),
             "network_throughput": system_metrics.get("network_throughput"),
             "uptime_seconds": system_metrics.get("uptime_seconds"),
             "hostname": os_info.get("hostname"),
@@ -230,6 +241,7 @@ class HeartbeatManager:
             payload["active_plugins"] = active_plugins
 
         try:
+            logger.debug("Heartbeat payload: %s", payload)
             result = await self.client.post(
                 "/api/v1/agents/heartbeat", payload
             )
@@ -238,7 +250,31 @@ class HeartbeatManager:
                 agent_id,
                 len(result.get("commands") or []),
             )
+            await self._apply_plugin_updates(result)
             return result
         except Exception as e:
             logger.warning("Heartbeat failed: %s", e)
             raise
+
+    async def _apply_plugin_updates(self, result: dict) -> None:
+        """Apply plugin file updates delivered by the server."""
+        updates = result.get("plugin_updates") or {}
+        if not updates:
+            return
+        for plugin_name, content_b64 in updates.items():
+            try:
+                content = base64.b64decode(content_b64)
+            except Exception:
+                logger.error("Invalid plugin update payload for %s", plugin_name)
+                continue
+            plugins_dir = Path.cwd() / "agent" / "plugins"
+            plugins_dir.mkdir(parents=True, exist_ok=True)
+            target = plugins_dir / f"{plugin_name}_plugin.py"
+            try:
+                old = target.read_bytes()
+            except FileNotFoundError:
+                old = b""
+            if old == content:
+                continue
+            target.write_bytes(content)
+            logger.info("Updated plugin %s to %s bytes", plugin_name, len(content))

@@ -5,11 +5,15 @@ Business logic for agent management: registration, heartbeat processing,
 command dispatch, inventory updates, and file transfer.
 """
 
+import base64
 import hashlib
+import os
 import json
 import logging
 import secrets
 from datetime import UTC, datetime
+
+from pathlib import Path
 
 from fastapi import HTTPException, status
 from sqlalchemy import desc, func, select
@@ -184,6 +188,7 @@ class AgentService:
             cpu_percent=data.cpu_percent,
             memory_percent=data.memory_percent,
             disk_percent=data.disk_percent,
+            ip_address=data.ip_address,
             agent_version=data.agent_version,
             active_plugins=data.active_plugins,
         )
@@ -197,6 +202,7 @@ class AgentService:
             AgentCommandRepository.update(
                 db, cmd.id, status="dispatched", started_at=datetime.now(UTC)
             )
+            profile = json.loads(cmd.integration_profile) if cmd.integration_profile else None
             commands.append(
                 AgentPendingCommand(
                     id=cmd.id,
@@ -206,6 +212,7 @@ class AgentService:
                     file_path=cmd.file_path,
                     file_name=cmd.file_name,
                     file_content_b64=cmd.file_content_b64,
+                    integration_profile=profile,
                 )
             )
 
@@ -215,7 +222,22 @@ class AgentService:
             commands=commands if commands else None,
             heartbeat_interval=agent.heartbeat_interval,
             remote_targets=remote_targets if remote_targets else None,
+            active_plugins=(agent.enabled_plugins or agent.active_plugins),
+            pending_plugins=self._pending_plugins(
+                agent.enabled_plugins, data.active_plugins
+            ),
+            integration_profiles=self._integration_profiles_for_agent(db, agent.id),
+            plugin_updates=self._plugin_updates_for_agent(db, agent.id),
         )
+
+    @staticmethod
+    def _pending_plugins(
+        enabled_plugins: str | None, active_plugins: str | None
+    ) -> list[str]:
+        """Return server-selected plugins the agent has not yet reported active."""
+        enabled = {p.strip() for p in (enabled_plugins or "").split(",") if p.strip()}
+        active = {p.strip() for p in (active_plugins or "").split(",") if p.strip()}
+        return sorted(enabled - active)
 
     def _get_remote_targets_for_agent(
         self, db: Session, agent_id: int
@@ -256,6 +278,35 @@ class AgentService:
             }
             result.append(target_dict)
 
+        return result
+
+    def _integration_profiles_for_agent(
+        self, db: Session, agent_id: int
+    ) -> list[dict]:
+        """Return enabled integration profiles relevant to this agent."""
+        from app.repositories.integration_profile_repository import (
+            IntegrationProfileRepository,
+        )
+        from app.models.db.agent import Agent
+
+        agent = db.get(Agent, agent_id)
+        if agent is None:
+            return []
+
+        profiles = IntegrationProfileRepository.get_all_enabled_by_type(db, "veeam")
+        result = []
+        for p in profiles:
+            data = {
+                "id": p.id,
+                "name": p.name,
+                "integration_type": p.integration_type,
+                "base_url": p.base_url,
+                "username": p.username,
+                "ssh_host": p.ssh_host,
+                "ssh_port": p.ssh_port,
+                "ssh_username": p.ssh_username,
+            }
+            result.append(data)
         return result
 
     # ------------------------------------------------------------------ #
@@ -333,6 +384,7 @@ class AgentService:
             file_name=data.file_name,
             file_content_b64=data.file_content_b64,
             requested_by=data.requested_by,
+            integration_profile=json.dumps(data.integration_profile) if data.integration_profile is not None else None,
             status="pending",
         )
 
@@ -483,6 +535,53 @@ class AgentService:
             "agent_name": agent.name,
             "hostname": agent.hostname,
             "remote_targets": inventory.get("remote_targets", {}),
+        }
+
+    def get_plugin_file(
+        self, db: Session, agent_id: int, plugin_name: str
+    ) -> dict:
+        """Return plugin file content for agent-side installation."""
+        agent = AgentRepository.get_by_id(db, agent_id)
+        if agent is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Agent not found",
+            )
+
+        mapping = {
+            "docker": "docker_plugin.py",
+            "linux": "linux_plugin.py",
+            "hyperv": "hyperv_plugin.py",
+            "windows": "windows_plugin.py",
+            "zabbix": "zabbix_plugin.py",
+            "active_directory": "ad_plugin.py",
+            "microsoft_365": "m365_plugin.py",
+            "veeam": "veeam_plugin.py",
+            "proxmox": "proxmox_plugin.py",
+            "windows_docker": "windows_docker_plugin.py",
+        }
+        file_name = mapping.get(plugin_name)
+        if not file_name:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Unknown plugin",
+            )
+
+        plugin_root = Path(
+            os.environ.get("PROJECT_DIR", "/project")
+        ).resolve() / ".agents" / "agent" / "plugins"
+        plugin_file = plugin_root / file_name
+        if not plugin_file.exists():
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Plugin file not found",
+            )
+
+        content = plugin_file.read_text(encoding="utf-8")
+        return {
+            "plugin_name": plugin_name,
+            "file_name": file_name,
+            "content": content,
         }
 
     # ------------------------------------------------------------------ #
@@ -856,10 +955,42 @@ class AgentService:
             tags=agent.tags,
             notes=agent.notes,
             active_plugins=agent.active_plugins,
+            enabled_plugins=agent.enabled_plugins,
+            api_key_masked=f"mc_agent_...{agent.api_key[-6:]}" if agent.api_key else None,
             created_at=agent.created_at,
             updated_at=agent.updated_at,
             registered_at=agent.registered_at,
         )
+        return response
+
+
+    def _plugin_updates_for_agent(
+        self, db: Session, agent_id: int
+    ) -> dict[str, str] | None:
+        """Return base64-encoded plugin files that differ from deployed versions."""
+        from app.repositories.agent_repository import AgentRepository
+
+        agent = AgentRepository.get_by_id(db, agent_id)
+        if agent is None:
+            return None
+
+        plugin_root = (
+            Path(os.environ.get("PROJECT_DIR", "/project")).resolve()
+            / ".agents"
+            / "agent"
+            / "plugins"
+        )
+        updates: dict[str, str] = {}
+        for plugin_name in ["veeam"]:
+            file_name = f"{plugin_name}_plugin.py"
+            plugin_file = plugin_root / file_name
+            if not plugin_file.exists():
+                continue
+            content = plugin_file.read_text(encoding="utf-8")
+            updates[plugin_name] = base64.b64encode(
+                content.encode("utf-8")
+            ).decode("utf-8")
+        return updates or None
 
 
 agent_service = AgentService()
