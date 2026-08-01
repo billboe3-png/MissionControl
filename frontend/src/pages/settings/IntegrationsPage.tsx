@@ -111,8 +111,11 @@ export default function IntegrationsPage() {
         load();
     }, []);
 
-    const getProfiles = (type: string) =>
-        profiles.filter((p) => p.integration_type === type);
+    const getProfiles = (type: string) => {
+        const base = profiles.filter((p) => p.integration_type === type);
+        if (!selectedAgentId) return base;
+        return base.filter((p) => p.agent_id === selectedAgentId);
+      };
 
     const toggleExpand = (type: string) => {
         setExpandedTypes((prev) => {

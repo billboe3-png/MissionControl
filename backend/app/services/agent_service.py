@@ -295,6 +295,7 @@ class AgentService:
 
         profiles = IntegrationProfileRepository.get_all_enabled_by_type(db, "veeam")
         result = []
+        cipher = _get_cipher()
         for p in profiles:
             data = {
                 "id": p.id,
@@ -302,9 +303,14 @@ class AgentService:
                 "integration_type": p.integration_type,
                 "base_url": p.base_url,
                 "username": p.username,
+                "password": cipher.decrypt(p.encrypted_secret) if p.encrypted_secret else None,
+                "verify_ssl": p.verify_ssl if p.verify_ssl is not None else True,
+                "timeout": p.timeout,
+                "data_source": p.data_source,
                 "ssh_host": p.ssh_host,
                 "ssh_port": p.ssh_port,
                 "ssh_username": p.ssh_username,
+                "ssh_password": cipher.decrypt(p.ssh_password_encrypted) if p.ssh_password_encrypted else None,
             }
             result.append(data)
         return result
