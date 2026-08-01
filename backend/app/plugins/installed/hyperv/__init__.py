@@ -205,13 +205,13 @@ class HyperVPlugin(ServerPluginSDK):
         cp_sync = CheckpointSync()
         host_id = host.id
 
-        def _do_sync():
+        async def _do_sync():
             session = SessionLocal()
             try:
-                vm_sync.sync(session, provider, host_id)
-                net_sync.sync(session, provider, host_id)
-                vol_sync.sync(session, provider, host_id)
-                cp_sync.sync(session, provider, host_id)
+                await vm_sync.sync(session, provider, host_id)
+                await net_sync.sync(session, provider, host_id)
+                await vol_sync.sync(session, provider, host_id)
+                await cp_sync.sync(session, provider, host_id)
 
                 host_row = session.get(HyperVHost, host_id)
                 if host_row:
@@ -222,7 +222,7 @@ class HyperVPlugin(ServerPluginSDK):
             finally:
                 session.close()
 
-        await asyncio.to_thread(_do_sync)
+        await _do_sync()
 
     @staticmethod
     async def _mark_host_error(host_id: int, error_msg: str) -> None:

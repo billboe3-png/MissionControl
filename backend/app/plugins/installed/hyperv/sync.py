@@ -61,9 +61,9 @@ class HostSync:
 class VMSync:
     """Synchronize VM inventory from Hyper-V to local cache."""
 
-    def sync(self, session: Session, client: "HyperVProvider", host_id: int) -> dict[str, int]:
+    async def sync(self, session: Session, client: "HyperVProvider", host_id: int) -> dict[str, int]:
         """Pull VMs and upsert into hyperv_vms."""
-        result = client.get_vms()
+        result = await client.get_vms()
         if not result.get("connected"):
             return {"synced": 0, "error": result.get("error", "unknown")}
 
@@ -121,9 +121,9 @@ class VMSync:
 class NetworkSync:
     """Synchronize virtual switch data from Hyper-V to local cache."""
 
-    def sync(self, session: Session, client: "HyperVProvider", host_id: int) -> dict[str, int]:
+    async def sync(self, session: Session, client: "HyperVProvider", host_id: int) -> dict[str, int]:
         """Pull networks and upsert into hyperv_networks."""
-        result = client.get_networks()
+        result = await client.get_networks()
         if not result.get("connected"):
             return {"synced": 0, "error": result.get("error", "unknown")}
 
@@ -168,9 +168,9 @@ class NetworkSync:
 class VolumeSync:
     """Synchronize virtual hard disk data from Hyper-V to local cache."""
 
-    def sync(self, session: Session, client: "HyperVProvider", host_id: int) -> dict[str, int]:
+    async def sync(self, session: Session, client: "HyperVProvider", host_id: int) -> dict[str, int]:
         """Pull volumes and upsert into hyperv_volumes."""
-        result = client.get_storage()
+        result = await client.get_storage()
         if not result.get("connected"):
             return {"synced": 0, "error": result.get("error", "unknown")}
 
@@ -217,9 +217,9 @@ class VolumeSync:
 class CheckpointSync:
     """Synchronize checkpoint data from Hyper-V to local cache."""
 
-    def sync(self, session: Session, client: "HyperVProvider", host_id: int) -> dict[str, int]:
+    async def sync(self, session: Session, client: "HyperVProvider", host_id: int) -> dict[str, int]:
         """Pull checkpoints and upsert into hyperv_checkpoints."""
-        result = client.get_checkpoints()
+        result = await client.get_checkpoints()
         if not result.get("connected"):
             return {"synced": 0, "error": result.get("error", "unknown")}
 
