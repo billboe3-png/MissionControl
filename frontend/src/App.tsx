@@ -87,6 +87,7 @@ import TriggersPage from "./pages/automation/TriggersPage";
 import AuditPage from "./pages/automation/AuditPage";
 import AgentsOverviewPage from "./pages/agents/AgentsOverviewPage";
 import AgentDetailPage from "./pages/agents/AgentDetailPage";
+import AgentInstallPage from "./pages/agents/AgentInstallPage";
 import UniFiDashboardPage from "./pages/unifi/DashboardPage";
 import UniFiDevicesPage from "./pages/unifi/DevicesPage";
 import UniFiClientsPage from "./pages/unifi/ClientsPage";
@@ -189,6 +190,7 @@ export default function App() {
 
                             <Route path="/agents" element={<AgentsOverviewPage />} />
                             <Route path="/agents/:id" element={<AgentDetailPage />} />
+                            <Route path="/agents/install" element={<AgentInstallPage />} />
 
                             <Route path="/fleet" element={<AgentsOverviewPage />} />
                             <Route path="/fleet/timeline" element={<TimelinePage />} />

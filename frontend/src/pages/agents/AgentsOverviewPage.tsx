@@ -288,6 +288,9 @@ export default function AgentsOverviewPage() {
                         <button className="btn btn-primary" onClick={() => handleGlobalDownload("windows")}>
                             Download Windows bundle
                         </button>
+                        <Link to="/agents/install" className="btn btn-secondary">
+                            Install Agent
+                        </Link>
                     </div>
                 </div>
                 {globalDownload && (
