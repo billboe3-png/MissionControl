@@ -53,6 +53,13 @@ class AgentClient:
         for attempt in range(self.max_retries):
             try:
                 client = await self._get_client()
+                logger.debug(
+                    "HTTP %s %s headers=%s api_key_present=%s",
+                    method.upper(),
+                    path,
+                    {k: ("***" if k.lower() == "x-agent-api-key" else v) for k, v in client.headers.items()},
+                    bool(self.api_key),
+                )
                 response = await getattr(client, method)(path, **kwargs)
                 if response.status_code == 422:
                     logger.warning(
