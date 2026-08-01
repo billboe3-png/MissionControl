@@ -153,3 +153,26 @@ async def delete_project(
     service: ProjectService = Depends(get_project_service),
 ) -> None:
     await service.delete(db, project_id)
+
+
+@router.post(
+    "/{project_id}/close",
+    summary="Close project",
+    description="Mark a project as inactive without deleting it.",
+    response_model=ProjectResponse,
+    responses={
+        status.HTTP_200_OK: {
+            "description": "Project closed successfully.",
+            "model": ProjectResponse,
+        },
+        status.HTTP_404_NOT_FOUND: {
+            "description": "Project not found.",
+        },
+    },
+)
+async def close_project(
+    project_id: int,
+    db: Session = Depends(get_db),
+    service: ProjectService = Depends(get_project_service),
+) -> ProjectResponse:
+    return await service.close(db, project_id)

@@ -11,6 +11,7 @@ export const navigation: NavGroup[] = [
         label: "Tenants",
         icon: "🏢",
         items: [
+            { label: "Projects", path: "/projects", icon: "📁" },
             { label: "Companies", path: "/companies", icon: "🏢" },
         ],
     },

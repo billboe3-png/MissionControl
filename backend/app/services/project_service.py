@@ -125,6 +125,22 @@ class ProjectService:
                 detail="Project not found",
             )
 
+    async def close(self, db: Session, project_id: int) -> ProjectResponse:
+        """Close a project by marking it inactive."""
+        logger.info("Closing project id=%s", project_id)
+
+        project = self._repository.get_by_id(db, project_id)
+        if project is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Project not found",
+            )
+
+        project.active = False
+        db.commit()
+        db.refresh(project)
+        return ProjectResponse.model_validate(project)
+
     @staticmethod
     def _serialize_project(project: Project) -> dict:
         """

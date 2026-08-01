@@ -191,6 +191,7 @@ export type AgentUpdateInput = AgentUpdate & { hostname: string; operating_syste
 
 export const downloadAgentBundle = async (
     agentId: number,
+    _platform?: "linux" | "windows",
 ): Promise<void> => {
     const token = localStorage.getItem("mc_token");
     const headers: Record<string, string> = {};
