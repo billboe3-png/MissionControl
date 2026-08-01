@@ -10,6 +10,7 @@ Sprint 2.7 - Mission Control Agent.
 import logging
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Response, status
+from fastapi.responses import JSONResponse
 from pathlib import Path
 
 from sqlalchemy.orm import Session
@@ -386,9 +387,9 @@ async def get_agent_plugin(agent_id: int, plugin_name: str) -> Response:
         source = Path("/project/.agents/agent/plugins") / f"{plugin_name}_plugin.py"
     if not source.exists():
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="plugin not found")
-    return Response(
-        content=source.read_bytes(),
-        media_type="text/x-python",
+    content = source.read_text(encoding="utf-8")
+    return JSONResponse(
+        content={"file_name": source.name, "content": content},
         headers={"Cache-Control": "no-store", "X-Plugin-Name": plugin_name},
     )
 
