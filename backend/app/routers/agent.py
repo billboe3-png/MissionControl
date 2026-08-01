@@ -366,11 +366,30 @@ async def get_agent_plugin(agent_id: int, plugin_name: str) -> Response:
     )
 
 
-@router.get(
-    "/debug/download-agent-bundle",
+
+@router.post(
+    "/{agent_id}/bundles/download",
     include_in_schema=False,
 )
-async def debug_download_agent_bundle() -> Response:
+async def download_agent_bundle(agent_id: int) -> Response:
+    source = Path("/project/.agents/agent-bundle-live.zip")
+    if not source.exists():
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="bundle not found")
+    return Response(
+        content=source.read_bytes(),
+        media_type="application/zip",
+        headers={
+            "Cache-Control": "no-store",
+            "Content-Disposition": f'attachment; filename="missioncontrol-agent-3.0.0-rc1.zip"',
+        },
+    )
+
+
+@router.post(
+    "/bundles/download",
+    include_in_schema=False,
+)
+async def download_agent_bundle_global() -> Response:
     source = Path("/project/.agents/agent-bundle-live.zip")
     if not source.exists():
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="bundle not found")

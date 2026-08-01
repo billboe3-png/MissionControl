@@ -168,9 +168,9 @@ export const agentsApi = {
         );
     },
 
-    async downloadBundle(agentId: number, platform: "linux" | "windows"): Promise<Blob> {
+    async downloadBundle(agentId: number): Promise<Blob> {
         return apiClient<Blob>(
-            `${API}/${agentId}/bundles/download?platform=${encodeURIComponent(platform)}`,
+            `${API}/${agentId}/bundles/download`,
             { method: "POST" }
         );
     },
@@ -191,19 +191,15 @@ export type AgentUpdateInput = AgentUpdate & { hostname: string; operating_syste
 
 export const downloadAgentBundle = async (
     agentId: number,
-    platform: "linux" | "windows"
 ): Promise<void> => {
     const token = localStorage.getItem("mc_token");
     const headers: Record<string, string> = {};
     if (token) {
         headers["Authorization"] = `Bearer ${token}`;
     }
-    let path: string;
-    if (agentId && agentId > 0) {
-        path = `/api/v1/agents/${agentId}/bundles/download?platform=${encodeURIComponent(platform)}`;
-    } else {
-        path = `/api/v1/agents/bundles/download?platform=${encodeURIComponent(platform)}`;
-    }
+    const path = agentId && agentId > 0
+        ? `/api/v1/agents/${agentId}/bundles/download`
+        : `/api/v1/agents/bundles/download`;
     const response = await fetch(path, { method: "POST", headers, credentials: "same-origin", cache: "no-store" });
     if (!response.ok) {
         const detail = await response.json().catch(() => null);
@@ -213,7 +209,7 @@ export const downloadAgentBundle = async (
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `mission-control-agent-${platform}-${agentId}-${Date.now()}.zip`;
+    a.download = `mission-control-agent-${agentId > 0 ? agentId : "global"}-${Date.now()}.zip`;
     document.body.appendChild(a);
     a.click();
     a.remove();
