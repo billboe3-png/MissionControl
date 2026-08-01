@@ -820,6 +820,18 @@ class AgentService:
             )
         return self._to_response(agent)
 
+    async def reveal_api_key(
+        self, db: Session, agent_id: int
+    ) -> dict:
+        """Return the stored API key for the agent."""
+        agent = AgentRepository.get_by_id(db, agent_id)
+        if agent is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Agent not found",
+            )
+        return {"agent_id": agent.id, "api_key": agent.api_key}
+
     async def update_agent(
         self, db: Session, agent_id: int, data: AgentUpdate
     ) -> AgentResponse:

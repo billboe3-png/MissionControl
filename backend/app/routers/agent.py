@@ -187,6 +187,17 @@ async def delete_agent(
     await service.delete_agent(db, agent_id)
 
 
+@router.get("/{agent_id}/api-key")
+async def reveal_agent_api_key(
+    agent_id: int,
+    current_user: object = Depends(get_current_user),
+    db: Session = Depends(get_db),
+    service: AgentService = Depends(get_agent_service),
+) -> dict:
+    """Reveal the API key for an agent."""
+    return await service.reveal_api_key(db, agent_id)
+
+
 @router.post(
     "/{agent_id}/enable",
     response_model=AgentResponse,
