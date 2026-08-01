@@ -295,7 +295,11 @@ class AgentService:
 
         profiles = IntegrationProfileRepository.get_all_enabled_by_type(db, "veeam")
         result = []
-        cipher = _get_cipher()
+        from app.core.config import get_settings
+        from app.core.security import CredentialCipher
+
+        settings = get_settings()
+        cipher = CredentialCipher(settings.missioncontrol_secret_key)
         for p in profiles:
             data = {
                 "id": p.id,
