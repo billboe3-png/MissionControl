@@ -15,7 +15,7 @@ class HyperVPlugin(AgentPlugin):
     """Hyper-V virtualization management plugin."""
 
     name = "hyperv"
-    version = "1.0.0"
+    version = "3.0.0-rc1"
     description = "Hyper-V virtual machine management plugin"
     platform_required = "windows"
 

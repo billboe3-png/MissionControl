@@ -124,6 +124,10 @@ def load_config(config_path: str | Path | None = None) -> AgentSettings:
         default_path = DEFAULT_CONFIG_DIR / "config.yaml"
         if default_path.exists():
             config_path = default_path
+        else:
+            fallback = Path(__file__).resolve().parent.parent / "config.yaml"
+            if fallback.exists():
+                config_path = fallback
 
     if config_path and Path(config_path).exists():
         with open(config_path) as f:

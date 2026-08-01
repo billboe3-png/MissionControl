@@ -13,7 +13,7 @@ class ZabbixPlugin(AgentPlugin):
     """Zabbix monitoring data collector plugin."""
 
     name = "zabbix"
-    version = "1.0.0"
+    version = "3.0.0-rc1"
     description = "Zabbix monitoring data collector"
     platform_required = None
 
@@ -30,19 +30,8 @@ class ZabbixPlugin(AgentPlugin):
         self._base_url = os.environ.get("MC_ZABBIX_URL", "")
         self._username = os.environ.get("MC_ZABBIX_USERNAME", "")
         self._password = os.environ.get("MC_ZABBIX_PASSWORD", "")
-        if self._base_url and self._username and self._password:
-            logged_in = await self._jsonrpc("user.login", {
-                "username": self._username,
-                "password": self._password,
-            })
-            if logged_in and logged_in.get("result"):
-                self._auth_token = logged_in["result"]
-                logger.info("Zabbix plugin authenticated")
-                return True
-            logger.warning("Zabbix plugin auth failed")
-            return False
-        logger.info("Zabbix plugin not configured (set MC_ZABBIX_URL/USERNAME/PASSWORD)")
-        return False
+        logger.info("Zabbix plugin initialized")
+        return True
 
     async def _jsonrpc(self, method: str, params: dict) -> dict | None:
         try:
@@ -105,4 +94,58 @@ class ZabbixPlugin(AgentPlugin):
         }
 
     async def execute_command(self, command: str, args: dict[str, Any]) -> dict[str, Any]:
+        if command == "test_connection":
+            tested = await self._test_connection(args)
+            return {
+                "success": tested.get("available", False),
+                "stdout": str(tested),
+                "stderr": str(tested.get("error", "")),
+                "exit_code": 0 if tested.get("available") else 1,
+            }
         return {"success": False, "error": f"Unknown command: {command}"}
+
+    async def _test_connection(self, args: dict[str, Any] | None = None) -> dict[str, Any]:
+        args = args or {}
+        base_url = args.get("base_url") or self._base_url
+        username = args.get("username") or self._username
+        password = args.get("password") or self._password
+
+        if not base_url or not username or password is None:
+            return {"available": False, "error": "Missing Zabbix credentials"}
+        try:
+            from httpx import AsyncClient
+        except Exception as exc:
+            return {"available": False, "error": f"httpx_missing:{exc}"}
+        try:
+            async with AsyncClient(verify=False, timeout=max(int(args.get("timeout") or 30), 5)) as client:
+                login_payload = {
+                    "jsonrpc": "2.0",
+                    "method": "user.login",
+                    "params": {"username": username, "password": password},
+                    "id": 1,
+                }
+                login_resp = await client.post(base_url, json=login_payload)
+                login_data = login_resp.json()
+                if not login_data.get("result"):
+                    return {"available": False, "error": str(login_data.get("error"))}
+                auth_token = login_data["result"]
+                try:
+                    version_payload = {
+                        "jsonrpc": "2.0",
+                        "method": "apiinfo.version",
+                        "params": {},
+                        "auth": auth_token,
+                        "id": 2,
+                    }
+                    version_resp = await client.post(base_url, json=version_payload)
+                    version_data = version_resp.json()
+                    version = version_data.get("result")
+                    return {
+                        "available": True,
+                        "version": version,
+                        "latency_ms": None,
+                    }
+                except Exception as exc:
+                    return {"available": True, "version": None, "error": str(exc)}
+        except Exception as exc:
+            return {"available": False, "error": str(exc)}

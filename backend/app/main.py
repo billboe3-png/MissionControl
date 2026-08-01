@@ -173,7 +173,7 @@ except Exception as exc:
 
 app = FastAPI(
     title=settings.project_name,
-    version="3.0.0",
+    version="3.0.0-rc1",
     docs_url="/api/docs",
     redoc_url="/api/redoc",
     openapi_url="/api/openapi.json",
@@ -252,7 +252,7 @@ async def api_root() -> dict[str, str]:
     return {
         "name": settings.project_name,
         "status": "online",
-        "version": "3.0.0",
+        "version": "3.0.0-rc1",
     }
 
 
@@ -263,7 +263,7 @@ async def _startup_banner():
     from app.services.setup_service import is_setup_required
 
     print("")
-    print("  Mission Control v3.0.0")
+    print("  Mission Control v3.0.0-rc1")
     print("  ─────────────────────────────────────")
 
     # Run comprehensive startup validation

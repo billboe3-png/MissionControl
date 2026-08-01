@@ -7,6 +7,8 @@ import {
     integrationsApi,
     IntegrationProfile,
 } from "../../services/integrations";
+import type { Agent, AgentListResponse } from "../../services/agents";
+import { agentsApi } from "../../services/agents";
 import ZabbixConfigModal from "../../components/modals/ZabbixConfigModal";
 import ADConfigModal from "../../components/modals/ADConfigModal";
 import M365ConfigModal from "../../components/modals/M365ConfigModal";
@@ -69,6 +71,8 @@ const INTEGRATION_DEFS: {
 
 export default function IntegrationsPage() {
     const [profiles, setProfiles] = useState<IntegrationProfile[]>([]);
+    const [agents, setAgents] = useState<Agent[]>([]);
+    const [selectedAgentId, setSelectedAgentId] = useState<number | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [modalType, setModalType] = useState<ConfigModalType>(null);
@@ -83,8 +87,12 @@ export default function IntegrationsPage() {
 
     const load = async () => {
         try {
-            const items = await integrationsApi.list();
+            const [items, agentList] = await Promise.all([
+                integrationsApi.list(),
+                agentsApi.list(),
+            ]);
             setProfiles(items);
+            setAgents(agentList.items ?? []);
             // Auto-expand types that have profiles
             const types = new Set(items.map((p) => p.integration_type));
             setExpandedTypes((prev) => {
@@ -180,6 +188,23 @@ export default function IntegrationsPage() {
             <PageHeader
                 title="Integrations"
                 subtitle="Manage external platform connections"
+                actions={
+                    <select
+                        className="form-input"
+                        value={selectedAgentId ?? ""}
+                        onChange={(e) => {
+                            const val = e.target.value;
+                            setSelectedAgentId(val ? Number(val) : null);
+                        }}
+                    >
+                        <option value="">All agents / Global</option>
+                        {agents.map((a) => (
+                            <option key={a.id} value={a.id}>
+                                #{a.id} — {a.name}
+                            </option>
+                        ))}
+                    </select>
+                }
             />
 
             {error && (
@@ -269,6 +294,7 @@ export default function IntegrationsPage() {
                                                         <div className="integration-row-info">
                                                             <strong>{profile.name}</strong>
                                                             <div className="integration-row-meta">
+                                                                {profile.agent_id ? <span>Agent #{profile.agent_id}</span> : <span>Global</span>}
                                                                 {profile.username && <span>{profile.username}</span>}
                                                                 {profile.base_url && (
                                                                     <span className="integration-meta-url">{profile.base_url}</span>

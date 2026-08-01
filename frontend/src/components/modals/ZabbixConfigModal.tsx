@@ -4,6 +4,7 @@ import {
     integrationsApi,
     IntegrationProfile,
 } from "../../services/integrations";
+import AgentSelector from "../common/AgentSelector";
 
 interface ZabbixConfigModalProps {
     profile: IntegrationProfile | null;
@@ -24,6 +25,7 @@ export default function ZabbixConfigModal({
     const [password, setPassword] = useState("");
     const [verifySsl, setVerifySsl] = useState(profile?.verify_ssl ?? true);
     const [timeout, setTimeout_] = useState(String(profile?.timeout ?? 30));
+    const [agentId, setAgentId] = useState<number | null>(profile?.agent_id ?? null);
     const [loading, setLoading] = useState(false);
 
     const isEditing = profile !== null;
@@ -33,25 +35,23 @@ export default function ZabbixConfigModal({
         setLoading(true);
 
         try {
+            const payload: Record<string, unknown> = {
+                name,
+                base_url: baseUrl,
+                username,
+                verify_ssl: verifySsl,
+                timeout: parseInt(timeout, 10) || 30,
+                agent_id: agentId,
+            };
+            if (password) payload.password = password;
+
             if (isEditing) {
-                await integrationsApi.update(profile.id, {
-                    name,
-                    base_url: baseUrl,
-                    username,
-                    password: password || undefined,
-                    verify_ssl: verifySsl,
-                    timeout: parseInt(timeout, 10) || 30,
-                });
+                await integrationsApi.update(profile!.id, payload);
             } else {
                 await integrationsApi.create({
-                    name,
+                    ...payload,
                     integration_type: "zabbix",
-                    base_url: baseUrl,
-                    username,
-                    password,
-                    verify_ssl: verifySsl,
-                    timeout: parseInt(timeout, 10) || 30,
-                });
+                } as Parameters<typeof integrationsApi.create>[0]);
             }
             onSave();
         } catch (err) {
@@ -70,9 +70,9 @@ export default function ZabbixConfigModal({
 
                 <form onSubmit={handleSubmit}>
                     <div className="form-group">
-                        <label htmlFor="zb-name">Name</label>
+                        <label htmlFor="zbx-name">Name</label>
                         <input
-                            id="zb-name"
+                            id="zbx-name"
                             type="text"
                             className="form-input"
                             value={name}
@@ -83,15 +83,17 @@ export default function ZabbixConfigModal({
                         />
                     </div>
 
+                    <AgentSelector value={agentId} onChange={setAgentId} />
+
                     <div className="form-group">
-                        <label htmlFor="zb-url">Zabbix URL</label>
+                        <label htmlFor="zbx-url">Zabbix Server / Proxy</label>
                         <input
-                            id="zb-url"
-                            type="url"
+                            id="zbx-url"
+                            type="text"
                             className="form-input"
                             value={baseUrl}
                             onChange={(e) => setBaseUrl(e.target.value)}
-                            placeholder="https://zabbix.example.com"
+                            placeholder="zabbix.example.com or https://zabbix.example.com"
                             required
                         />
                     </div>

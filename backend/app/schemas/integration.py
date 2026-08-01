@@ -21,6 +21,7 @@ class IntegrationProfileCreate(BaseModel):
     integration_type: str = Field(..., min_length=1, max_length=50)
     description: str | None = None
     enabled: bool = False
+    agent_id: int | None = None
 
     base_url: str | None = None
     username: str | None = None
@@ -53,6 +54,7 @@ class IntegrationProfileUpdate(BaseModel):
     name: str | None = Field(None, min_length=1, max_length=200)
     description: str | None = None
     enabled: bool | None = None
+    agent_id: int | None = None
 
     base_url: str | None = None
     username: str | None = None
@@ -92,6 +94,7 @@ class IntegrationProfileResponse(BaseModel):
     integration_type: str
     description: str | None = None
     enabled: bool
+    agent_id: int | None = None
 
     base_url: str | None = None
     username: str | None = None

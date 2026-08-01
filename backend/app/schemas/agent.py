@@ -97,6 +97,7 @@ class AgentHeartbeatRequest(BaseModel):
     cpu_percent: float | None = None
     memory_percent: float | None = None
     disk_percent: float | None = None
+    ip_address: str | None = None
     active_plugins: str | None = None
 
 
@@ -108,6 +109,10 @@ class AgentHeartbeatResponse(BaseModel):
     latest_version: str | None = None
     heartbeat_interval: int = 30
     remote_targets: list[dict] | None = None
+    active_plugins: str | None = None
+    pending_plugins: list[str] | None = None
+    integration_profiles: list[dict] | None = None
+    plugin_updates: dict[str, str] | None = None
 
 
 class AgentPendingCommand(BaseModel):
@@ -120,6 +125,7 @@ class AgentPendingCommand(BaseModel):
     file_path: str | None = None
     file_name: str | None = None
     file_content_b64: str | None = None
+    integration_profile: dict | None = None
 
 
 # ------------------------------------------------------------------ #
@@ -158,17 +164,18 @@ class AgentCommandDispatchRequest(BaseModel):
     agent_id: int = Field(default=0, description="Set by router path parameter.")
     command_type: str = Field(
         ...,
-        description="Type: execute, script, upload, download, inventory, update",
+        description="Type: execute, script, upload, download, inventory, update, integration_test",
     )
     command: str = Field(
-        ...,
-        description="Command or script content.",
+        default="",
+        description="Command or plugin command content.",
     )
     timeout: int = Field(default=60, ge=1, le=3600)
     file_path: str | None = None
     file_name: str | None = None
     file_content_b64: str | None = None
     requested_by: str | None = None
+    integration_profile: dict | None = None
 
 
 # ------------------------------------------------------------------ #
@@ -197,6 +204,10 @@ class AgentUpdate(BaseModel):
     tags: str | None = None
     notes: str | None = None
     heartbeat_interval: int | None = Field(None, ge=10, le=300)
+    enabled_plugins: str | None = Field(
+        default=None,
+        description="Comma-separated plugin names to enable for this agent.",
+    )
 
 
 class AgentResponse(BaseModel):
@@ -222,6 +233,8 @@ class AgentResponse(BaseModel):
     tags: str | None = None
     notes: str | None = None
     active_plugins: str | None = None
+    enabled_plugins: str | None = None
+    api_key_masked: str | None = Field(default=None, description="Masked agent API key for display")
     created_at: datetime | None = None
     updated_at: datetime | None = None
     registered_at: datetime | None = None
@@ -275,6 +288,10 @@ class AgentCommandHistoryResponse(BaseModel):
     agent_name: str
     count: int
     items: list[AgentCommandResponse]
+
+
+class AgentApiKeyRevealResponse(BaseModel):
+    api_key: str
 
 
 class AgentInventoryResponse(BaseModel):

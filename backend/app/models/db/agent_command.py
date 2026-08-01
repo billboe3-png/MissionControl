@@ -125,6 +125,11 @@ class AgentCommand(Base):
         nullable=True,
     )
 
+    integration_profile: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
+    )
+
     # ------------------------------------------------------------------ #
     # Timestamps                                                          #
     # ------------------------------------------------------------------ #

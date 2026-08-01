@@ -54,6 +54,13 @@ class AgentClient:
             try:
                 client = await self._get_client()
                 response = await getattr(client, method)(path, **kwargs)
+                if response.status_code == 422:
+                    logger.warning(
+                        "422 response body from %s %s: %s",
+                        method.upper(),
+                        path,
+                        response.text[:400],
+                    )
                 response.raise_for_status()
                 return response.json()
             except httpx.HTTPStatusError as e:

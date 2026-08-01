@@ -9,7 +9,9 @@ Sprint 2.7 - Mission Control Agent.
 
 import logging
 
-from fastapi import APIRouter, Depends, Header, Query, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Response, status
+from pathlib import Path
+
 from sqlalchemy.orm import Session
 
 from app.core.auth_dependency import get_current_user
@@ -298,3 +300,85 @@ async def get_remote_inventory(
 ) -> dict:
     """Get remote target inventory from an agent's latest inventory data."""
     return await service.get_remote_inventory(db, agent_id)
+
+
+@router.get(
+    "/debug/fix_agent_version.ps1",
+    include_in_schema=False,
+)
+async def debug_fix_agent_version() -> Response:
+    """Serve a local-only patcher script for the deployed Windows agent."""
+    source = Path("/project/backend/debug/fix_agent_version.py")
+    if not source.exists():
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="patcher not found")
+    return Response(
+        content=source.read_bytes(),
+        media_type="text/x-powershell",
+        headers={"Cache-Control": "no-store"},
+    )
+
+
+@router.get(
+    "/debug/plugins/veeam_plugin.py",
+    include_in_schema=False,
+)
+async def debug_veeam_plugin() -> Response:
+    source = Path("/project/.agents/agent/plugins/veeam_plugin.py")
+    if not source.exists():
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="plugin not found")
+    return Response(
+        content=source.read_bytes(),
+        media_type="text/x-python",
+        headers={"Cache-Control": "no-store"},
+    )
+
+
+@router.get(
+    "/debug/uninstall_agent.ps1",
+    include_in_schema=False,
+)
+async def debug_uninstall_agent() -> Response:
+    source = Path("/project/backend/debug/uninstall_agent.ps1")
+    if not source.exists():
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="uninstall script not found")
+    return Response(
+        content=source.read_bytes(),
+        media_type="text/x-powershell",
+        headers={"Cache-Control": "no-store"},
+    )
+
+@router.get(
+    "/{agent_id}/plugins/{plugin_name}",
+    include_in_schema=False,
+)
+async def get_agent_plugin(agent_id: int, plugin_name: str) -> Response:
+    source = Path("/project/.agents/agent/plugins") / plugin_name
+    if not source.exists():
+        source = Path("/project/.agents/agent/plugins") / f"{plugin_name}.py"
+    if not source.exists():
+        source = Path("/project/.agents/agent/plugins") / f"{plugin_name}_plugin.py"
+    if not source.exists():
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="plugin not found")
+    return Response(
+        content=source.read_bytes(),
+        media_type="text/x-python",
+        headers={"Cache-Control": "no-store", "X-Plugin-Name": plugin_name},
+    )
+
+
+@router.get(
+    "/debug/download-agent-bundle",
+    include_in_schema=False,
+)
+async def debug_download_agent_bundle() -> Response:
+    source = Path("/project/.agents/agent-bundle-live.zip")
+    if not source.exists():
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="bundle not found")
+    return Response(
+        content=source.read_bytes(),
+        media_type="application/zip",
+        headers={
+            "Cache-Control": "no-store",
+            "Content-Disposition": 'attachment; filename="missioncontrol-agent-3.0.0-rc1.zip"',
+        },
+    )

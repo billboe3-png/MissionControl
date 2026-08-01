@@ -27,7 +27,7 @@ function formatDuration(ms: number | null): string {
 
 function HealthBar({ label, value }: { label: string; value: number | null }) {
     const pct = value ?? 0;
-    const color = pct > 90 ? "#ef4444" : pct > 70 ? "#f59e0b" : "#22c55e";
+    const color = pct >= 90 ? "#ef4444" : pct >= 70 ? "#f59e0b" : "#22c55e";
     return (
         <div className="agent-health-bar">
             <span className="agent-health-label">{label}</span>
@@ -35,6 +35,53 @@ function HealthBar({ label, value }: { label: string; value: number | null }) {
                 <div className="agent-health-fill" style={{ width: `${pct}%`, backgroundColor: color }} />
             </div>
             <span className="agent-health-value">{pct.toFixed(1)}%</span>
+        </div>
+    );
+}
+
+function Section({ title, children }: { title: string; children: React.ReactNode }) {
+    return (
+        <div className="agent-section-card" style={{ marginBottom: 16 }}>
+            <div className="agent-section-title" style={{ marginBottom: 8 }}>{title}</div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>{children}</div>
+        </div>
+    );
+}
+
+function KeyValue({ label, value }: { label: string; value: React.ReactNode }) {
+    return (
+        <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
+            <span style={{ opacity: 0.8 }}>{label}</span>
+            <span style={{ fontWeight: 600 }}>{value}</span>
+        </div>
+    );
+}
+
+function ListItems({ items }: { items: Array<Record<string, unknown>> }) {
+    if (!items.length) return <div className="empty-text">No items</div>;
+    return (
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {items.map((item, idx) => (
+                <div
+                    key={idx}
+                    style={{
+                        border: "1px solid rgba(255,255,255,0.08)",
+                        borderRadius: 8,
+                        padding: 10,
+                    }}
+                >
+                    <div style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 13 }}>
+                        {(Object.keys(item) as Array<keyof typeof item>).map((key) => (
+                            <div key={String(key)} style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
+                                <span style={{ opacity: 0.75, textTransform: "capitalize" }}>{String(key)}</span>
+                                <span style={{ fontWeight: 500, wordBreak: "break-word" }}>
+                                    {typeof item[key] === "object" ? JSON.stringify(item[key]) : String(item[key] ?? "—")}
+                                </span>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            ))}
         </div>
     );
 }
@@ -49,12 +96,198 @@ const TABS: { key: Tab; label: string; icon: string }[] = [
     { key: "history", label: "History", icon: "📜" },
 ];
 
+function PluginInventory({ inventory }: { inventory: Record<string, unknown> }) {
+    const entries = Object.entries(inventory);
+    if (!entries.length) return <div className="empty-text">No plugin data collected yet.</div>;
+
+    return (
+        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+            {entries.map(([key, value]) => {
+                const data = value as Record<string, unknown> | undefined;
+                if (!data || typeof data !== "object") return null;
+
+                return (
+                    <div key={key} className="agent-section-card">
+                        <div className="agent-section-title" style={{ marginBottom: 8, textTransform: "capitalize" }}>
+                            {key}
+                        </div>
+                        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                            {key === "docker" && (
+                                <>
+                                    {data.available !== undefined && (
+                                        <KeyValue label="Available" value={String(data.available)} />
+                                    )}
+                                    {data.version && <KeyValue label="Version" value={String(data.version)} />}
+                                    {data.container_count != null && (
+                                        <KeyValue label="Containers" value={String(data.container_count)} />
+                                    )}
+                                    {data.image_count != null && (
+                                        <KeyValue label="Images" value={String(data.image_count)} />
+                                    )}
+                                    {Array.isArray(data.containers) && data.containers.length > 0 && (
+                                        <div>
+                                            <div style={{ opacity: 0.85, marginBottom: 6 }}>Containers</div>
+                                            <ListItems items={data.containers as Array<Record<string, unknown>>} />
+                                        </div>
+                                    )}
+                                </>
+                            )}
+
+                            {key === "hyperv" && (
+                                <>
+                                    {data.vm_count != null && (
+                                        <KeyValue label="VMs" value={String(data.vm_count)} />
+                                    )}
+                                    {Array.isArray(data.vms) && data.vms.length > 0 && (
+                                        <div>
+                                            <div style={{ opacity: 0.85, marginBottom: 6 }}>Virtual Machines</div>
+                                            <ListItems items={data.vms as Array<Record<string, unknown>>} />
+                                        </div>
+                                    )}
+                                    {Array.isArray(data.switches) && data.switches.length > 0 && (
+                                        <div>
+                                            <div style={{ opacity: 0.85, marginBottom: 6 }}>Switches</div>
+                                            <ListItems items={data.switches as Array<Record<string, unknown>>} />
+                                        </div>
+                                    )}
+                                </>
+                            )}
+
+                            {key === "linux" && (
+                                <>
+                                    {data.distro && <KeyValue label="Distro" value={String(data.distro)} />}
+                                    {data.kernel && <KeyValue label="Kernel" value={String(data.kernel)} />}
+                                    {Array.isArray(data.systemd_services) && (
+                                        <div>
+                                            <div style={{ opacity: 0.85, marginBottom: 6 }}>Systemd Services</div>
+                                            <ListItems items={data.systemd_services as Array<Record<string, unknown>>} />
+                                        </div>
+                                    )}
+                                    {Array.isArray(data.cron_jobs) && (
+                                        <div>
+                                            <div style={{ opacity: 0.85, marginBottom: 6 }}>Cron Jobs</div>
+                                            <ListItems items={data.cron_jobs.map((name: string) => ({ name }))} />
+                                        </div>
+                                    )}
+                                </>
+                            )}
+
+                            {key === "zabbix" && (
+                                <>
+                                    {data.available !== undefined && (
+                                        <KeyValue label="Available" value={String(data.available)} />
+                                    )}
+                                    {data.host_count != null && (
+                                        <KeyValue label="Hosts" value={String(data.host_count)} />
+                                    )}
+                                    {Array.isArray(data.hosts) && data.hosts.length > 0 && (
+                                        <div>
+                                            <div style={{ opacity: 0.85, marginBottom: 6 }}>Hosts</div>
+                                            <ListItems items={data.hosts as Array<Record<string, unknown>>} />
+                                        </div>
+                                    )}
+                                </>
+                            )}
+
+                            {key === "veeam" && (
+                                <>
+                                    {data.available !== undefined && (
+                                        <KeyValue label="Available" value={String(data.available)} />
+                                    )}
+                                    {(data as Record<string, unknown>).server && (
+                                        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                                            <KeyValue label="Server" value={String(((data as Record<string, unknown>).server as Record<string, unknown>).name)} />
+                                            <KeyValue label="Version" value={String(((data as Record<string, unknown>).server as Record<string, unknown>).version)} />
+                                            <KeyValue label="Server ID" value={String(((data as Record<string, unknown>).server as Record<string, unknown>).server_id)} />
+                                        </div>
+                                    )}
+                                    {Array.isArray(data.jobs) && data.jobs.length > 0 && (
+                                        <div>
+                                            <div style={{ opacity: 0.85, marginBottom: 6 }}>Jobs</div>
+                                            <ListItems items={data.jobs as Array<Record<string, unknown>>} />
+                                        </div>
+                                    )}
+                                    {Array.isArray(data.sessions) && data.sessions.length > 0 && (
+                                        <div>
+                                            <div style={{ opacity: 0.85, marginBottom: 6 }}>Sessions</div>
+                                            <ListItems items={data.sessions as Array<Record<string, unknown>>} />
+                                        </div>
+                                    )}
+                                    {Array.isArray(data.repositories) && data.repositories.length > 0 && (
+                                        <div>
+                                            <div style={{ opacity: 0.85, marginBottom: 6 }}>Repositories</div>
+                                            <ListItems items={data.repositories as Array<Record<string, unknown>>} />
+                                        </div>
+                                    )}
+                                    {Array.isArray(data.managed_servers) && data.managed_servers.length > 0 && (
+                                        <div>
+                                            <div style={{ opacity: 0.85, marginBottom: 6 }}>Managed Servers</div>
+                                            <ListItems items={data.managed_servers as Array<Record<string, unknown>>} />
+                                        </div>
+                                    )}
+                                </>
+                            )}
+
+                            {key === "proxmox" && (
+                                <>
+                                    {data.available !== undefined && (
+                                        <KeyValue label="Available" value={String(data.available)} />
+                                    )}
+                                    {data.cluster_name && <KeyValue label="Cluster" value={String(data.cluster_name)} />}
+                                    {data.version && <KeyValue label="Version" value={String(data.version)} />}
+                                    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                                        {typeof data.nodes_total === "number" && <KeyValue label="Nodes" value={`${data.nodes_online ?? 0}/${data.nodes_total}`} />}
+                                        {typeof data.total_vms === "number" && <KeyValue label="VMs" value={`${data.running_vms ?? 0} running / ${data.total_vms}`} />}
+                                        {typeof data.total_lxc === "number" && <KeyValue label="LXCs" value={`${data.running_lxc ?? 0} running / ${data.total_lxc}`} />}
+                                        {typeof data.storage_count === "number" && <KeyValue label="Storage" value={String(data.storage_count)} />}
+                                    </div>
+                                    {Array.isArray(data.nodes) && data.nodes.length > 0 && (
+                                        <div>
+                                            <div style={{ opacity: 0.85, marginBottom: 6 }}>Nodes</div>
+                                            <ListItems items={data.nodes as Array<Record<string, unknown>>} />
+                                        </div>
+                                    )}
+                                    {Array.isArray(data.vms) && data.vms.length > 0 && (
+                                        <div>
+                                            <div style={{ opacity: 0.85, marginBottom: 6 }}>VMs</div>
+                                            <ListItems items={data.vms as Array<Record<string, unknown>>} />
+                                        </div>
+                                    )}
+                                    {Array.isArray(data.lxcs) && data.lxcs.length > 0 && (
+                                        <div>
+                                            <div style={{ opacity: 0.85, marginBottom: 6 }}>LXCs</div>
+                                            <ListItems items={data.lxcs as Array<Record<string, unknown>>} />
+                                        </div>
+                                    )}
+                                    {Array.isArray(data.storage) && data.storage.length > 0 && (
+                                        <div>
+                                            <div style={{ opacity: 0.85, marginBottom: 6 }}>Storage</div>
+                                            <ListItems items={data.storage as Array<Record<string, unknown>>} />
+                                        </div>
+                                    )}
+                                </>
+                            )}
+
+                            {!["docker", "hyperv", "linux", "zabbix"].includes(key) && (
+                                <pre className="inventory-data" style={{ margin: 0 }}>
+                                    {JSON.stringify(data, null, 2)}
+                                </pre>
+                            )}
+                        </div>
+                    </div>
+                );
+            })}
+        </div>
+    );
+}
+
 export default function AgentDetailPage() {
     const { id } = useParams<{ id: string }>();
     const navigate = useNavigate();
     const agentId = parseInt(id || "0", 10);
 
     const [agent, setAgent] = useState<Agent | null>(null);
+    const [initialAgent, setInitialAgent] = useState<Agent | null>(null);
     const [commands, setCommands] = useState<AgentCommand[]>([]);
     const [inventory, setInventory] = useState<AgentInventory | null>(null);
     const [activeTab, setActiveTab] = useState<Tab>("overview");
@@ -67,6 +300,32 @@ export default function AgentDetailPage() {
     const [executing, setExecuting] = useState(false);
     const [cmdStatusFilter, setCmdStatusFilter] = useState<string>("all");
     const [expandedCmd, setExpandedCmd] = useState<number | null>(null);
+    const [savingPlugins, setSavingPlugins] = useState(false);
+    const [draftPlugins, setDraftPlugins] = useState<Set<string>>(new Set());
+
+    const PLUGIN_OPTIONS = [
+        { label: "Active Directory", value: "active_directory" },
+        { label: "Docker", value: "docker" },
+        { label: "Hyper-V", value: "hyperv" },
+        { label: "Linux", value: "linux" },
+        { label: "Microsoft 365", value: "microsoft_365" },
+        { label: "Windows", value: "windows" },
+        { label: "Windows Docker", value: "windows_docker" },
+        { label: "Zabbix", value: "zabbix" },
+    ];
+
+    const enabledSet = (agent?.enabled_plugins || "")
+        .split(",")
+        .map((p) => p.trim())
+        .filter(Boolean);
+
+    useEffect(() => {
+        setDraftPlugins((prev) => {
+            const next = new Set(enabledSet);
+            if (prev.size === 0 && next.size === 0) return next;
+            return next;
+        });
+    }, [agent?.enabled_plugins]);
 
     const load = async () => {
         try {
@@ -75,6 +334,7 @@ export default function AgentDetailPage() {
                 agentsApi.getCommands(agentId),
             ]);
             setAgent(a);
+            setInitialAgent((prev) => prev ?? a);
             setCommands(c.items);
         } catch (e) {
             setError(e instanceof Error ? e.message : "Failed to load");
@@ -471,13 +731,9 @@ export default function AgentDetailPage() {
 
             {activeTab === "inventory" && (
                 <div>
-                    <div className="agent-section-title">Inventory Data</div>
-                    {inventory?.inventory ? (
-                        <div className="agent-section-card">
-                            <pre className="inventory-data">
-                                {JSON.stringify(inventory.inventory, null, 2)}
-                            </pre>
-                        </div>
+                    <div className="agent-section-title">Plugin Inventory</div>
+                    {inv ? (
+                        <PluginInventory inventory={inv} />
                     ) : (
                         <div className="empty-state">
                             <p>No inventory data available</p>
@@ -513,8 +769,8 @@ export default function AgentDetailPage() {
                                 <StatusBadge
                                     status={
                                         agent.health === "healthy" ? "healthy"
-                                        : agent.health === "warning" ? "warning"
-                                        : "error"
+                                            : agent.health === "warning" ? "warning"
+                                            : "error"
                                     }
                                     label={agent.health}
                                 />
@@ -533,25 +789,71 @@ export default function AgentDetailPage() {
 
             {activeTab === "configuration" && (
                 <div>
-                    <div className="agent-section-title">Agent Configuration</div>
+                    <div className="agent-section-title">Plugin Configuration</div>
                     <div className="agent-section-card">
-                        <div className="agent-overview-grid">
-                            <div className="agent-overview-card">
-                                <span className="agent-overview-label">Heartbeat Interval</span>
-                                <span className="agent-overview-value">{agent.heartbeat_interval}s</span>
-                            </div>
-                            <div className="agent-overview-card">
-                                <span className="agent-overview-label">Enabled</span>
-                                <span className="agent-overview-value">{agent.enabled ? "Yes" : "No"}</span>
-                            </div>
-                            <div className="agent-overview-card">
-                                <span className="agent-overview-label">Tags</span>
-                                <span className="agent-overview-value">{agent.tags || "None"}</span>
-                            </div>
-                            <div className="agent-overview-card">
-                                <span className="agent-overview-label">Notes</span>
-                                <span className="agent-overview-value">{agent.notes || "None"}</span>
-                            </div>
+                        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                            {PLUGIN_OPTIONS.map((plugin) => {
+                                const enabled = draftPlugins.has(plugin.value);
+                                return (
+                                    <label key={plugin.value} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                                        <input
+                                            type="checkbox"
+                                            checked={enabled}
+                                            onChange={(e) => {
+                                                setDraftPlugins((prev) => {
+                                                    const next = new Set(prev);
+                                                    if (e.target.checked) {
+                                                        next.add(plugin.value);
+                                                    } else {
+                                                        next.delete(plugin.value);
+                                                    }
+                                                    return next;
+                                                });
+                                            }}
+                                        />
+                                        <span>{plugin.label}</span>
+                                        <span style={{ opacity: 0.7, fontSize: 12 }}>{plugin.value}</span>
+                                    </label>
+                                );
+                            })}
+                        </div>
+                        <div style={{ marginTop: 12, display: "flex", gap: 10 }}>
+                            <LoadingButton
+                                loading={savingPlugins}
+                                className="btn btn-primary"
+                                onClick={async () => {
+                                    setSavingPlugins(true);
+                                    try {
+                                        const updated = await agentsApi.update(agentId, {
+                                            enabled_plugins: Array.from(draftPlugins).join(",") || null,
+                                        });
+                                        setAgent(updated);
+                                        setInitialAgent((prev) => prev ?? updated);
+                                        setError(null);
+                                    } catch (e) {
+                                        setError(e instanceof Error ? e.message : "Failed to save plugins");
+                                    } finally {
+                                        setSavingPlugins(false);
+                                    }
+                                }}
+                            >
+                                Save Plugins
+                            </LoadingButton>
+                            <button
+                                className="btn btn-secondary"
+                                onClick={() => {
+                                    setDraftPlugins(
+                                        new Set(
+                                            (initialAgent?.enabled_plugins || "")
+                                                .split(",")
+                                                .map((p) => p.trim())
+                                                .filter(Boolean)
+                                        )
+                                    );
+                                }}
+                            >
+                                Reset
+                            </button>
                         </div>
                     </div>
                 </div>
@@ -577,23 +879,14 @@ export default function AgentDetailPage() {
                                             }`}
                                         />
                                         <div className="timeline-content">
-                                            <div className="timeline-message">
-                                                <strong>{cmd.command_type}</strong>:{" "}
-                                                {cmd.command.length > 80
-                                                    ? cmd.command.substring(0, 80) + "…"
-                                                    : cmd.command}
+                                            <div style={{ fontWeight: 600 }}>{cmd.command_type}</div>
+                                            <div style={{ fontSize: 13, opacity: 0.85 }}>
+                                                {cmd.command.length > 140 ? cmd.command.slice(0, 140) + "…" : cmd.command}
                                             </div>
-                                            <div className="timeline-meta">
-                                                <span>Status: {cmd.status}</span>
-                                                {cmd.exit_code != null && <span>Exit: {cmd.exit_code}</span>}
-                                                {cmd.duration_ms != null && <span>{formatDuration(cmd.duration_ms)}</span>}
+                                            <div style={{ fontSize: 12, opacity: 0.7 }}>
+                                                {cmd.created_at ? new Date(cmd.created_at).toLocaleString() : ""}
                                             </div>
                                         </div>
-                                        <span className="timeline-time">
-                                            {cmd.created_at
-                                                ? new Date(cmd.created_at).toLocaleString()
-                                                : "—"}
-                                        </span>
                                     </div>
                                 ))}
                             </div>

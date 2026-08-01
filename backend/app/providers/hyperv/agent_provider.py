@@ -4,17 +4,21 @@ Mission Control Agent Hyper-V Provider
 Reads Hyper-V inventory from agent-collected remote target data
 stored in Agent.inventory_json.  Implements HyperVProvider so the
 existing Hyper-V pages work transparently for agent-relayed hosts.
-
 Write operations (start/stop/restart/pause/resume VM, checkpoints)
 dispatch commands to the agent via the server's command queue.
 """
 
+from __future__ import annotations
+
 import json
 import logging
+import re
 
 from .base_provider import HyperVProvider
 
 logger = logging.getLogger(__name__)
+
+_GUID_RE = re.compile(r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")
 
 _HYPERV_STATE_MAP = {
     0: "other",
@@ -36,13 +40,28 @@ _SWITCH_TYPE_MAP = {
     2: "private",
 }
 
-_HV_CMD_START = "Start-VM -Id '{vm_id}'"
-_HV_CMD_STOP = "Stop-VM -Id '{vm_id}'{force}"
-_HV_CMD_RESTART = "Restart-VM -Id '{vm_id}'"
-_HV_CMD_PAUSE = "Suspend-VM -Id '{vm_id}'"
-_HV_CMD_RESUME = "Resume-VM -Id '{vm_id}'"
-_HV_CMD_CREATE_CHECKPOINT = "Checkpoint-VM -Id '{vm_id}'{name}"
-_HV_CMD_DELETE_CHECKPOINT = "Remove-VMCheckpoint -Id '{checkpoint_id}'"
+
+def _vm_command(vm_id: str, cmdlet: str) -> str:
+    """Build a PowerShell command that works with VM names or GUIDs."""
+    if _GUID_RE.match(vm_id):
+        return f"Get-VM -Id '{vm_id}' | {cmdlet}"
+    return f"{cmdlet} -Name '{vm_id}'"
+
+
+def _checkpoint_identity(checkpoint_id: str) -> str:
+    """Return the appropriate PowerShell parameter for a checkpoint identifier."""
+    if _GUID_RE.match(checkpoint_id):
+        return f"-Id '{checkpoint_id}'"
+    return f"-Name '{checkpoint_id}'"
+
+
+_HV_CMD_START = "Start-VM {vm_id}"
+_HV_CMD_STOP = "Stop-VM {vm_id}{force}"
+_HV_CMD_RESTART = "Restart-VM {vm_id}"
+_HV_CMD_PAUSE = "Suspend-VM {vm_id}"
+_HV_CMD_RESUME = "Resume-VM {vm_id}"
+_HV_CMD_CREATE_CHECKPOINT = "Checkpoint-VM {vm_id}{name}"
+_HV_CMD_DELETE_CHECKPOINT = "Remove-VMCheckpoint {checkpoint_id}"
 
 
 class AgentHyperVProvider(HyperVProvider):
@@ -114,10 +133,11 @@ class AgentHyperVProvider(HyperVProvider):
 
     async def get_summary(self) -> dict:
         vms = self._get_vm_list()
-        running = sum(1 for v in vms if (v.get("state") or "").lower() == "running")
-        stopped = sum(1 for v in vms if (v.get("state") or "").lower() == "off")
-        paused = sum(1 for v in vms if (v.get("state") or "").lower() == "paused")
-        saved = sum(1 for v in vms if (v.get("state") or "").lower() == "saved")
+        states = [_HYPERV_STATE_MAP.get(v.get("state"), str(v.get("state", "")).lower()) for v in vms]
+        running = sum(1 for s in states if s == "running")
+        stopped = sum(1 for s in states if s == "stopped")
+        paused = sum(1 for s in states if s == "paused")
+        saved = sum(1 for s in states if s == "saved")
         total_mem = sum((v.get("memory_mb") or 0) for v in vms)
         return {
             "connected": True,
@@ -188,24 +208,24 @@ class AgentHyperVProvider(HyperVProvider):
     # ------------------------------------------------------------------ #
 
     async def start_vm(self, vm_id: str) -> dict:
-        cmd = _HV_CMD_START.format(vm_id=vm_id)
+        cmd = _vm_command(vm_id, 'Start-VM')
         return await self._dispatch(cmd)
 
     async def stop_vm(self, vm_id: str, force: bool = False) -> dict:
         force_flag = " -Force" if force else ""
-        cmd = _HV_CMD_STOP.format(vm_id=vm_id, force=force_flag)
+        cmd = _vm_command(vm_id, 'Stop-VM') + force_flag
         return await self._dispatch(cmd)
 
     async def restart_vm(self, vm_id: str) -> dict:
-        cmd = _HV_CMD_RESTART.format(vm_id=vm_id)
+        cmd = _vm_command(vm_id, 'Restart-VM')
         return await self._dispatch(cmd)
 
     async def pause_vm(self, vm_id: str) -> dict:
-        cmd = _HV_CMD_PAUSE.format(vm_id=vm_id)
+        cmd = _vm_command(vm_id, 'Suspend-VM')
         return await self._dispatch(cmd)
 
     async def resume_vm(self, vm_id: str) -> dict:
-        cmd = _HV_CMD_RESUME.format(vm_id=vm_id)
+        cmd = _vm_command(vm_id, 'Resume-VM')
         return await self._dispatch(cmd)
 
     # ------------------------------------------------------------------ #
@@ -226,10 +246,6 @@ class AgentHyperVProvider(HyperVProvider):
         ]
         return {"connected": True, "count": len(items), "items": items}
 
-    # ------------------------------------------------------------------ #
-    # Storage                                                             #
-    # ------------------------------------------------------------------ #
-
     async def get_storage(self) -> dict:
         return {"connected": True, "count": 0, "items": []}
 
@@ -248,14 +264,14 @@ class AgentHyperVProvider(HyperVProvider):
 
     async def create_checkpoint(self, vm_id: str, name: str | None = None) -> dict:
         name_flag = f" -SnapshotName '{name}'" if name else ""
-        cmd = _HV_CMD_CREATE_CHECKPOINT.format(vm_id=vm_id, name=name_flag)
+        cmd = _vm_command(vm_id, 'Checkpoint-VM') + name_flag
         return await self._dispatch(cmd)
 
     async def delete_snapshot(self, vm_id: str, snapshot_id: str) -> dict:
         return await self.delete_checkpoint(vm_id, snapshot_id)
 
     async def delete_checkpoint(self, vm_id: str, checkpoint_id: str) -> dict:
-        cmd = _HV_CMD_DELETE_CHECKPOINT.format(checkpoint_id=checkpoint_id)
+        cmd = f"Get-VMCheckpoint -Id '{checkpoint_id}' | Remove-VMCheckpoint"
         return await self._dispatch(cmd)
 
     # ------------------------------------------------------------------ #

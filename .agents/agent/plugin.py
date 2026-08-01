@@ -51,50 +51,68 @@ class AgentPlugin(ABC):
 class PluginManager:
     """Manages loading and lifecycle of agent plugins."""
 
-    def __init__(self):
+    def __init__(self, data_dir: Path | None = None):
         self._plugins: dict[str, AgentPlugin] = {}
         self._initialized: dict[str, bool] = {}
+        self._data_dir = data_dir
 
     async def discover_plugins(self) -> list[str]:
         """Discover available plugins from the plugins directory."""
         plugins_dir = Path(__file__).parent / "plugins"
         discovered = []
 
-        if not plugins_dir.exists():
-            return discovered
+        # Prefer the local install plugins dir so user/agent updates win
+        # over any SYSTEM site-packages copy.
+        local_plugins_dir = Path.cwd() / "agent" / "plugins"
+        search_dirs = []
+        if local_plugins_dir.exists() and local_plugins_dir != plugins_dir:
+            search_dirs.append(local_plugins_dir)
+        search_dirs.append(plugins_dir)
+        if self._data_dir:
+            data_plugins = self._data_dir / "plugins"
+            if data_plugins.exists() and data_plugins not in search_dirs:
+                search_dirs.append(data_plugins)
+        builtin_data_dir = Path(__file__).resolve().parent.parent / ".agents" / "agent" / "plugins"
+        if builtin_data_dir.exists() and builtin_data_dir not in search_dirs:
+            search_dirs.append(builtin_data_dir)
 
-        for py_file in plugins_dir.glob("*_plugin.py"):
-            module_name = py_file.stem
-            try:
-                spec = importlib.util.spec_from_file_location(
-                    f"agent.plugins.{module_name}", py_file
-                )
-                if spec and spec.loader:
-                    module = importlib.util.module_from_spec(spec)
-                    spec.loader.exec_module(module)
+        for scan_dir in search_dirs:
+            if not scan_dir.exists():
+                continue
+            for py_file in scan_dir.glob("*_plugin.py"):
+                module_name = py_file.stem
+                try:
+                    spec = importlib.util.spec_from_file_location(
+                        f"agent.plugins.{module_name}", py_file
+                    )
+                    if spec and spec.loader:
+                        module = importlib.util.module_from_spec(spec)
+                        spec.loader.exec_module(module)
 
-                    for attr_name in dir(module):
-                        attr = getattr(module, attr_name)
-                        if (
-                            isinstance(attr, type)
-                            and issubclass(attr, AgentPlugin)
-                            and attr is not AgentPlugin
-                        ):
-                            plugin = attr()
-                            if plugin.is_compatible():
-                                self._plugins[plugin.name] = plugin
-                                discovered.append(plugin.name)
-                                logger.info(
-                                    "Discovered plugin: %s v%s",
-                                    plugin.name,
-                                    plugin.version,
-                                )
-            except Exception as e:
-                logger.error(
-                    "Failed to load plugin %s: %s",
-                    module_name,
-                    e,
-                )
+                        for attr_name in dir(module):
+                            attr = getattr(module, attr_name)
+                            if (
+                                isinstance(attr, type)
+                                and issubclass(attr, AgentPlugin)
+                                and attr is not AgentPlugin
+                            ):
+                                plugin = attr()
+                                if plugin.is_compatible():
+                                    if plugin.name in self._plugins:
+                                        continue
+                                    self._plugins[plugin.name] = plugin
+                                    discovered.append(plugin.name)
+                                    logger.info(
+                                        "Discovered plugin: %s v%s",
+                                        plugin.name,
+                                        plugin.version,
+                                    )
+                except Exception as e:
+                    logger.error(
+                        "Failed to load plugin %s: %s",
+                        module_name,
+                        e,
+                    )
 
         return discovered
 
