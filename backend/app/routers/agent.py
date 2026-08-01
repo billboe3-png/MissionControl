@@ -358,6 +358,22 @@ async def debug_uninstall_agent() -> Response:
         headers={"Cache-Control": "no-store"},
     )
 
+
+@router.get(
+    "/debug/install-agent.bat",
+    include_in_schema=False,
+)
+async def debug_install_agent_bat() -> Response:
+    source = Path("/project/backend/debug/install-agent.bat")
+    if not source.exists():
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="installer not found")
+    return Response(
+        content=source.read_bytes(),
+        media_type="application/x-msdos-program",
+        headers={"Cache-Control": "no-store"},
+    )
+
+
 @router.get(
     "/{agent_id}/plugins/{plugin_name}",
     include_in_schema=False,
