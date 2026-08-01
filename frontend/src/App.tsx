@@ -70,6 +70,7 @@ import AIHealthScorePage from "./pages/ai/HealthScorePage";
 import AIHistoryPage from "./pages/ai/HistoryPage";
 import CompaniesPage from "./pages/companies/CompaniesPage";
 import ProjectsPage from "./pages/projects/ProjectsPage";
+import ResumesPage from "./pages/resume/ResumesPage";
 import CompanyDetailPage from "./pages/companies/CompanyDetailPage";
 import CompanyWorkspacePage from "./pages/companies/CompanyWorkspacePage";
 import TimelinePage from "./pages/remote/TimelinePage";
@@ -139,6 +140,7 @@ export default function App() {
                             <Route path="/identity/microsoft-365" element={<Microsoft365Page />} />
 
                             <Route path="/projects" element={<ProjectsPage />} />
+                            <Route path="/resume" element={<ResumesPage />} />
                             <Route path="/companies" element={<CompaniesPage />} />
                             <Route path="/companies/:id" element={<CompanyDetailPage />} />
 
