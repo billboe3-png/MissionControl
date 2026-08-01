@@ -2,26 +2,32 @@
 setlocal enabledelayedexpansion
 
 :: Mission Control Agent Installer for Windows
-:: Usage: install-agent.bat <AgentId> <ApiKey> [ServerUrl] [InstallDir]
-if "%~1"=="" (
-    echo ERROR: Agent ID required
-    echo Usage: %~nx0 ^<AgentId^> ^<ApiKey^> [ServerUrl] [InstallDir]
-    pause
-    exit /b 1
-)
-if "%~2"=="" (
-    echo ERROR: API key required
-    echo Usage: %~nx0 ^<AgentId^> ^<ApiKey^> [ServerUrl] [InstallDir]
-    pause
-    exit /b 1
-)
+:: If no arguments are provided, the installer prompts interactively.
 
 set AGENT_ID=%~1
 set API_KEY=%~2
 set SERVER_URL=%~3
-if "%SERVER_URL%"=="" set SERVER_URL=https://missioncontrol.optichosting.co.za
 set INSTALL_DIR=%~4
+
+if "%AGENT_ID%"=="" (
+    set /p AGENT_ID="Enter Agent ID: "
+)
+if "%API_KEY%"=="" (
+    set /p API_KEY="Enter API Key: "
+)
+if "%SERVER_URL%"=="" set SERVER_URL=https://missioncontrol.optichosting.co.za
 if "%INSTALL_DIR%"=="" set INSTALL_DIR=C:\MissionControlAgent
+
+if "%AGENT_ID%"=="" (
+    echo ERROR: Agent ID is required
+    pause
+    exit /b 1
+)
+if "%API_KEY%"=="" (
+    echo ERROR: API key is required
+    pause
+    exit /b 1
+)
 
 echo.
 echo ========================================
