@@ -39,7 +39,16 @@ class SSHConnector(RemoteConnector):
         elif self.password:
             connect_kwargs["password"] = self.password
 
+        logger.info(
+            "SSHConnector connecting to %s:%s as %s (password=%s key=%s)",
+            self.hostname,
+            self.port,
+            self.username,
+            "yes" if self.password else "no",
+            "yes" if self.ssh_key else "no",
+        )
         client.connect(**connect_kwargs)
+        logger.info("SSHConnector connected to %s:%s", self.hostname, self.port)
         return client
 
     async def _run_cmd(self, command: str, timeout: int = 30) -> dict:
