@@ -1,9 +1,10 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import CytoscapeComponent from "react-cytoscapejs";
 import { Network as VisNetwork } from "vis-network/standalone";
+// @ts-ignore
 import DataSet from "vis-data";
 import * as d3 from "d3";
-import { networkApi, NetworkTopologyResponse, NetworkDevice } from "../services/network";
+import { NetworkTopologyResponse, NetworkDevice, DEMO_TOPOLOGY } from "../services/network";
 
 type ViewMode = "cytoscape" | "vis" | "d3";
 
@@ -17,12 +18,11 @@ const COLORS: Record<string, string> = {
 
 function classify(device: NetworkDevice): string {
   const name = (device.hostname || "").toLowerCase();
-  const ip = device.ip || "";
   if (name.includes("switch") || name.includes("sw")) return "switch";
   if (name.includes("veeam") || name.includes("backup")) return "server";
   if (name.includes("nas") || name.includes("storage")) return "storage";
   if (name.includes("hyperv") || name.includes("vm")) return "server";
-  if (ip.startsWith("192.168.10.")) return "workstation";
+  if ((device.ip || "").startsWith("192.168.10.")) return "workstation";
   return "unknown";
 }
 
@@ -33,8 +33,6 @@ function colorFor(device: NetworkDevice) {
 export default function NetworkTopologyPage() {
   const [view, setView] = useState<ViewMode>("cytoscape");
   const [selected, setSelected] = useState<NetworkDevice | null>(null);
-  const [agentId] = useState(1);
-
   const [topology, setTopology] = useState<NetworkTopologyResponse | undefined>(undefined);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -42,11 +40,19 @@ export default function NetworkTopologyPage() {
   useEffect(() => {
     let cancelled = false;
     setIsLoading(true);
-    networkApi.getTopology(agentId)
-      .then((res) => { if (!cancelled) { setTopology(res.data); setIsLoading(false); } })
-      .catch((e) => { if (!cancelled) { setError(e instanceof Error ? e.message : "Failed to load"); setIsLoading(false); } });
+    Promise.resolve({ data: DEMO_TOPOLOGY }).then((res) => {
+      if (!cancelled) {
+        setTopology(res.data);
+        setIsLoading(false);
+      }
+    }).catch((e: any) => {
+      if (!cancelled) {
+        setError(e?.message || "Failed to load");
+        setIsLoading(false);
+      }
+    });
     return () => { cancelled = true; };
-  }, [agentId]);
+  }, []);
 
   const buildElements = () => {
     if (!topology) return { nodes: [], edges: [] };
@@ -66,7 +72,7 @@ export default function NetworkTopologyPage() {
       });
     };
 
-    topology.devices.forEach((device) => {
+    (topology.devices || []).forEach((device: NetworkDevice) => {
       const devId = device.mac || device.ip;
       addNode(devId, device.hostname || device.ip, device);
 
@@ -87,7 +93,7 @@ export default function NetworkTopologyPage() {
 
   const renderCytoscape = () => {
     const elements = buildElements();
-    const layout = { name: "cose", animate: false, padding: 40 };
+    const layout = { name: "cose" as const, animate: false, padding: 40 };
     const stylesheet = [
       {
         selector: "node",
@@ -133,102 +139,101 @@ export default function NetworkTopologyPage() {
   };
 
   const renderVis = () => {
-    const container = document.createElement("div");
+    const ref = useRef<HTMLDivElement>(null);
     const { nodes, edges } = buildElements();
-    const data = {
-      nodes: new (DataSet as any)(nodes.map((n: any) => n.data)),
-      edges: new (DataSet as any)(
-        edges.map((e: any) => ({
-          ...e.data,
-          arrows: "to",
-          font: { align: "middle", size: 10 },
-        }))
-      ),
-    };
-    const options = {
-      nodes: {
-        shape: "dot",
-        size: 18,
-        font: { color: "#e5e7eb" },
-        borderWidth: 2,
-        color: { border: "#111827", background: "#2563eb" },
-      },
-      edges: {
-        color: { color: "#94a3b8", highlight: "#22d3ee" },
-        arrows: { to: { enabled: true, scaleFactor: 0.6 } },
-        font: { color: "#e5e7eb", size: 10, strokeWidth: 3 },
-        smooth: { type: "cubicBezier" },
-      },
-      physics: { stabilization: true },
-      interaction: { hover: true },
-    };
-    new VisNetwork(container, data, options);
-    return (
-      <div
-        ref={(node) => {
-          if (node && node.firstChild) node.firstChild.remove();
-          if (node) node.appendChild(container);
-        }}
-        style={{ width: "100%", height: "100%" }}
-      />
-    );
+
+    useEffect(() => {
+      if (!ref.current) return;
+      ref.current.innerHTML = "";
+      const container = document.createElement("div");
+      container.style.width = "100%";
+      container.style.height = "100%";
+      ref.current.appendChild(container);
+
+      const data = {
+        nodes: new DataSet(nodes.map((n: any) => n.data)),
+        edges: new DataSet(
+          edges.map((e: any) => ({
+            ...e.data,
+            arrows: "to" as const,
+            font: { align: "middle" as const, size: 10 },
+          }))
+        ),
+      };
+      const options = {
+        nodes: {
+          shape: "dot" as const,
+          size: 18,
+          font: { color: "#e5e7eb" },
+          borderWidth: 2,
+          color: { border: "#111827", background: "#2563eb" },
+        },
+        edges: {
+          color: { color: "#94a3b8", highlight: "#22d3ee" },
+          arrows: { to: { enabled: true, scaleFactor: 0.6 } },
+          font: { color: "#e5e7eb", size: 10, strokeWidth: 3 },
+          smooth: { enabled: true, type: "cubicBezier", roundness: 0.1 },
+        },
+        physics: { stabilization: true },
+        interaction: { hover: true },
+      };
+      new VisNetwork(container, data, options);
+    }, [nodes, edges]);
+
+    return <div ref={ref} style={{ width: "100%", height: "100%" }} />;
   };
 
   const renderD3 = () => {
-    const ref = document.createElement("div");
+    const ref = useRef<HTMLDivElement>(null);
     const { nodes, edges } = buildElements();
-    const nodeMap = new Map(nodes.map((n: any) => [n.data.id, n.data]));
+    const nodeMap = new Map((nodes as any[]).map((n: any) => [n.data.id, n.data]));
     const width = 1200;
     const height = 800;
 
-    const svg = d3.select(ref).append("svg").attr("viewBox", [0, 0, width, height]);
-    const g = svg.append("g");
-    const zoom = d3.zoom<SVGSVGElement, unknown>().scaleExtent([0.2, 4]).on("zoom", (e) => g.attr("transform", e.transform));
-    svg.call(zoom as any);
+    useEffect(() => {
+      if (!ref.current) return;
+      ref.current.innerHTML = "";
+      const svg = d3.select(ref.current).append("svg").attr("viewBox", [0, 0, width, height]);
+      const g = svg.append("g");
+      const zoom = d3.zoom<SVGSVGElement, unknown>().scaleExtent([0.2, 4]).on("zoom", (event) => g.attr("transform", event.transform));
+      svg.call(zoom as any);
 
-    const simulation = d3
-      .forceSimulation(Array.from(nodeMap.values()))
-      .force("link", d3.forceLink(edges.map((e: any) => e.data)).id((d: any) => d.id))
-      .force("charge", d3.forceManyBody().strength(-400))
-      .force("center", d3.forceCenter(width / 2, height / 2));
+      const simulation = d3
+        .forceSimulation(Array.from(nodeMap.values()) as any[])
+        .force("link", d3.forceLink(edges.map((e: any) => e.data)).id((d: any) => d.id))
+        .force("charge", d3.forceManyBody().strength(-400))
+        .force("center", d3.forceCenter(width / 2, height / 2));
 
-    const link = g.append("g").selectAll("line").data(edges).join("line").attr("stroke", "#475569").attr("stroke-width", 1.5);
-    const label = g.append("g").selectAll("text").data(edges).join("text").text((d: any) => d.data.label).attr("font-size", 9).attr("fill", "#e5e7eb").attr("text-anchor", "middle");
-    const node = g
-      .append("g")
-      .selectAll("circle")
-      .data(nodeMap.values() as any[])
-      .join("circle")
-      .attr("r", 10)
-      .attr("fill", (d: any) => d.color?.background || "#2563eb")
-      .attr("stroke", "#111827")
-      .attr("stroke-width", 2)
-      .on("click", (_: any, d: any) => {
-        const dev = topology?.devices.find((x: NetworkDevice) => (x.mac || x.ip) === d.id);
-        if (dev) setSelected(dev);
+      const link = g.append("g").selectAll("line").data(edges).join("line").attr("stroke", "#475569").attr("stroke-width", 1.5);
+      const label = g.append("g").selectAll("text").data(edges).join("text").text((d: any) => d.data.label).attr("font-size", 9).attr("fill", "#e5e7eb").attr("text-anchor", "middle");
+      const node = g
+        .append("g")
+        .selectAll("circle")
+        .data(Array.from(nodeMap.values()))
+        .join("circle")
+        .attr("r", 10)
+        .attr("fill", (d: any) => d.color?.background || "#2563eb")
+        .attr("stroke", "#111827")
+        .attr("stroke-width", 2)
+        .on("click", (_event: any, d: any) => {
+          const dev = (topology?.devices || []).find((x: NetworkDevice) => (x.mac || x.ip) === d.id);
+          if (dev) setSelected(dev);
+        });
+
+      simulation.on("tick", () => {
+        link
+          .attr("x1", (d: any) => d.source.x)
+          .attr("y1", (d: any) => d.source.y)
+          .attr("x2", (d: any) => d.target.x)
+          .attr("y2", (d: any) => d.target.y);
+        label
+          .attr("x", (d: any) => (d.source.x + d.target.x) / 2)
+          .attr("y", (d: any) => (d.source.y + d.target.y) / 2);
+        node.attr("cx", (d: any) => d.x).attr("cy", (d: any) => d.y);
       });
+    }, [nodes, edges, topology?.devices]);
 
-    simulation.on("tick", () => {
-      link
-        .attr("x1", (d: any) => d.source.x)
-        .attr("y1", (d: any) => d.source.y)
-        .attr("x2", (d: any) => d.target.x)
-        .attr("y2", (d: any) => d.target.y);
-      label
-        .attr("x", (d: any) => (d.source.x + d.target.x) / 2)
-        .attr("y", (d: any) => (d.source.y + d.target.y) / 2);
-      node.attr("cx", (d: any) => d.x).attr("cy", (d: any) => d.y);
-    });
-
-    return (
-      <div
-        ref={(node) => {
-          if (node && node.firstChild) node.firstChild.remove();
-          if (node) node.appendChild(ref);
-        }}
-        style={{ width: "100%", height: "100%" }}
-      />
-    );
+    return <div ref={ref} style={{ width: "100%", height: "100%" }} />;
   };
 
   const renderGraph = () => {
@@ -239,6 +244,8 @@ export default function NetworkTopologyPage() {
         return renderVis();
       case "d3":
         return renderD3();
+      default:
+        return null;
     }
   };
 
@@ -281,7 +288,7 @@ export default function NetworkTopologyPage() {
           </div>
           <h3 className="text-gray-200 font-medium mt-4">Devices</h3>
           <div className="space-y-2 max-h-[320px] overflow-auto">
-            {topology?.devices.map((device: NetworkDevice) => (
+            {(topology?.devices || []).map((device: NetworkDevice) => (
               <button
                 key={device.mac || device.ip}
                 onClick={() => setSelected(device)}
@@ -306,7 +313,7 @@ export default function NetworkTopologyPage() {
             <button onClick={() => setSelected(null)} className="text-gray-400 hover:text-gray-200">Close</button>
           </div>
           <div className="mt-2 grid grid-cols-2 gap-x-6 gap-y-1 text-sm">
-            {Object.entries(selected).map(([key, value]) => (
+            {(Object.entries(selected) as Array<[string, any]>).map(([key, value]) => (
               <div key={key}>
                 <span className="text-gray-500">{key}: </span>
                 <span className="text-gray-200">{String(value ?? "")}</span>
