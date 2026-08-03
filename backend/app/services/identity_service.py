@@ -1,3 +1,4 @@
+import json
 """
 Mission Control Identity Service
 
@@ -19,11 +20,17 @@ logger = logging.getLogger(__name__)
 
 
 def _get_ad_provider_from_db(db: Session, profile_id: int | None = None):
-    """Get AD provider from an IntegrationProfile, falling back to env/mock."""
+    """Get AD provider from an IntegrationProfile, preferring agent relay
+    when the profile is bound to an agent, otherwise falling back to
+    direct LDAP or env/mock."""
     try:
         from app.core.config import get_settings
         from app.core.security import CredentialCipher
+        from app.models.db.agent import Agent
         from app.models.db.integration_profile import IntegrationProfile
+        from app.providers.identity.agent_ad_provider import (
+            AgentActiveDirectoryProvider,
+        )
         from app.providers.identity.ldap_ad_provider import (
             LDAPActiveDirectoryProvider,
         )
@@ -47,7 +54,29 @@ def _get_ad_provider_from_db(db: Session, profile_id: int | None = None):
                 .first()
             )
 
-        if profile and profile.domain and profile.username:
+        if not profile:
+            raise ValueError("No AD integration profile available")
+
+        if profile.agent_id is not None:
+            agent = (
+                db.query(Agent)
+                .filter(Agent.id == profile.agent_id)
+                .first()
+            )
+            if agent and agent.inventory_json:
+                try:
+                    full_inv = json.loads(agent.inventory_json)
+                    ad_inv = full_inv.get("plugins", {}).get("active_directory")
+                    if ad_inv:
+                        hostname = agent.name or full_inv.get("system", {}).get("hostname", "")
+                        return AgentActiveDirectoryProvider(
+                            inventory=ad_inv,
+                            hostname=hostname or f"agent-{agent.id}",
+                        )
+                except (json.JSONDecodeError, TypeError):
+                    pass
+
+        if profile.domain and profile.username:
             password = ""
             if profile.encrypted_secret:
                 try:
