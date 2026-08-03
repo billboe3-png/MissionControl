@@ -18,7 +18,7 @@ class SSHConnector(RemoteConnector):
         self._client = None
 
     def _get_client(self):
-        import paramiko
+        import paramiko, traceback
 
         client = paramiko.SSHClient()
         client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
@@ -28,6 +28,8 @@ class SSHConnector(RemoteConnector):
             "port": self.port,
             "username": self.username,
             "timeout": 10,
+            "allow_agent": False,
+            "look_for_keys": False,
         }
 
         if self.ssh_key:
@@ -47,8 +49,18 @@ class SSHConnector(RemoteConnector):
             "yes" if self.password else "no",
             "yes" if self.ssh_key else "no",
         )
-        client.connect(**connect_kwargs)
-        logger.info("SSHConnector connected to %s:%s", self.hostname, self.port)
+        try:
+            client.connect(**connect_kwargs)
+            logger.info("SSHConnector connected to %s:%s", self.hostname, self.port)
+        except Exception as exc:
+            logger.error(
+                "SSHConnector connect failed to %s:%s: %s\n%s",
+                self.hostname,
+                self.port,
+                repr(exc),
+                traceback.format_exc(),
+            )
+            raise
         return client
 
     async def _run_cmd(self, command: str, timeout: int = 30) -> dict:
