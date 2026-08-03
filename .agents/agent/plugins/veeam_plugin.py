@@ -62,6 +62,24 @@ class VeeamPlugin(AgentPlugin):
         self._token = None
         self._token_expires_at = 0.0
 
+    def _find_remote_target_for_api_base(self) -> dict[str, Any] | None:
+        """Find an SSH remote target whose hostname matches the Veeam API base."""
+        remote_targets = (self._context.get("remote_targets") or [])
+        if not self._api_base or not remote_targets:
+            return None
+        api_base = self._api_base.strip()
+        if api_base.startswith("https://"):
+            api_base = api_base[len("https://"):]
+        if api_base.startswith("http://"):
+            api_base = api_base[len("http://"):]
+        hostname = api_base.split("/", 1)[0].split(":", 1)[0]
+        for target in remote_targets:
+            if not isinstance(target, dict):
+                continue
+            if target.get("hostname") == hostname and (target.get("protocol") or "").lower() == "ssh":
+                return target
+        return None
+
     async def _configure_from_context(self) -> None:
         """Load or reload integration profile settings."""
         profiles = (
@@ -99,6 +117,10 @@ class VeeamPlugin(AgentPlugin):
                     "password": ssh_password or self._password,
                     "protocol": "ssh",
                 }
+            else:
+                remote_target = self._find_remote_target_for_api_base()
+                if remote_target:
+                    self._ssh_target = remote_target
 
         system = platform.system()
 

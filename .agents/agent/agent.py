@@ -133,11 +133,13 @@ class MissionControlAgent:
             )
 
     def _update_plugin_integration_context(self, response: dict[str, Any]) -> None:
-        """Push integration profiles into initialized plugins."""
+        """Push integration profiles and remote targets into initialized plugins."""
         profiles = response.get("integration_profiles") or []
+        remote_targets = response.get("remote_targets") or []
         for plugin in self.plugin_manager._plugins.values():
             if hasattr(plugin, "_context"):
                 plugin._context["integration_profiles"] = profiles
+                plugin._context["remote_targets"] = remote_targets
             if hasattr(plugin, "reinitialize"):
                 plugin.reinitialize()
 
