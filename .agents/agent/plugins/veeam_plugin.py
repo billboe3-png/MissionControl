@@ -488,11 +488,17 @@ class VeeamPlugin(AgentPlugin):
     async def _collect_inventory_relay(self) -> dict[str, Any]:
         logger.info("Veeam relay inventory collection starting")
         jobs = await self._run_collector_via_relay("jobs")
+        logger.info("Veeam relay jobs collected=%d", len(jobs or []))
         sessions = await self._run_collector_via_relay("sessions")
+        logger.info("Veeam relay sessions collected=%d", len(sessions or []))
         repos = await self._run_collector_via_relay("repositories")
+        logger.info("Veeam relay repos collected=%d", len(repos or []))
         managed_servers = await self._run_collector_via_relay("managed_servers")
+        logger.info("Veeam relay managed_servers collected=%d", len(managed_servers or []))
         restore_points = await self._run_collector_via_relay("restore_points")
+        logger.info("Veeam relay restore_points collected=%d", len(restore_points or []))
         license = await self._run_collector_via_relay("license")
+        logger.info("Veeam relay license collected=%s", bool(license))
         return {
             "jobs": jobs or [],
             "sessions": sessions or [],
