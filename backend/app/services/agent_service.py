@@ -293,7 +293,10 @@ class AgentService:
         if agent is None:
             return []
 
-        profiles = IntegrationProfileRepository.get_all_enabled_by_type(db, "veeam")
+        profiles = (
+            IntegrationProfileRepository.get_all_enabled_by_type(db, "veeam")
+            + IntegrationProfileRepository.get_all_enabled_by_type(db, "active_directory")
+        )
         result = []
         from app.core.config import get_settings
         from app.core.security import CredentialCipher
