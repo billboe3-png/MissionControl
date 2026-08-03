@@ -74,3 +74,27 @@ class AgentActiveDirectoryProvider(ActiveDirectoryProvider):
             "server": self._hostname,
             "domain": self._inventory.get("domain", self._hostname),
         }
+
+    async def reset_password(self, sam_account_name: str, new_password: str) -> dict:
+        return {"success": False, "error": "Agent-relayed AD provider is read-only"}
+
+    async def unlock_account(self, sam_account_name: str) -> dict:
+        return {"success": False, "error": "Agent-relayed AD provider is read-only"}
+
+    async def enable_account(self, sam_account_name: str) -> dict:
+        return {"success": False, "error": "Agent-relayed AD provider is read-only"}
+
+    async def disable_account(self, sam_account_name: str) -> dict:
+        return {"success": False, "error": "Agent-relayed AD provider is read-only"}
+
+    async def rename_user(self, sam_account_name: str, new_display_name: str, new_first_name: str | None = None, new_last_name: str | None = None) -> dict:
+        return {"success": False, "error": "Agent-relayed AD provider is read-only"}
+
+    async def get_user_groups(self, sam_account_name: str) -> dict:
+        return {"success": False, "error": "Agent-relayed AD provider is read-only"}
+
+    async def add_to_group(self, sam_account_name: str, group_name: str) -> dict:
+        return {"success": False, "error": "Agent-relayed AD provider is read-only"}
+
+    async def remove_from_group(self, sam_account_name: str, group_name: str) -> dict:
+        return {"success": False, "error": "Agent-relayed AD provider is read-only"}
