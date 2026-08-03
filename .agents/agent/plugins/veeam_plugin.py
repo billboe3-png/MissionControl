@@ -254,9 +254,9 @@ class VeeamPlugin(AgentPlugin):
     async def _collect_inventory_rest(self) -> dict[str, Any]:
         jobs = await self._rest_get("/api/v1/jobs") or []
         sessions = await self._rest_get("/api/v1/sessions") or []
-        repos = await self._rest_get("/api/v1/repositories") or []
-        managed_servers = await self._rest_get("/api/v1/servers") or []
-        restore_points = []
+        repos = await self._rest_get("/api/v1/backupInfrastructure/repositories") or []
+        managed_servers = await self._rest_get("/api/v1/backupInfrastructure/managedServers") or []
+        restore_points = await self._rest_get("/api/v1/restorePoints") or []
         license = await self._rest_get("/api/v1/license") or {}
         return {
             "jobs": jobs,
