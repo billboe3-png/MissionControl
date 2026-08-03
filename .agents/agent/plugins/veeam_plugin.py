@@ -11,6 +11,7 @@ import json
 import logging
 import os
 import platform
+import time
 from typing import Any
 
 from agent.plugin import AgentPlugin
@@ -38,6 +39,8 @@ class VeeamPlugin(AgentPlugin):
         self._password = _VEEAM_PASSWORD
         self._use_rest = False
         self._ssh_target: dict[str, Any] | None = None
+        self._token: str | None = None
+        self._token_expires_at: float = 0.0
 
     async def initialize(self, context: dict[str, Any]) -> bool:
         self._context = context
@@ -47,11 +50,15 @@ class VeeamPlugin(AgentPlugin):
         self._username = _VEEAM_USERNAME
         self._password = _VEEAM_PASSWORD
         self._ssh_target = None
+        self._token = None
+        self._token_expires_at = 0.0
         return True
 
     def reinitialize(self) -> None:
         """Allow agent to reload integration profiles from updated context."""
         self._configured_from_context = False
+        self._token = None
+        self._token_expires_at = 0.0
 
     async def _configure_from_context(self) -> None:
         """Load or reload integration profile settings."""
@@ -140,6 +147,46 @@ class VeeamPlugin(AgentPlugin):
         self._configured_from_context = True
 
     # ------------------------------------------------------------------
+    # OAuth2 / Bearer token handling
+    # ------------------------------------------------------------------
+
+    async def _ensure_token(self) -> None:
+        """Acquire a bearer token from Veeam OAuth2 endpoint if needed."""
+        if self._token and time.time() < (self._token_expires_at - 30):
+            return
+        if not self._api_base or not self._username or not self._password:
+            logger.warning("Veeam token acquisition skipped: missing api_base/username/password")
+            return
+        token_url = f"{self._api_base.rstrip('/')}/api/oauth2/token"
+        body = {
+            "grant_type": "password",
+            "username": self._username,
+            "password": self._password or "",
+        }
+        try:
+            import httpx
+        except ImportError:
+            logger.warning("httpx not installed for Veeam token acquisition")
+            return
+        try:
+            async with httpx.AsyncClient(verify=False, timeout=20) as client:
+                resp = await client.post(
+                    token_url,
+                    data=body,
+                    headers={"Content-Type": "application/x-www-form-urlencoded"},
+                )
+            if resp.status_code == 200:
+                payload = resp.json()
+                self._token = payload.get("access_token")
+                expires_in = int(payload.get("expires_in", 900))
+                self._token_expires_at = time.time() + max(expires_in, 60)
+                logger.info("Veeam bearer token acquired; expires in %ss", expires_in)
+            else:
+                logger.warning("Veeam token acquisition failed: %s -> %s", token_url, resp.status_code)
+        except Exception as exc:
+            logger.warning("Veeam token acquisition error: %s", exc)
+
+    # ------------------------------------------------------------------
     # REST API helpers (used by both Linux and Windows remote paths)
     # ------------------------------------------------------------------
 
@@ -153,13 +200,12 @@ class VeeamPlugin(AgentPlugin):
             return None
         url = f"{self._api_base.rstrip('/')}{path}"
         try:
+            await self._ensure_token()
             headers = {"x-api-version": "1.3-rev1"}
+            if self._token:
+                headers["Authorization"] = f"Bearer {self._token}"
             async with httpx.AsyncClient(verify=False, timeout=30) as client:
-                resp = await client.get(
-                    url,
-                    auth=(self._username, self._password or ""),
-                    headers=headers,
-                )
+                resp = await client.get(url, headers=headers)
             logger.info("Veeam REST %s -> %s", url, resp.status_code)
             if resp.status_code == 200:
                 try:
@@ -172,6 +218,9 @@ class VeeamPlugin(AgentPlugin):
                 except Exception:
                     logger.info("Veeam REST %s text=%s", url, resp.text[:200])
                     return resp.text
+            if resp.status_code == 401:
+                self._token = None
+                self._token_expires_at = 0.0
             logger.warning("Veeam REST %s body=%s", url, resp.text[:500])
             return None
         except Exception as exc:
@@ -187,14 +236,12 @@ class VeeamPlugin(AgentPlugin):
             return {"success": False, "error": "httpx not installed"}
         url = f"{self._api_base.rstrip('/')}{path}"
         try:
+            await self._ensure_token()
             headers = {"x-api-version": "1.3-rev1"}
+            if self._token:
+                headers["Authorization"] = f"Bearer {self._token}"
             async with httpx.AsyncClient(verify=False, timeout=30) as client:
-                resp = await client.post(
-                    url,
-                    json=payload,
-                    auth=(self._username, self._password or ""),
-                    headers=headers,
-                )
+                resp = await client.post(url, json=payload, headers=headers)
             return {
                 "success": resp.status_code in (200, 202),
                 "stdout": resp.text,
@@ -228,11 +275,12 @@ class VeeamPlugin(AgentPlugin):
                 return {"success": False, "error": "httpx not installed"}
             url = f"{self._api_base.rstrip('/')}/api/v1/license"
             try:
+                await self._ensure_token()
+                headers = {"x-api-version": "1.3-rev1"}
+                if self._token:
+                    headers["Authorization"] = f"Bearer {self._token}"
                 async with httpx.AsyncClient(verify=False, timeout=10) as client:
-                    resp = await client.get(
-                        url,
-                        auth=(self._username, self._password or ""),
-                    )
+                    resp = await client.get(url, headers=headers)
                 if resp.status_code == 200:
                     return {"success": True, "available": True, "message": "Veeam REST API reachable"}
                 return {"success": False, "error": f"HTTP {resp.status_code}: {resp.text}", "available": False}
