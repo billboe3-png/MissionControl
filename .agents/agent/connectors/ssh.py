@@ -30,6 +30,8 @@ class SSHConnector(RemoteConnector):
             "timeout": 10,
             "allow_agent": False,
             "look_for_keys": False,
+            "gss_auth": False,
+            "compress": False,
         }
 
         if self.ssh_key:
