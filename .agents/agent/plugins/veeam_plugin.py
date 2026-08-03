@@ -38,6 +38,7 @@ class VeeamPlugin(AgentPlugin):
         self._username = _VEEAM_USERNAME
         self._password = _VEEAM_PASSWORD
         self._use_rest = False
+        self._use_relay = False
         self._ssh_target: dict[str, Any] | None = None
         self._token: str | None = None
         self._token_expires_at: float = 0.0
@@ -45,6 +46,7 @@ class VeeamPlugin(AgentPlugin):
     async def initialize(self, context: dict[str, Any]) -> bool:
         self._context = context
         self._use_rest = False
+        self._use_relay = False
         self._has_module = None
         self._api_base = _VEEAM_API_BASE
         self._username = _VEEAM_USERNAME
@@ -90,13 +92,24 @@ class VeeamPlugin(AgentPlugin):
                 self._api_base = f"https://{ssh_host}:9419"
                 self._username = ssh_username or self._username
                 self._password = ssh_password or self._password
+                self._ssh_target = {
+                    "hostname": ssh_host,
+                    "port": ssh_port,
+                    "username": ssh_username or self._username,
+                    "password": ssh_password or self._password,
+                    "protocol": "ssh",
+                }
 
         system = platform.system()
 
         if system == "Windows":
-            if self._api_base and self._username and not self._ssh_target:
-                self._use_rest = True
-                logger.info("Veeam plugin initialized for Windows REST API (%s)", self._api_base)
+            if self._api_base and self._username:
+                if self._ssh_target:
+                    self._use_relay = True
+                    logger.info("Veeam plugin initialized for Windows via SSH relay (%s)", self._ssh_target.get("hostname"))
+                else:
+                    self._use_rest = True
+                    logger.info("Veeam plugin initialized for Windows REST API (%s)", self._api_base)
                 return
             self._has_module = await self._check_veeam()
             if not self._has_module:
@@ -111,8 +124,12 @@ class VeeamPlugin(AgentPlugin):
                     "Veeam REST API not configured (set MC_VEEAM_API_BASE, MC_VEEAM_USERNAME)"
                 )
                 return
-            self._use_rest = True
-            logger.info("Veeam plugin initialized for Linux REST API (%s)", self._api_base)
+            if self._ssh_target:
+                self._use_relay = True
+                logger.info("Veeam plugin initialized for Linux via SSH relay (%s)", self._ssh_target.get("hostname"))
+            else:
+                self._use_rest = True
+                logger.info("Veeam plugin initialized for Linux REST API (%s)", self._api_base)
             return
 
         logger.warning("Veeam plugin not supported on %s", system)
@@ -120,6 +137,8 @@ class VeeamPlugin(AgentPlugin):
     async def collect_inventory(self) -> dict[str, Any]:
         """Collect Veeam inventory."""
         await self._ensure_configured()
+        if self._use_relay:
+            return await self._collect_inventory_relay()
         if self._use_rest:
             return await self._collect_inventory_rest()
         if platform.system() == "Windows":
@@ -131,6 +150,8 @@ class VeeamPlugin(AgentPlugin):
     async def execute_command(self, command: str, args: dict[str, Any]) -> dict[str, Any]:
         """Execute Veeam commands."""
         await self._ensure_configured()
+        if self._use_relay:
+            return await self._execute_relay(command, args)
         if self._use_rest:
             return await self._execute_rest(command, args)
         if platform.system() == "Windows":
@@ -255,8 +276,6 @@ class VeeamPlugin(AgentPlugin):
         jobs = await self._rest_get("/api/v1/jobs")
         if jobs is None:
             jobs = await self._run_collector("jobs") or []
-            if not jobs:
-                jobs = await self._collect_jobs_via_relay() or []
         sessions = await self._rest_get("/api/v1/sessions") or []
         repos = await self._rest_get("/api/v1/backupInfrastructure/repositories") or []
         managed_servers = await self._rest_get("/api/v1/backupInfrastructure/managedServers") or []
@@ -443,6 +462,102 @@ class VeeamPlugin(AgentPlugin):
 
     async def _execute_linux(self, command: str, args: dict[str, Any]) -> dict[str, Any]:
         return await self._execute_rest(command, args)
+
+    async def _collect_inventory_relay(self) -> dict[str, Any]:
+        jobs = await self._run_collector_via_relay("jobs")
+        sessions = await self._run_collector_via_relay("sessions")
+        repos = await self._run_collector_via_relay("repositories")
+        managed_servers = await self._run_collector_via_relay("managed_servers")
+        restore_points = await self._run_collector_via_relay("restore_points")
+        license = await self._run_collector_via_relay("license")
+        return {
+            "jobs": jobs or [],
+            "sessions": sessions or [],
+            "repositories": repos or [],
+            "managed_servers": managed_servers or [],
+            "restore_points": restore_points or [],
+            "license": license or {},
+        }
+
+    async def _execute_relay(self, command: str, args: dict[str, Any]) -> dict[str, Any]:
+        if command == "test_connection":
+            result = await self._run_collector_via_relay("license")
+            if result is None:
+                return {"success": False, "error": "Veeam relay test failed", "available": False}
+            return {"success": True, "available": True, "message": "Veeam SSH relay reachable"}
+        if command == "start_job":
+            script = (
+                "Import-Module Veeam.Backup.PowerShell -ErrorAction SilentlyContinue; "
+                f"Start-VBRJob -JobId {args.get('job_id','')} -ErrorAction Stop | ConvertTo-Json -Compress"
+            )
+            result = await self._run_script_via_relay(script, timeout=60)
+            return {"success": result.get("success", False), "stdout": result.get("stdout", ""), "stderr": result.get("stderr", ""), "exit_code": result.get("exit_code", -1)}
+        if command == "stop_job":
+            script = (
+                "Import-Module Veeam.Backup.PowerShell -ErrorAction SilentlyContinue; "
+                f"Stop-VBRJob -JobId {args.get('job_id','')} -ErrorAction Stop | ConvertTo-Json -Compress"
+            )
+            result = await self._run_script_via_relay(script, timeout=60)
+            return {"success": result.get("success", False), "stdout": result.get("stdout", ""), "stderr": result.get("stderr", ""), "exit_code": result.get("exit_code", -1)}
+        return {"success": False, "error": f"Unknown relay command: {command}"}
+
+    async def _run_collector_via_relay(self, collector: str) -> Any:
+        script_map = {
+            "jobs": (
+                "Import-Module Veeam.Backup.PowerShell -ErrorAction SilentlyContinue; "
+                "Get-VBRJob | ForEach-Object { $j=$_; $last=Get-VBRSession -Job $j -Last 1 | Select-Object -First 1; @{"
+                "id=$j.Id.ToString(); name=$j.Name; type=$j.JobType.ToString(); "
+                "state=if ($j.IsRunning) {'Running'} else {'Stopped'}; enabled=$j.Options.Enabled; "
+                "schedule=if ($j.ScheduleOptions -and $j.ScheduleOptions.Enabled) {@{kind='periodic'}} else {$null}; "
+                "lastRun=if ($last) @{ id=$last.Id.ToString(); state=$last.State.ToString(); result=@{result=$last.Result.ToString()}; "
+                "creationTime=$last.CreationTime.ToString('o'); endTime=$last.EndTime.ToString('o'); progressPercent=$last.Progress } else {$null}; "
+                "includedObjects=@{objectsInJob=if ($j.Info) {$j.Info.LinkedObjects.Count} else {0}} "
+                "} | ConvertTo-Json -Compress }"
+            ),
+            "sessions": (
+                "Import-Module Veeam.Backup.PowerShell -ErrorAction SilentlyContinue; "
+                "Get-VBRSession -Last 200 | ForEach-Object { @{"
+                "id=$_.Id.ToString(); jobId=$_.JobId.ToString(); name=$_.Name; sessionType=$_.SessionType.ToString(); "
+                "state=$_.State.ToString(); result=@{result=$_.Result.ToString()}; creationTime=$_.CreationTime.ToString('o'); "
+                "endTime=$_.EndTime.ToString('o'); progressPercent=$_.Progress "
+                "} | ConvertTo-Json -Compress }"
+            ),
+            "repositories": (
+                "Import-Module Veeam.Backup.PowerShell -ErrorAction SilentlyContinue; "
+                "Get-VBRBackupRepository | ForEach-Object { @{"
+                "id=$_.Id.ToString(); name=$_.Name; type=$_.GetType().Name; description=$_.Description; path=$_.Path; "
+                "hostId=if ($_.HostId) {$_.HostId.ToString()} else {$null} "
+                "} | ConvertTo-Json -Compress }"
+            ),
+            "managed_servers": (
+                "Import-Module Veeam.Backup.PowerShell -ErrorAction SilentlyContinue; "
+                "Get-VBRServer | ForEach-Object { @{"
+                "id=$_.Id.ToString(); name=$_.Name; type=$_.GetType().Name; description=$_.Description; "
+                "hostId=if ($_.HostId) {$_.HostId.ToString()} else {$null} "
+                "} | ConvertTo-Json -Compress }"
+            ),
+            "restore_points": (
+                "Import-Module Veeam.Backup.PowerShell -ErrorAction SilentlyContinue; "
+                "Get-VBRRestorePoint -Result Success -MaxCount 200 | ForEach-Object { @{"
+                "id=$_.Id.ToString(); jobId=$_.JobId.ToString(); creationTime=$_.CreationTime.ToString('o'); size=$_.Size "
+                "} | ConvertTo-Json -Compress }"
+            ),
+            "license": (
+                "Import-Module Veeam.Backup.PowerShell -ErrorAction SilentlyContinue; "
+                "$ver=(Get-Module Veeam.Backup.PowerShell).Version; $lic=Get-VBRLicense; @{"
+                "type=$lic.Edition.ToString(); status=$lic.Status.ToString(); supportId=$lic.SupportId; "
+                "expirationDate=$lic.ExpirationDate.ToString('o'); edition=$lic.Edition.ToString(); "
+                "moduleVersion=if ($ver) {$ver.ToString()} else {$null} "
+                "} | ConvertTo-Json -Compress"
+            ),
+        }
+        script = script_map.get(collector)
+        if not script:
+            return None
+        result = await self._run_script_via_relay(script, timeout=120)
+        if not result.get("success"):
+            return None
+        return self._parse_json_array(result.get("stdout", "[]")) or []
 
     # ------------------------------------------------------------------
     # Relay fallback for Windows backend inventory
