@@ -281,7 +281,7 @@ export default function NetworkTopologyPage() {
           </div>
           <h3 className="text-gray-200 font-medium mt-4">Devices</h3>
           <div className="space-y-2 max-h-[320px] overflow-auto">
-            {topology?.devices.map((device) => (
+            {topology?.devices.map((device: NetworkDevice) => (
               <button
                 key={device.mac || device.ip}
                 onClick={() => setSelected(device)}
