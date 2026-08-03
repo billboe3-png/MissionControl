@@ -266,7 +266,7 @@ $pyDir = Split-Path $python -Parent
 $pyExe = "$pyDir\python.exe"
 $prevEAP = $ErrorActionPreference
 $ErrorActionPreference = "Continue"
-& "$pyExe" -m pip install --quiet httpx psutil pydantic pydantic-settings pyyaml packaging paramiko pywinrm 2>$null
+& "$pyExe" -m pip install --quiet httpx psutil pydantic pydantic-settings pyyaml packaging paramiko pywinrm pysnmp 2>$null
 $ErrorActionPreference = $prevEAP
 Write-Ok "Dependencies installed"
 

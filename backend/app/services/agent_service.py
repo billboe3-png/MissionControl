@@ -572,6 +572,7 @@ class AgentService:
             "veeam": "veeam_plugin.py",
             "proxmox": "proxmox_plugin.py",
             "windows_docker": "windows_docker_plugin.py",
+            "network_discovery": "network_discovery_plugin.py",
         }
         file_name = mapping.get(plugin_name)
         if not file_name:
