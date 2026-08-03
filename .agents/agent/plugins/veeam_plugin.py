@@ -486,6 +486,7 @@ class VeeamPlugin(AgentPlugin):
         return await self._execute_rest(command, args)
 
     async def _collect_inventory_relay(self) -> dict[str, Any]:
+        logger.info("Veeam relay inventory collection starting")
         jobs = await self._run_collector_via_relay("jobs")
         sessions = await self._run_collector_via_relay("sessions")
         repos = await self._run_collector_via_relay("repositories")
@@ -672,14 +673,21 @@ class VeeamPlugin(AgentPlugin):
         if target_id is None:
             return {"success": False, "stdout": "", "stderr": f"no SSH target for host {hostname}", "exit_code": -1}
 
-        escaped = script.replace("`", "``").replace("'", "`'")
-        ps_command = f"powershell -NoProfile -NonInteractive -Command '{escaped}'"
+        encoded = self._encode_powershell(script)
+        ps_command = f"powershell -NoProfile -NonInteractive -EncodedCommand {encoded}"
         logger.info("Veeam relay command -> target %s", target_id)
         return await remote_manager.execute_on_target(
             target_id=target_id,
             command=ps_command,
             timeout=timeout,
         )
+
+    @staticmethod
+    def _encode_powershell(script: str) -> str:
+        """Encode a PowerShell script as base64 UTF-16LE for -EncodedCommand."""
+        import base64
+        encoded = base64.b64encode(script.encode("utf-16-le")).decode("ascii")
+        return encoded
 
     # ------------------------------------------------------------------
     # Shared collectors
