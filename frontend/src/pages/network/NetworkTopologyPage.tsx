@@ -204,7 +204,7 @@ export default function NetworkTopologyPage() {
       .attr("stroke", "#111827")
       .attr("stroke-width", 2)
       .on("click", (_: any, d: any) => {
-        const dev = topology?.devices.find((x) => (x.mac || x.ip) === d.id);
+        const dev = topology?.devices.find((x: NetworkDevice) => (x.mac || x.ip) === d.id);
         if (dev) setSelected(dev);
       });
 
