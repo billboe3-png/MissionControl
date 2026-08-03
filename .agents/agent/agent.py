@@ -126,7 +126,10 @@ class MissionControlAgent:
                 ", ".join(discovered),
             )
             await self.plugin_manager.initialize_plugins(
-                {"agent_id": self._agent_id}
+                {
+                    "agent_id": self._agent_id,
+                    "remote_manager": self.remote_manager,
+                }
             )
 
     def _update_plugin_integration_context(self, response: dict[str, Any]) -> None:

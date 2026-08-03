@@ -255,6 +255,8 @@ class VeeamPlugin(AgentPlugin):
         jobs = await self._rest_get("/api/v1/jobs")
         if jobs is None:
             jobs = await self._run_collector("jobs") or []
+            if not jobs:
+                jobs = await self._collect_jobs_via_relay() or []
         sessions = await self._rest_get("/api/v1/sessions") or []
         repos = await self._rest_get("/api/v1/backupInfrastructure/repositories") or []
         managed_servers = await self._rest_get("/api/v1/backupInfrastructure/managedServers") or []
@@ -441,6 +443,106 @@ class VeeamPlugin(AgentPlugin):
 
     async def _execute_linux(self, command: str, args: dict[str, Any]) -> dict[str, Any]:
         return await self._execute_rest(command, args)
+
+    # ------------------------------------------------------------------
+    # Relay fallback for Windows backend inventory
+    # ------------------------------------------------------------------
+
+    async def _collect_jobs_via_relay(self) -> list[dict[str, Any]]:
+        """Collect Veeam jobs from the Windows backend via agent SSH relay."""
+        remote_manager = (self._context.get("remote_manager") or None)
+        if remote_manager is None:
+            logger.warning("Veeam jobs relay skipped: remote_manager not in plugin context")
+            return []
+
+        if not self._api_base:
+            logger.warning("Veeam jobs relay skipped: api_base not configured")
+            return []
+
+        hostname = ""
+        api_base = self._api_base.strip()
+        if api_base.startswith("https://"):
+            api_base = api_base[len("https://"):]
+        if api_base.startswith("http://"):
+            api_base = api_base[len("http://"):]
+        hostname = api_base.split("/", 1)[0].split(":", 1)[0]
+        if not hostname:
+            return []
+
+        target_id = None
+        for tid, target in (remote_manager.targets or {}).items():
+            if target.get("hostname") == hostname and (target.get("protocol") or "").lower() == "ssh":
+                target_id = tid
+                break
+        if target_id is None:
+            logger.warning("Veeam jobs relay skipped: no SSH target for host %s", hostname)
+            return []
+
+        script = (
+            "Import-Module Veeam.Backup.PowerShell -ErrorAction SilentlyContinue; "
+            "Get-VBRJob | ForEach-Object { "
+            "  $j = $_; "
+            "  $last = Get-VBRSession -Job $j -Last 1 | Select-Object -First 1; "
+            "  @{"
+            "    id=$j.Id.ToString(); "
+            "    name=$j.Name; "
+            "    type=$j.JobType.ToString(); "
+            "    state=if ($j.IsRunning) {'Running'} else {'Stopped'}; "
+            "    enabled=$j.Options.Enabled; "
+            "    schedule=if ($j.ScheduleOptions -and $j.ScheduleOptions.Enabled) {@{kind='periodic'}} else {$null}; "
+            "    lastRun=if ($last) @{"
+            "      id=$last.Id.ToString(); "
+            "      state=$last.State.ToString(); "
+            "      result=@{result=$last.Result.ToString()}; "
+            "      creationTime=$last.CreationTime.ToString('o'); "
+            "      endTime=$last.EndTime.ToString('o'); "
+            "      progressPercent=$last.Progress "
+            "    } else {$null}; "
+            "    includedObjects=@{objectsInJob=if ($j.Info) {$j.Info.LinkedObjects.Count} else {0}} "
+            "  } | ConvertTo-Json -Compress "
+            "}"
+        )
+        logger.info("Veeam jobs relay via SSH target %s", target_id)
+        result = await self._run_script_via_relay(script, timeout=90)
+        if not result.get("success"):
+            return []
+        return self._parse_json_array(result.get("stdout", "[]")) or []
+
+    async def _run_script_via_relay(self, script: str, timeout: int = 60) -> dict[str, Any]:
+        """Execute a PowerShell script on the Veeam Windows backend via SSH relay."""
+        remote_manager = (self._context.get("remote_manager") or None)
+        if remote_manager is None:
+            return {"success": False, "stdout": "", "stderr": "remote_manager not configured", "exit_code": -1}
+
+        if not self._api_base:
+            return {"success": False, "stdout": "", "stderr": "Veeam API base not configured", "exit_code": -1}
+
+        hostname = ""
+        api_base = self._api_base.strip()
+        if api_base.startswith("https://"):
+            api_base = api_base[len("https://"):]
+        if api_base.startswith("http://"):
+            api_base = api_base[len("http://"):]
+        hostname = api_base.split("/", 1)[0].split(":", 1)[0]
+        if not hostname:
+            return {"success": False, "stdout": "", "stderr": "invalid api_base", "exit_code": -1}
+
+        target_id = None
+        for tid, target in (remote_manager.targets or {}).items():
+            if target.get("hostname") == hostname and (target.get("protocol") or "").lower() == "ssh":
+                target_id = tid
+                break
+        if target_id is None:
+            return {"success": False, "stdout": "", "stderr": f"no SSH target for host {hostname}", "exit_code": -1}
+
+        escaped = script.replace("`", "``").replace("'", "`'")
+        ps_command = f"powershell -NoProfile -NonInteractive -Command '{escaped}'"
+        logger.info("Veeam relay command -> target %s", target_id)
+        return await remote_manager.execute_on_target(
+            target_id=target_id,
+            command=ps_command,
+            timeout=timeout,
+        )
 
     # ------------------------------------------------------------------
     # Shared collectors
