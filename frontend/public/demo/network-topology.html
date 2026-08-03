@@ -6,10 +6,13 @@
 <title>Network Topology Demo</title>
 <style>
   body { margin: 0; background: #0b0f17; color: #e5e7eb; font-family: ui-sans-serif, system-ui, sans-serif; }
-  .bar { display: flex; gap: 8px; padding: 12px; background: #0f172a; border-bottom: 1px solid #1f2937; position: sticky; top: 0; z-index: 10; }
+  .bar { display: flex; gap: 8px; padding: 12px; background: #0f172a; border-bottom: 1px solid #1f2937; align-items: center; }
   .bar select { background: #111827; color: #e5e7eb; border: 1px solid #374151; padding: 8px 10px; border-radius: 6px; }
+  .legend { display: flex; gap: 10px; flex-wrap: wrap; margin-left: auto; }
+  .chip { display: inline-flex; align-items: center; gap: 6px; padding: 4px 8px; background: #0b0f17; border: 1px solid #1f2937; border-radius: 999px; font-size: 12px; color: #cbd5e1; }
+  .dot { width: 10px; height: 10px; border-radius: 50%; background: currentColor; }
   .panes { display: grid; grid-template-columns: 1fr 320px; gap: 12px; padding: 12px; height: calc(100vh - 52px); }
-  .graph { background: #0b0f17; border: 1px solid #1f2937; border-radius: 8px; overflow: hidden; position: relative; }
+  .graph { background: #0b0f17; border: 1px solid #1f2937; border-radius: 8px; overflow: hidden; }
   .graph canvas, .graph svg { display: block; width: 100%; height: 100%; }
   .side { background: #0f172a; border: 1px solid #1f2937; border-radius: 8px; padding: 12px; overflow: auto; }
   .side h3 { margin: 4px 0 8px; color: #f3f4f6; }
@@ -21,9 +24,7 @@
   .detail table { width: 100%; border-collapse: collapse; font-size: 12px; }
   .detail td:first-child { color: #9ca3af; padding: 3px 6px 3px 0; width: 40%; }
   .detail td:last-child { color: #e5e7eb; word-break: break-all; }
-  .legend { display: flex; gap: 10px; flex-wrap: wrap; }
-  .chip { display: inline-flex; align-items: center; gap: 6px; padding: 4px 8px; background: #0b0f17; border: 1px solid #1f2937; border-radius: 999px; font-size: 12px; color: #cbd5e1; }
-  .dot { width: 10px; height: 10px; border-radius: 50%; background: currentColor; }
+  .error { color: #f87171; padding: 10px; }
 </style>
 </head>
 <body>
@@ -36,7 +37,9 @@
     <div class="legend" id="legend"></div>
   </div>
   <div class="panes">
-    <div class="graph" id="graph"></div>
+    <div class="graph" id="graph">
+      <div id="fallback" style="display:none; padding: 12px; color:#f87171;">Graph library failed to load.</div>
+    </div>
     <div class="side">
       <h3>Devices</h3>
       <div id="devices"></div>
@@ -44,141 +47,151 @@
     </div>
   </div>
 
-<script type="module">
-import CytoscapeComponent from "https://esm.sh/react-cytoscapejs";
-import Cytoscape from "https://esm.sh/cytoscape";
-import { Network } from "https://esm.sh/vis-network/standalone";
-import DataSet from "https://esm.sh/vis-data";
-import * as d3 from "https://esm.sh/d3";
-
-const COLORS = { switch: "#2563eb", server: "#16a34a", workstation: "#f59e0b", storage: "#7c3aed", unknown: "#6b7280" };
-const topology = {
-  available: true,
-  discovered_at: new Date().toISOString(),
-  devices: [
-    { ip: "192.168.10.1", mac: "aa:bb:cc:00:01:01", hostname: "core-sw01", switch_ip: "192.168.10.1", switch_port: "GigabitEthernet1/0/1", source: "snmp" },
-    { ip: "192.168.10.2", mac: "aa:bb:cc:00:02:01", hostname: "dist-sw01", switch_ip: "192.168.10.1", switch_port: "GigabitEthernet1/0/2", source: "snmp" },
-    { ip: "192.168.10.10", mac: "aa:bb:cc:00:10:01", hostname: "veeam-server", switch_ip: "192.168.10.2", switch_port: "GigabitEthernet1/0/12", source: "arp" },
-    { ip: "192.168.10.20", mac: "aa:bb:cc:00:20:01", hostname: "hyperv-host01", switch_ip: "192.168.10.2", switch_port: "GigabitEthernet1/0/24", source: "arp" },
-    { ip: "192.168.10.30", mac: "aa:bb:cc:00:30:01", hostname: "nas-storage01", switch_ip: "192.168.10.2", switch_port: "GigabitEthernet1/0/36", source: "arp" },
-    { ip: "192.168.10.40", mac: "aa:bb:cc:00:40:01", hostname: "corhqrobertb", switch_ip: "192.168.10.2", switch_port: "GigabitEthernet1/0/48", source: "arp" },
-  ],
-  local_interfaces: [{ name: "Ethernet0", ip: "192.168.10.1", prefix_length: 24 }],
-  switch_topology: [],
-};
-
-function classify(device) {
-  const name = (device.hostname || "").toLowerCase();
-  if (name.includes("switch") || name.includes("sw")) return "switch";
-  if (name.includes("veeam") || name.includes("backup")) return "server";
-  if (name.includes("nas") || name.includes("storage")) return "storage";
-  if (name.includes("hyperv") || name.includes("vm")) return "server";
-  if ((device.ip || "").startsWith("192.168.10.")) return "workstation";
-  return "unknown";
-}
-
-function buildElements() {
-  const nodeSet = new Set();
-  const nodes = [], edges = [];
-  const addNode = (id, label, device) => {
-    if (nodeSet.has(id)) return;
-    nodeSet.add(id);
-    const category = classify(device || {});
-    nodes.push({ data: { id, label, color: { background: COLORS[category] || COLORS.unknown, border: "#111827" } } });
+<script src="https://cdn.jsdelivr.net/npm/cytoscape@3.28.1/dist/cytoscape.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/vis-network@7.10.2/standalone/umd/vis-network.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/vis-data@7.2.2/peer/umd/vis-data.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/d3@7.9.0/dist/d3.min.js"></script>
+<script>
+(function(){
+  const COLORS = { switch: "#2563eb", server: "#16a34a", workstation: "#f59e0b", storage: "#7c3aed", unknown: "#6b7280" };
+  const topology = {
+    discovered_at: new Date().toISOString(),
+    devices: [
+      { ip: "192.168.10.1", mac: "aa:bb:cc:00:01:01", hostname: "core-sw01", switch_ip: "192.168.10.1", switch_port: "GigabitEthernet1/0/1", source: "snmp" },
+      { ip: "192.168.10.2", mac: "aa:bb:cc:00:02:01", hostname: "dist-sw01", switch_ip: "192.168.10.1", switch_port: "GigabitEthernet1/0/2", source: "snmp" },
+      { ip: "192.168.10.10", mac: "aa:bb:cc:00:10:01", hostname: "veeam-server", switch_ip: "192.168.10.2", switch_port: "GigabitEthernet1/0/12", source: "arp" },
+      { ip: "192.168.10.20", mac: "aa:bb:cc:00:20:01", hostname: "hyperv-host01", switch_ip: "192.168.10.2", switch_port: "GigabitEthernet1/0/24", source: "arp" },
+      { ip: "192.168.10.30", mac: "aa:bb:cc:00:30:01", hostname: "nas-storage01", switch_ip: "192.168.10.2", switch_port: "GigabitEthernet1/0/36", source: "arp" },
+      { ip: "192.168.10.40", mac: "aa:bb:cc:00:40:01", hostname: "corhqrobertb", switch_ip: "192.168.10.2", switch_port: "GigabitEthernet1/0/48", source: "arp" },
+    ],
+    local_interfaces: [{ name: "Ethernet0", ip: "192.168.10.1", prefix_length: 24 }],
+    switch_topology: []
   };
-  topology.devices.forEach((device) => {
-    const devId = device.mac || device.ip;
-    addNode(devId, device.hostname || device.ip, device);
-    if (device.switch_ip) {
-      addNode(device.switch_ip, device.switch_ip || "Switch", { hostname: device.switch_ip });
-      edges.push({ data: { source: devId, target: device.switch_ip, label: device.switch_port || "" } });
-    }
-  });
-  return { nodes, edges };
-}
 
-function renderLegend() {
-  const el = document.getElementById("legend");
-  el.innerHTML = Object.entries(COLORS).map(([k,v]) => `<div class="chip"><span class="dot" style="color:${v}"></span>${k}</div>`).join("");
-}
+  function classify(device) {
+    const name = (device.hostname || "").toLowerCase();
+    if (name.includes("switch") || name.includes("sw")) return "switch";
+    if (name.includes("veeam") || name.includes("backup")) return "server";
+    if (name.includes("nas") || name.includes("storage")) return "storage";
+    if (name.includes("hyperv") || name.includes("vm")) return "server";
+    if ((device.ip || "").startsWith("192.168.10.")) return "workstation";
+    return "unknown";
+  }
 
-function renderDeviceList() {
-  const el = document.getElementById("devices");
-  el.innerHTML = topology.devices.map((device) => `<div class="item" data-mac="${device.mac}" data-ip="${device.ip}"><div class="name">${device.hostname || device.ip}</div><div class="meta">${device.ip} • ${device.switch_port || ""}</div></div>`).join("");
-  el.querySelectorAll(".item").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      const device = topology.devices.find((d) => d.mac === btn.dataset.mac || d.ip === btn.dataset.ip);
-      if (device) showDetail(device);
+  function buildElements() {
+    const nodeSet = new Set();
+    const nodes = [], edges = [];
+    const addNode = function(id, label, device) {
+      if (nodeSet.has(id)) return;
+      nodeSet.add(id);
+      const category = classify(device || {});
+      nodes.push({ data: { id: id, label: label, color: { background: COLORS[category] || COLORS.unknown, border: "#111827" } } });
+    };
+    topology.devices.forEach(function(device) {
+      const devId = device.mac || device.ip;
+      addNode(devId, device.hostname || device.ip, device);
+      if (device.switch_ip) {
+        addNode(device.switch_ip, device.switch_ip || "Switch", { hostname: device.switch_ip });
+        edges.push({ data: { source: devId, target: device.switch_ip, label: device.switch_port || "" } });
+      }
     });
-  });
-}
+    return { nodes: nodes, edges: edges };
+  }
 
-function showDetail(device) {
-  const el = document.getElementById("detail");
-  el.style.display = "block";
-  el.innerHTML = `<h3>${device.hostname || device.ip}</h3><table>${Object.entries(device).map(([k,v]) => `<tr><td>${k}</td><td>${String(v ?? "")}</td></tr>`).join("")}</table>`;
-}
+  function renderLegend() {
+    const el = document.getElementById("legend");
+    el.innerHTML = Object.entries(COLORS).map(function(entry) {
+      const k = entry[0], v = entry[1];
+      return '<div class="chip"><span class="dot" style="color:' + v + '"></span>' + k + '</div>';
+    }).join("");
+  }
 
-function clearDetail() {
-  const el = document.getElementById("detail");
-  el.style.display = "none";
-  el.innerHTML = "";
-}
+  function renderDeviceList() {
+    const el = document.getElementById("devices");
+    el.innerHTML = topology.devices.map(function(device) {
+      return '<div class="item" data-mac="' + device.mac + '" data-ip="' + device.ip + '"><div class="name">' + (device.hostname || device.ip) + '</div><div class="meta">' + device.ip + ' • ' + (device.switch_port || "") + '</div></div>';
+    }).join("");
+    el.querySelectorAll(".item").forEach(function(btn) {
+      btn.addEventListener("click", function() {
+        const device = topology.devices.find(function(d) { return d.mac === btn.dataset.mac || d.ip === btn.dataset.ip; });
+        if (device) showDetail(device);
+      });
+    });
+  }
 
-let cy = null;
-let visNet = null;
+  function showDetail(device) {
+    const el = document.getElementById("detail");
+    el.style.display = "block";
+    el.innerHTML = '<h3>' + (device.hostname || device.ip) + '</h3><table>' + Object.entries(device).map(function(entry) {
+      return '<tr><td>' + entry[0] + '</td><td>' + String(entry[1] ?? "") + '</td></tr>';
+    }).join("") + '</table>';
+  }
 
-function renderCytoscape() {
-  clearDetail();
-  const container = document.getElementById("graph");
-  container.innerHTML = "";
-  const elements = buildElements();
-  cy = Cytoscape({ container, elements, layout: { name: "cose", animate: false, padding: 40 }, style: [
-    { selector: "node", style: { label: "data(label)", "font-size": 12, "text-valign": "center", "text-halign": "center", width: 60, height: 60, "background-color": "data(color.background)", color: "#fff", "border-width": 2, "border-color": "data(color.border)" } },
-    { selector: "edge", style: { label: "data(label)", "font-size": 10, "curve-style": "bezier", "target-arrow-shape": "triangle", "target-arrow-color": "#94a3b8", "line-color": "#94a3b8", width: 2, "text-rotation": "autorotate", "text-outline-color": "#ffffff", "text-outline-opacity": 0.6 } }
-  ], minZoom: 0.3, maxZoom: 3 });
-  cy.on("tap", "node", (e) => showDetail(e.target.data()));
-}
+  function clearDetail() {
+    const el = document.getElementById("detail");
+    el.style.display = "none";
+    el.innerHTML = "";
+  }
 
-function renderVis() {
-  clearDetail();
-  const container = document.getElementById("graph");
-  container.innerHTML = "";
-  const { nodes, edges } = buildElements();
-  const data = { nodes: new DataSet(nodes.map((n) => n.data)), edges: new DataSet(edges.map((e) => ({ ...e.data, arrows: "to", font: { align: "middle", size: 10 } }))) };
-  visNet = new Network(container, data, { nodes: { shape: "dot", size: 18, font: { color: "#e5e7eb" }, borderWidth: 2, color: { border: "#111827", background: "#2563eb" } }, edges: { color: { color: "#94a3b8", highlight: "#22d3ee" }, arrows: { to: { enabled: true, scaleFactor: 0.6 } }, font: { color: "#e5e7eb", size: 10, strokeWidth: 3 }, smooth: { enabled: true, type: "cubicBezier", roundness: 0.1 } }, physics: { stabilization: true }, interaction: { hover: true } });
-  visNet.on("click", (params) => { if (params.nodes.length) showDetail(params.nodes[0]); });
-}
+  function renderCytoscape() {
+    clearDetail();
+    const container = document.getElementById("graph");
+    container.innerHTML = "";
+    if (typeof Cytoscape === "undefined") { document.getElementById("fallback").style.display = "block"; return; }
+    const elements = buildElements();
+    Cytoscape({ container: container, elements: elements, layout: { name: "cose", animate: false, padding: 40 }, style: [
+      { selector: "node", style: { label: "data(label)", "font-size": 12, "text-valign": "center", "text-halign": "center", width: 60, height: 60, "background-color": "data(color.background)", color: "#fff", "border-width": 2, "border-color": "data(color.border)" } },
+      { selector: "edge", style: { label: "data(label)", "font-size": 10, "curve-style": "bezier", "target-arrow-shape": "triangle", "target-arrow-color": "#94a3b8", "line-color": "#94a3b8", width: 2, "text-rotation": "autorotate", "text-outline-color": "#ffffff", "text-outline-opacity": 0.6 } }
+    ], minZoom: 0.3, maxZoom: 3 }).on("tap", "node", function(e) { showDetail(e.target.data()); });
+  }
 
-function renderD3() {
-  clearDetail();
-  const container = document.getElementById("graph");
-  container.innerHTML = "";
-  const { nodes, edges } = buildElements();
-  const nodeMap = new Map(nodes.map((n) => [n.data.id, n.data]));
-  const width = container.clientWidth || 900, height = container.clientHeight || 600;
-  const svg = d3.select(container).append("svg").attr("viewBox", [0, 0, width, height]);
-  const g = svg.append("g");
-  const zoom = d3.zoom().scaleExtent([0.2, 4]).on("zoom", (event) => g.attr("transform", event.transform));
-  svg.call(zoom);
-  const simulation = d3.forceSimulation(Array.from(nodeMap.values())).force("link", d3.forceLink(edges.map((e) => e.data)).id((d) => d.id)).force("charge", d3.forceManyBody().strength(-400)).force("center", d3.forceCenter(width / 2, height / 2));
-  const link = g.append("g").selectAll("line").data(edges).join("line").attr("stroke", "#475569").attr("stroke-width", 1.5);
-  const label = g.append("g").selectAll("text").data(edges).join("text").text((d) => d.data.label).attr("font-size", 9).attr("fill", "#e5e7eb").attr("text-anchor", "middle");
-  const node = g.append("g").selectAll("circle").data(Array.from(nodeMap.values())).join("circle").attr("r", 10).attr("fill", (d) => d.color?.background || "#2563eb").attr("stroke", "#111827").attr("stroke-width", 2).on("click", (_event, d) => showDetail(d));
-  simulation.on("tick", () => { link.attr("x1", (d) => d.source.x).attr("y1", (d) => d.source.y).attr("x2", (d) => d.target.x).attr("y2", (d) => d.target.y); label.attr("x", (d) => (d.source.x + d.target.x) / 2).attr("y", (d) => (d.source.y + d.target.y) / 2); node.attr("cx", (d) => d.x).attr("cy", (d) => d.y); });
-}
+  function renderVis() {
+    clearDetail();
+    const container = document.getElementById("graph");
+    container.innerHTML = "";
+    const DataSet = window.DataSet || window.visData && window.visData.DataSet;
+    if (!DataSet || typeof Network === "undefined") { document.getElementById("fallback").style.display = "block"; return; }
+    const { nodes, edges } = buildElements();
+    const data = { nodes: new DataSet(nodes.map(function(n) { return n.data; })), edges: new DataSet(edges.map(function(e) { return Object.assign({}, e.data, { arrows: "to", font: { align: "middle", size: 10 } }); })) };
+    const visNet = new Network(container, data, { nodes: { shape: "dot", size: 18, font: { color: "#e5e7eb" }, borderWidth: 2, color: { border: "#111827", background: "#2563eb" } }, edges: { color: { color: "#94a3b8", highlight: "#22d3ee" }, arrows: { to: { enabled: true, scaleFactor: 0.6 } }, font: { color: "#e5e7eb", size: 10, strokeWidth: 3 }, smooth: { enabled: true, type: "cubicBezier", roundness: 0.1 } }, physics: { stabilization: true }, interaction: { hover: true } });
+    visNet.on("click", function(params) { if (params.nodes.length) showDetail(params.nodes[0]); });
+  }
 
-function render() {
-  const lib = document.getElementById("lib").value;
-  if (lib === "cytoscape") renderCytoscape();
-  else if (lib === "vis") renderVis();
-  else if (lib === "d3") renderD3();
-}
+  function renderD3() {
+    clearDetail();
+    const container = document.getElementById("graph");
+    container.innerHTML = "";
+    if (typeof d3 === "undefined") { document.getElementById("fallback").style.display = "block"; return; }
+    const { nodes, edges } = buildElements();
+    const nodeMap = new Map(nodes.map(function(n) { return [n.data.id, n.data]; }));
+    const width = container.clientWidth || 900, height = container.clientHeight || 600;
+    const svg = d3.select(container).append("svg").attr("viewBox", [0, 0, width, height]);
+    const g = svg.append("g");
+    const zoom = d3.zoom().scaleExtent([0.2, 4]).on("zoom", function(event) { g.attr("transform", event.transform); });
+    svg.call(zoom);
+    const simulation = d3.forceSimulation(Array.from(nodeMap.values())).force("link", d3.forceLink(edges.map(function(e) { return e.data; })).id(function(d) { return d.id; })).force("charge", d3.forceManyBody().strength(-400)).force("center", d3.forceCenter(width / 2, height / 2));
+    const link = g.append("g").selectAll("line").data(edges).join("line").attr("stroke", "#475569").attr("stroke-width", 1.5);
+    const label = g.append("g").selectAll("text").data(edges).join("text").text(function(d) { return d.data.label; }).attr("font-size", 9).attr("fill", "#e5e7eb").attr("text-anchor", "middle");
+    const node = g.append("g").selectAll("circle").data(Array.from(nodeMap.values())).join("circle").attr("r", 10).attr("fill", function(d) { return d.color && d.color.background ? d.color.background : "#2563eb"; }).attr("stroke", "#111827").attr("stroke-width", 2).on("click", function(_event, d) { showDetail(d); });
+    simulation.on("tick", function() {
+      link.attr("x1", function(d) { return d.source.x; }).attr("y1", function(d) { return d.source.y; }).attr("x2", function(d) { return d.target.x; }).attr("y2", function(d) { return d.target.y; });
+      label.attr("x", function(d) { return (d.source.x + d.target.x) / 2; }).attr("y", function(d) { return (d.source.y + d.target.y) / 2; });
+      node.attr("cx", function(d) { return d.x; }).attr("cy", function(d) { return d.y; });
+    });
+  }
 
-renderLegend();
-renderDeviceList();
-render();
-document.getElementById("lib").addEventListener("change", render);
+  function render() {
+    const lib = document.getElementById("lib").value;
+    if (lib === "cytoscape") renderCytoscape();
+    else if (lib === "vis") renderVis();
+    else if (lib === "d3") renderD3();
+  }
+
+  renderLegend();
+  renderDeviceList();
+  render();
+  document.getElementById("lib").addEventListener("change", render);
+})();
 </script>
 </body>
 </html>
