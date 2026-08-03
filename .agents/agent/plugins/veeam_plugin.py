@@ -126,12 +126,8 @@ class VeeamPlugin(AgentPlugin):
 
         if system == "Windows":
             if self._api_base and self._username:
-                if self._ssh_target:
-                    self._use_relay = True
-                    logger.info("Veeam plugin initialized for Windows via SSH relay (%s)", self._ssh_target.get("hostname"))
-                else:
-                    self._use_rest = True
-                    logger.info("Veeam plugin initialized for Windows REST API (%s)", self._api_base)
+                self._use_rest = True
+                logger.info("Veeam plugin initialized for Windows REST API (%s)", self._api_base)
                 return
             self._has_module = await self._check_veeam()
             if not self._has_module:
@@ -297,7 +293,9 @@ class VeeamPlugin(AgentPlugin):
     async def _collect_inventory_rest(self) -> dict[str, Any]:
         jobs = await self._rest_get("/api/v1/jobs")
         if jobs is None:
+            logger.info("Veeam REST /jobs failed, trying local PowerShell fallback on agent host")
             jobs = await self._run_collector("jobs") or []
+            logger.info("Veeam local PowerShell jobs fallback returned %d jobs", len(jobs) if isinstance(jobs, list) else 0)
         sessions = await self._rest_get("/api/v1/sessions") or []
         repos = await self._rest_get("/api/v1/backupInfrastructure/repositories") or []
         managed_servers = await self._rest_get("/api/v1/backupInfrastructure/managedServers") or []
