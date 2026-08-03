@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import CytoscapeComponent from "react-cytoscapejs";
 import { Network as VisNetwork } from "vis-network/standalone";
-import DataSet from "vis-data/peer";
+import DataSet from "vis-data";
 import * as d3 from "d3";
 import { networkApi, NetworkTopologyResponse, NetworkDevice } from "../services/network";
 
