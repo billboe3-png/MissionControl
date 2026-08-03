@@ -95,6 +95,7 @@ import UniFiAlertsPage from "./pages/unifi/AlertsPage";
 import UniFiWirelessPage from "./pages/unifi/WirelessPage";
 import UniFiControllersPage from "./pages/unifi/ControllersPage";
 import UniFiSitesPage from "./pages/unifi/SitesPage";
+import NetworkTopologyPage from "./pages/network/NetworkTopologyPage";
 
 export default function App() {
     return (
@@ -171,6 +172,9 @@ export default function App() {
                             <Route path="/veeam/repositories" element={<VeeamRepositoriesPage />} />
 
                             <Route path="/veeam/servers" element={<VeeamServersPage />} />
+
+                            {/* Network */}
+                            <Route path="/network/topology" element={<NetworkTopologyPage />} />
 
                             {/* UniFi */}
                             <Route path="/unifi" element={<UniFiDashboardPage />} />

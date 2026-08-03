@@ -123,6 +123,7 @@ export const navigation: NavGroup[] = [
             { label: "Wireless", path: "/unifi/wireless", icon: "📡" },
             { label: "Controllers", path: "/unifi/controllers", icon: "🎛️" },
             { label: "Sites", path: "/unifi/sites", icon: "🗺️" },
+            { label: "Topology", path: "/network/topology", icon: "🕸️" },
         ],
     },
     {
