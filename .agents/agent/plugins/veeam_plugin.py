@@ -252,7 +252,9 @@ class VeeamPlugin(AgentPlugin):
             return {"success": False, "error": str(exc), "stdout": "", "stderr": str(exc), "exit_code": -1}
 
     async def _collect_inventory_rest(self) -> dict[str, Any]:
-        jobs = await self._rest_get("/api/v1/jobs") or []
+        jobs = await self._rest_get("/api/v1/jobs")
+        if jobs is None:
+            jobs = await self._run_collector("jobs") or []
         sessions = await self._rest_get("/api/v1/sessions") or []
         repos = await self._rest_get("/api/v1/backupInfrastructure/repositories") or []
         managed_servers = await self._rest_get("/api/v1/backupInfrastructure/managedServers") or []
