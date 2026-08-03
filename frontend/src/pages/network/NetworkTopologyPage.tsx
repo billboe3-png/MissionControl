@@ -187,7 +187,7 @@ export default function NetworkTopologyPage() {
     svg.call(zoom as any);
 
     const simulation = d3
-      .forceSimulation(nodeMap.values() as any[])
+      .forceSimulation(Array.from(nodeMap.values()))
       .force("link", d3.forceLink(edges.map((e: any) => e.data)).id((d: any) => d.id))
       .force("charge", d3.forceManyBody().strength(-400))
       .force("center", d3.forceCenter(width / 2, height / 2));
