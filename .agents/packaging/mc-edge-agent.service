@@ -1,0 +1,27 @@
+[Unit]
+Description=Mission Control Edge Agent
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=mc-agent
+Group=mc-agent
+WorkingDirectory=/opt/mc-agent
+Environment="MC_LOG_FILE=/var/log/mc-agent/agent.log"
+ExecStart=/usr/bin/python3 -m agent
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=mc-edge-agent
+
+# Security hardening
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/var/lib/mc-agent /var/log/mc-agent
+
+[Install]
+WantedBy=multi-user.target

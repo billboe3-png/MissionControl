@@ -1,37 +1,56 @@
 <#
 .SYNOPSIS
-Uninstalls Mission Control Agent from CORHQROBERTB.
+Uninstalls Mission Control Edge Agent from Windows.
 #>
 
 $ErrorActionPreference = 'SilentlyContinue'
 
-# 1. Remove scheduled task
-schtasks /Delete /TN "MissionControlAgent" /F 2>$null
+$ServiceName = "MissionControlEdgeAgent"
+$InstallDir = "C:\Program Files\MC Edge Agent"
+$ConfigDir = "$env:ProgramData\MC Edge Agent"
 
-# 2. Kill any running agent processes
-Get-Process -Name "python" -ErrorAction SilentlyContinue | Stop-Process -Force
+# 1. Stop and remove service
+Write-Host "[*] Stopping and removing service..."
+$svc = Get-Service -Name $ServiceName -ErrorAction SilentlyContinue
+if ($svc) {
+    Stop-Service -Name $ServiceName -Force -ErrorAction SilentlyContinue
+    sc.exe delete $ServiceName | Out-Null
+    Write-Host "[+] Service removed"
+}
 
-# 3. Remove install dirs
+# 2. Remove install dirs
+Write-Host "[*] Removing installation files..."
 $dirs = @(
-    'C:\MissionControlAgent',
-    'C:\Program Files\Python312\Lib\site-packages\agent',
-    'C:\Program Files\Python312\Scripts\mc-agent*',
-    'C:\Users\robert\AppData\Local\hermes\hermes-agent\venv\Lib\site-packages\agent'
+    $InstallDir,
+    "C:\MissionControlAgent",
+    "$env:ProgramData\MissionControlAgent"
 )
 foreach ($d in $dirs) {
     if (Test-Path $d) {
-        Write-Host "Removing $d"
         Remove-Item $d -Recurse -Force
+        Write-Host "[+] Removed $d"
     }
 }
 
-# 4. Remove leftover configs
+# 3. Remove leftover configs
 $configs = @(
-    'C:\MissionControlAgent\config.yaml',
-    'C:\ProgramData\MissionControlAgent\config.yaml'
+    "$InstallDir\config.yaml",
+    "$ConfigDir\config.yaml",
+    "$env:USERPROFILE\.config\mission-control-agent\config.yaml",
+    "$env:USERPROFILE\.config\mission-control-edge-agent\config.yaml"
 )
 foreach ($c in $configs) {
-    if (Test-Path $c) { Remove-Item $c -Force }
+    if (Test-Path $c) { 
+        Remove-Item $c -Force
+        Write-Host "[+] Removed $c"
+    }
 }
 
-Write-Host "Uninstall complete. Reboot or reinstall from UI."
+# 4. Remove scheduled task if exists
+$task = Get-ScheduledTask -TaskName "MissionControlAgent" -ErrorAction SilentlyContinue
+if ($task) {
+    Unregister-ScheduledTask -TaskName "MissionControlAgent" -Confirm:$false
+    Write-Host "[+] Removed scheduled task"
+}
+
+Write-Host "`n[+] Uninstall complete."

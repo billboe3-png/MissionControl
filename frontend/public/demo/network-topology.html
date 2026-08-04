@@ -6,13 +6,14 @@
 <title>Network Topology Demo</title>
 <style>
   body { margin: 0; background: #0b0f17; color: #e5e7eb; font-family: ui-sans-serif, system-ui, sans-serif; }
-  .bar { display: flex; gap: 8px; padding: 12px; background: #0f172a; border-bottom: 1px solid #1f2937; align-items: center; flex-wrap: wrap; }
+  html, body { height: 100%; }
+  .bar { display: flex; gap: 8px; padding: 12px; background: #0f172a; border-bottom: 1px solid #1f2937; align-items: center; flex-wrap: wrap; box-sizing: border-box; }
   .bar select { background: #111827; color: #e5e7eb; border: 1px solid #374151; padding: 8px 10px; border-radius: 6px; }
   .legend { display: flex; gap: 10px; flex-wrap: wrap; margin-left: auto; }
   .chip { display: inline-flex; align-items: center; gap: 6px; padding: 4px 8px; background: #0b0f17; border: 1px solid #1f2937; border-radius: 999px; font-size: 12px; color: #cbd5e1; }
   .dot { width: 10px; height: 10px; border-radius: 50%; background: currentColor; }
-  .panes { display: grid; grid-template-columns: 1fr 320px; gap: 12px; padding: 12px; height: calc(100vh - 52px); }
-  .graph { background: #0b0f17; border: 1px solid #1f2937; border-radius: 8px; overflow: hidden; position: relative; }
+  .panes { display: grid; grid-template-columns: 1fr 320px; gap: 12px; padding: 12px; height: calc(100vh - 52px); box-sizing: border-box; }
+  .graph { background: #0b0f17; border: 1px solid #1f2937; border-radius: 8px; overflow: hidden; position: relative; width: 100%; height: 100%; min-height: 200px; }
   .graph canvas, .graph svg { display: block; width: 100%; height: 100%; }
   .side { background: #0f172a; border: 1px solid #1f2937; border-radius: 8px; padding: 12px; overflow: auto; }
   .side h3 { margin: 4px 0 8px; color: #f3f4f6; }
@@ -150,6 +151,28 @@
     el.innerHTML = "";
   }
 
+  function ensureContainerSize() {
+    const container = document.getElementById("graph");
+    if (!container) return null;
+    const w = container.clientWidth || 900;
+    const h = container.clientHeight || 600;
+    if (w < 10 || h < 10) {
+      container.style.width = "100%";
+      container.style.height = "100%";
+      container.style.minHeight = "400px";
+    }
+    return container;
+  }
+
+  function tryResizeLater(lib, attempts) {
+    if (attempts <= 0) return;
+    setTimeout(function() {
+      if (lib === "cytoscape" && window.__cy) window.__cy.resize();
+      if (lib === "vis" && window.__vis) window.__vis.fit();
+      tryResizeLater(lib, attempts - 1);
+    }, 250);
+  }
+
   function toCytoscapeElements() {
     const nodes = topology.switches.map(function(n) {
       return { data: { id: n.id, label: n.label, color: { background: COLORS.switch, border: "#111827" } } };
@@ -166,21 +189,24 @@
 
   function renderCytoscape() {
     clearDetail();
-    const container = document.getElementById("graph");
-    container.innerHTML = "";
-    if (typeof Cytoscape === "undefined") { document.getElementById("fallback").style.display = "block"; return; }
-    Cytoscape({ container: container, elements: toCytoscapeElements(), layout: { name: "cose", animate: false, padding: 40 }, style: [
+    const container = ensureContainerSize();
+    if (!container) return;
+    container.innerHTML = '<div id="fallback" style="display:none; padding: 12px; color:#f87171;">Graph library failed to load.</div>';
+    if (typeof Cytoscape === "undefined") { const fb = document.getElementById("fallback"); if (fb) fb.style.display = "block"; return; }
+    window.__cy = Cytoscape({ container: container, elements: toCytoscapeElements(), layout: { name: "cose", animate: false, padding: 40 }, style: [
       { selector: "node", style: { label: "data(label)", "font-size": 11, "text-valign": "center", "text-halign": "center", width: 50, height: 50, "background-color": "data(color.background)", color: "#fff", "border-width": 2, "border-color": "data(color.border)" } },
       { selector: "edge", style: { label: "data(label)", "font-size": 9, "curve-style": "bezier", "target-arrow-shape": "triangle", "target-arrow-color": "#94a3b8", "line-color": "#94a3b8", width: 1.5, "text-rotation": "autorotate", "text-outline-color": "#ffffff", "text-outline-opacity": 0.6 } }
     ], minZoom: 0.2, maxZoom: 4 }).on("tap", "node", function(e) { showDetail(e.target.data()); });
+    tryResizeLater("cytoscape", 6);
   }
 
   function renderVis() {
     clearDetail();
-    const container = document.getElementById("graph");
-    container.innerHTML = "";
+    const container = ensureContainerSize();
+    if (!container) return;
+    container.innerHTML = '<div id="fallback" style="display:none; padding: 12px; color:#f87171;">Graph library failed to load.</div>';
     const DataSet = window.DataSet || (window.visData && window.visData.DataSet);
-    if (!DataSet || typeof Network === "undefined") { document.getElementById("fallback").style.display = "block"; return; }
+    if (!DataSet || typeof Network === "undefined") { const fb = document.getElementById("fallback"); if (fb) fb.style.display = "block"; return; }
     const nodeSet = new Set();
     const nodeData = [];
     const addNodeIfMissing = function(item) {
@@ -194,26 +220,29 @@
     const edgeData = edges.map(function(e, idx) { return { id: "e" + idx, from: e.source, to: e.target, label: e.label, arrows: "to", font: { align: "middle", size: 9 } }; });
     const data = { nodes: new DataSet(nodeData), edges: new DataSet(edgeData) };
     const visNet = new Network(container, data, { nodes: { shape: "dot", size: 16, font: { color: "#e5e7eb" }, borderWidth: 2, color: { border: "#111827", background: "#2563eb" } }, edges: { color: { color: "#94a3b8", highlight: "#22d3ee" }, arrows: { to: { enabled: true, scaleFactor: 0.6 } }, font: { color: "#e5e7eb", size: 9, strokeWidth: 3 }, smooth: { enabled: true, type: "cubicBezier", roundness: 0.1 } }, physics: { stabilization: true, barnesHut: { springLength: 80 } }, interaction: { hover: true } });
+    window.__vis = visNet;
     visNet.on("click", function(params) { if (params.nodes.length) showDetail({ id: params.nodes[0], label: params.nodes[0] }); });
+    tryResizeLater("vis", 6);
   }
 
   function renderD3() {
     clearDetail();
-    const container = document.getElementById("graph");
-    container.innerHTML = "";
-    if (typeof d3 === "undefined") { document.getElementById("fallback").style.display = "block"; return; }
+    const container = ensureContainerSize();
+    if (!container) return;
+    container.innerHTML = '<div id="fallback" style="display:none; padding: 12px; color:#f87171;">Graph library failed to load.</div>';
+    if (typeof d3 === "undefined") { const fb = document.getElementById("fallback"); if (fb) fb.style.display = "block"; return; }
     const nodeMap = new Map();
     const nodes = [];
     topology.switches.forEach(function(n) { nodeMap.set(n.id, n.label); nodes.push({ id: n.id, label: n.label, category: "switch" }); });
     topology.devices.forEach(function(n) { nodeMap.set(n.id, n.label); nodes.push({ id: n.id, label: n.label, category: classifyById(n.id, n.label) }); });
     const nodeData = nodes.map(function(n) { return { id: n.id, label: n.label, color: { background: COLORS[n.category] || COLORS.unknown, border: "#111827" } }; });
     const edgeData = edges.map(function(e, idx) { return { id: "e" + idx, source: e.source, target: e.target, label: e.label }; });
-    const width = container.clientWidth || 900, height = container.clientHeight || 600;
-    const svg = d3.select(container).append("svg").attr("viewBox", [0, 0, width, height]);
+    const w = container.clientWidth || 900, h = container.clientHeight || 600;
+    const svg = d3.select(container).append("svg").attr("viewBox", [0, 0, w, h]).attr("width", "100%").attr("height", "100%");
     const g = svg.append("g");
     const zoom = d3.zoom().scaleExtent([0.2, 4]).on("zoom", function(event) { g.attr("transform", event.transform); });
     svg.call(zoom);
-    const simulation = d3.forceSimulation(nodeData).force("link", d3.forceLink(edgeData).id(function(d) { return d.id; })).force("charge", d3.forceManyBody().strength(-250)).force("center", d3.forceCenter(width / 2, height / 2));
+    const simulation = d3.forceSimulation(nodeData).force("link", d3.forceLink(edgeData).id(function(d) { return d.id; })).force("charge", d3.forceManyBody().strength(-250)).force("center", d3.forceCenter(w / 2, h / 2));
     const link = g.append("g").selectAll("line").data(edgeData).join("line").attr("stroke", "#475569").attr("stroke-width", 1.2);
     const label = g.append("g").selectAll("text").data(edgeData).join("text").text(function(d) { return d.label; }).attr("font-size", 8).attr("fill", "#e5e7eb").attr("text-anchor", "middle");
     const node = g.append("g").selectAll("circle").data(nodeData).join("circle").attr("r", 7).attr("fill", function(d) { return d.color && d.color.background ? d.color.background : "#2563eb"; }).attr("stroke", "#111827").attr("stroke-width", 1.5).on("click", function(_event, d) { showDetail({ id: d.id, label: d.label }); });
@@ -231,10 +260,22 @@
     else if (lib === "d3") renderD3();
   }
 
-  renderLegend();
-  renderDeviceList();
-  render();
-  document.getElementById("lib").addEventListener("change", render);
+  function init() {
+    renderLegend();
+    renderDeviceList();
+    render();
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", init);
+  } else {
+    init();
+  }
+
+  window.addEventListener("resize", function() {
+    if (window.__cy) window.__cy.resize();
+    if (window.__vis) window.__vis.fit();
+  });
 })();
 </script>
 </body>
