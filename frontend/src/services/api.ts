@@ -16,6 +16,12 @@ export interface SubsystemsResponse {
 }
 
 export const api = {
+    async changePassword(current_password: string, new_password: string): Promise<{status: string}> {
+        return apiClient<{status: string}>(`${API}/auth/change-password`, {
+            method: "POST",
+            json: { current_password, new_password },
+        });
+    },
     async getDashboard(): Promise<DashboardResponse> {
         return apiClient<DashboardResponse>(`${API}/dashboard`);
     },

@@ -22,6 +22,7 @@ import IdentityOverviewPage from "./pages/identity/IdentityOverviewPage";
 import ActiveDirectoryPage from "./pages/identity/ActiveDirectoryPage";
 import Microsoft365Page from "./pages/identity/Microsoft365Page";
 import GeneralPage from "./pages/settings/GeneralPage";
+import ProfilePage from "./pages/settings/ProfilePage";
 import UsersPage from "./pages/settings/UsersPage";
 import IntegrationsPage from "./pages/settings/IntegrationsPage";
 import AppearancePage from "./pages/settings/AppearancePage";
@@ -186,6 +187,7 @@ export default function App() {
                             <Route path="/unifi/sites" element={<UniFiSitesPage />} />
 
                             <Route path="/settings" element={<GeneralPage />} />
+                            <Route path="/settings/profile" element={<ProfilePage />} />
                             <Route path="/settings/users" element={<UsersPage />} />
                             <Route path="/settings/integrations" element={<IntegrationsPage />} />
                             <Route path="/settings/appearance" element={<AppearancePage />} />
