@@ -1,0 +1,208 @@
+"""Mission Control Edge Agent - Cloud sync module.
+
+Handles pull-based config sync and data export to the GCE backend.
+All operations are best-effort and offline-safe.
+"""
+
+from __future__ import annotations
+
+import gzip
+import json
+import logging
+import time
+from datetime import UTC, datetime
+from pathlib import Path
+from typing import Any
+
+import httpx
+
+from .storage import EdgeStorage, HeartbeatRecord, InventoryRecord, StorageConfig
+
+logger = logging.getLogger(__name__)
+
+
+class SyncResult:
+    """Result of a sync operation."""
+
+    def __init__(self, direction: str, success: bool, status_code: int = 0,
+                 bytes_in: int = 0, bytes_out: int = 0, error: str = ""):
+        self.direction = direction
+        self.success = success
+        self.status_code = status_code
+        self.bytes_in = bytes_in
+        self.bytes_out = bytes_out
+        self.error = error
+        self.timestamp = datetime.now(UTC).isoformat()
+
+
+class EdgeSync:
+    """Pull-based config sync + data push for the edge agent."""
+
+    def __init__(self, storage: EdgeStorage, base_url: str, api_key: str, agent_id: int):
+        self._storage = storage
+        self._base_url = base_url.rstrip("/")
+        self._api_key = api_key
+        self._agent_id = agent_id
+        self._last_pull_attempt: str | None = None
+        self._client = httpx.Client(
+            timeout=httpx.Timeout(30.0, connect=10.0),
+            headers={"Authorization": f"Bearer {api_key}"},
+        )
+
+    def close(self) -> None:
+        """Close the HTTP client."""
+        try:
+            self._client.close()
+        except Exception:
+            pass
+
+    # ------------------------------------------------------------------ #
+    # Config pull
+    # ------------------------------------------------------------------ #
+
+    def pull_config(self) -> SyncResult:
+        """Pull configuration from the cloud. Non-fatal if offline."""
+        endpoint = f"{self._base_url}/api/v1/edge/{self._agent_id}/config"
+        try:
+            response = self._client.get(endpoint)
+            status = response.status_code
+            if status == 200:
+                payload = response.json()
+                manifest = self._parse_manifest(payload)
+                self._storage.save_manifest(manifest)
+                self._last_pull_attempt = datetime.now(UTC).isoformat()
+                self._storage.log_sync(
+                    "pull-config", endpoint, status,
+                    bytes_in=len(response.content),
+                )
+                logger.info("Config pulled: version=%s", manifest.config_version)
+                return SyncResult("pull-config", True, status, len(response.content), 0)
+            if status == 404:
+                logger.warning("Config endpoint not found; edge not registered?")
+                self._storage.log_sync("pull-config", endpoint, status, error="not found")
+                return SyncResult("pull-config", False, status, 0, 0, "not found")
+            if status == 401:
+                logger.error("Config pull unauthorized; check API key")
+                self._storage.log_sync("pull-config", endpoint, status, error="unauthorized")
+                return SyncResult("pull-config", False, status, 0, 0, "unauthorized")
+            logger.warning("Config pull unexpected status=%s", status)
+            self._storage.log_sync("pull-config", endpoint, status, error=f"unexpected {status}")
+            return SyncResult("pull-config", False, status)
+        except Exception as e:
+            error_msg = str(e)
+            logger.debug("Config pull failed: %s", error_msg)
+            self._storage.log_sync("pull-config", endpoint, 0, error=error_msg)
+            return SyncResult("pull-config", False, 0, 0, 0, error_msg)
+
+    def _parse_manifest(self, payload: dict[str, Any]) -> Any:
+        """Parse cloud payload into a ConfigManifest."""
+        from .storage import ConfigManifest
+        return ConfigManifest(
+            config_version=int(payload.get("config_version", 1)),
+            agent_id=int(payload.get("agent_id", self._agent_id)),
+            last_modified=payload.get("last_modified", ""),
+            config=payload.get("config", {}),
+            plugins=payload.get("plugins", []),
+            remote_targets=payload.get("remote_targets", []),
+            integration_profiles=payload.get("integration_profiles", []),
+            pulled_at=datetime.now(UTC).isoformat(),
+            applied=False,
+        )
+
+    # ------------------------------------------------------------------ #
+    # Data push
+    # ------------------------------------------------------------------ #
+
+    def push_inventory(self, limit: int = 100) -> SyncResult:
+        """Push pending inventory records to the cloud."""
+        endpoint = f"{self._base_url}/api/v1/edge/{self._agent_id}/inventory"
+        records = self._storage.get_unpushed_inventory(limit)
+        if not records:
+            return SyncResult("push-inventory", True, 0, 0, 0)
+
+        payload = {
+            "agent_id": self._agent_id,
+            "records": [self._serialize_inventory(r) for r in records],
+        }
+        compressed = gzip.compress(json.dumps(payload).encode("utf-8"))
+        try:
+            response = self._client.post(
+                endpoint,
+                content=compressed,
+                headers={"Content-Encoding": "gzip"},
+            )
+            status = response.status_code
+            success = status == 200
+            if success:
+                for r in records:
+                    self._storage.mark_inventory_pushed(r.id or 0)
+                logger.info("Pushed %s inventory records", len(records))
+            else:
+                logger.warning("Inventory push failed: %s", status)
+            self._storage.log_sync(
+                "push-inventory", endpoint, status,
+                bytes_in=len(compressed),
+                bytes_out=len(response.content),
+                error="" if success else f"status {status}",
+            )
+            return SyncResult(
+                "push-inventory", success, status,
+                len(compressed), len(response.content),
+                "" if success else f"status {status}",
+            )
+        except Exception as e:
+            error_msg = str(e)
+            logger.debug("Inventory push failed: %s", error_msg)
+            self._storage.log_sync("push-inventory", endpoint, 0, error=error_msg)
+            return SyncResult("push-inventory", False, 0, len(compressed), 0, error_msg)
+
+    def push_heartbeat(self, record: HeartbeatRecord) -> SyncResult:
+        """Push a single heartbeat record."""
+        endpoint = f"{self._base_url}/api/v1/edge/{self._agent_id}/heartbeat"
+        payload = {
+            "agent_id": record.agent_id,
+            "status": record.status,
+            "latency_ms": record.latency_ms,
+            "timestamp": datetime.now(UTC).isoformat(),
+            "error": record.error,
+        }
+        try:
+            response = self._client.post(endpoint, json=payload)
+            status = response.status_code
+            success = status == 200
+            self._storage.log_sync(
+                "push-heartbeat", endpoint, status,
+                bytes_in=len(json.dumps(payload).encode("utf-8")),
+                bytes_out=len(response.content),
+            )
+            return SyncResult(
+                "push-heartbeat", success, status,
+                len(json.dumps(payload).encode("utf-8")),
+                len(response.content),
+                "" if success else f"status {status}",
+            )
+        except Exception as e:
+            error_msg = str(e)
+            self._storage.log_sync("push-heartbeat", endpoint, 0, error=error_msg)
+            return SyncResult("push-heartbeat", False, 0, 0, 0, error_msg)
+
+    # ------------------------------------------------------------------ #
+    # Helpers
+    # ------------------------------------------------------------------ #
+
+    def _serialize_inventory(self, record: InventoryRecord) -> dict[str, Any]:
+        """Serialize an inventory record for the cloud."""
+        return {
+            "id": record.id,
+            "plugin_name": record.plugin_name,
+            "data": record.data,
+            "checksum": record.checksum,
+            "collected_at": record.collected_at,
+        }
+
+    def run_sync_cycle(self) -> dict[str, SyncResult]:
+        """Run one full sync cycle: config pull then data push."""
+        results: dict[str, SyncResult] = {}
+        results["config"] = self.pull_config()
+        results["inventory"] = self.push_inventory()
+        return results
