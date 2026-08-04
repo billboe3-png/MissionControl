@@ -134,6 +134,7 @@ from app.routers import (  # noqa: E402
     automation,
     company,
     dashboard,
+    edge,
     health,
     hyperv,
     identity,

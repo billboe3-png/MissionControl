@@ -12,6 +12,8 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
+from app.providers.veeam.agent_provider import AgentVeeamProvider
+
 logger = logging.getLogger(__name__)
 
 
@@ -44,6 +46,41 @@ class VeeamService:
                 providers.append(("CORHQROBERTB (Agent)", local))
         except Exception as exc:
             logger.debug("Agent-local Veeam provider unavailable: %s", exc)
+
+        try:
+            from app.models.db.agent import Agent
+
+            agents = db.query(Agent).all() if db else []
+            for agent in agents:
+                if not agent.inventory_json:
+                    continue
+                try:
+                    full_inv = agent.inventory_json
+                    if isinstance(full_inv, str):
+                        import json
+                        full_inv = json.loads(full_inv)
+                    remote = full_inv.get("remote_targets", {})
+                    for tid_str, tdata in remote.items():
+                        inv = tdata.get("inventory", {})
+                        veeam = inv.get("veeam") or full_inv.get("plugins", {}).get("veeam")
+                        if not veeam or not isinstance(veeam, dict):
+                            continue
+                        if not ("jobs" in veeam or "license" in veeam):
+                            continue
+                        target_hostname = tdata.get("hostname") or agent.hostname or agent.name
+                        providers.append(
+                            (f"{target_hostname} (Agent)", AgentVeeamProvider(
+                                inventory=veeam,
+                                target_hostname=target_hostname,
+                                agent_id=agent.id,
+                                target_id=int(tid_str.replace("target-", "")) if tid_str.startswith("target-") else None,
+                            ))
+                        )
+                except Exception:
+                    continue
+        except Exception as exc:
+            logger.debug("Agent remote target Veeam providers unavailable: %s", exc)
+
         return providers
 
     async def get_summary(self, db: Session | None = None) -> dict:

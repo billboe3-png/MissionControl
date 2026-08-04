@@ -39,13 +39,13 @@ if (-not $currentPrincipal.IsInRole([Security.Principal.WindowsBuiltInRole]::Adm
     exit 1
 }
 
-$ServiceName = "MissionControlAgent"
+$ServiceName = "MissionControlEdgeAgent"
 $InstallDir = $InstallDir
-$AgentScript = "$InstallDir\agent\__main__.py"
-$ConfigDir = "$env:USERPROFILE\.config\mission-control-agent"
+$AgentScript = "$InstallDir\agent\edge_main.py"
+$ConfigDir = "$env:USERPROFILE\.config\mission-control-edge-agent"
 $ConfigFile = "$ConfigDir\config.yaml"
 $LogDir = "$InstallDir\logs"
-$ExeName = "mc-agent.exe"
+$ExeName = "mc-edge.exe"
 
 # ── Helpers ──────────────────────────────────────────────
 
@@ -143,7 +143,7 @@ function Install-Python {
 # ── Uninstall ────────────────────────────────────────────
 
 if ($Uninstall) {
-    Write-Status "Uninstalling Mission Control Agent..."
+    Write-Status "Uninstalling Mission Control Edge Agent..."
 
     $svc = Get-Service -Name $ServiceName -ErrorAction SilentlyContinue
     if ($svc) {
@@ -153,9 +153,21 @@ if ($Uninstall) {
         Write-Ok "Service removed"
     }
 
+    $task = Get-ScheduledTask -TaskName $ServiceName -ErrorAction SilentlyContinue
+    if ($task) {
+        Write-Status "Removing scheduled task..."
+        Unregister-ScheduledTask -TaskName $ServiceName -Confirm:$false -ErrorAction SilentlyContinue
+        Write-Ok "Scheduled task removed"
+    }
+
     if (Test-Path $InstallDir) {
         Remove-Item -Recurse -Force $InstallDir
         Write-Ok "Removed $InstallDir"
+    }
+
+    if (Test-Path $ConfigDir) {
+        Remove-Item -Recurse -Force $ConfigDir
+        Write-Ok "Removed $ConfigDir"
     }
 
     Write-Ok "Uninstall complete."
@@ -266,7 +278,7 @@ $pyDir = Split-Path $python -Parent
 $pyExe = "$pyDir\python.exe"
 $prevEAP = $ErrorActionPreference
 $ErrorActionPreference = "Continue"
-& "$pyExe" -m pip install --quiet httpx psutil pydantic pydantic-settings pyyaml packaging paramiko pywinrm pysnmp 2>$null
+& "$pyExe" -m pip install --quiet httpx psutil pydantic pydantic-settings pyyaml packaging paramiko pywinrm pysnmp pywin32 2>$null
 $ErrorActionPreference = $prevEAP
 Write-Ok "Dependencies installed"
 
@@ -330,64 +342,51 @@ New-Item -ItemType Directory -Path $LogDir -Force | Out-Null
 
 Write-Status "Registering Windows service..."
 
-# Find python.exe full path
-$pythonExe = (Get-Command $python -ErrorAction SilentlyContinue).Source
-if (-not $pythonExe) {
-    $pythonExe = $python
-}
-
-# Create a batch launcher for the service
-$BatchPath = "$InstallDir\start-agent.bat"
-$BatchContent = @"
-@echo off
-cd /d "$InstallDir"
-"$pythonExe" -m agent
-"@
-Set-Content -Path $BatchPath -Value $BatchContent -Encoding ASCII
-
-# Use NSSM if available, otherwise use sc.exe + srvany approach
+# Ensure NSSM is available
 $nssm = Get-Command "nssm" -ErrorAction SilentlyContinue
-
-if ($nssm) {
-    Write-Status "Using NSSM to register service..."
-    nssm stop $ServiceName 2>&1 | Out-Null
-    nssm remove $ServiceName confirm 2>&1 | Out-Null
-    nssm install $ServiceName $BatchPath
-    nssm set $ServiceName DisplayName "Mission Control Agent"
-    nssm set $ServiceName Description "Outbound-only agent for Mission Control"
-    nssm set $ServiceName Start SERVICE_AUTO_START
-    nssm set $ServiceName AppDirectory $InstallDir
-    nssm set $ServiceName AppStdout "$LogDir\service-stdout.log"
-    nssm set $ServiceName AppStderr "$LogDir\service-stderr.log"
-    nssm set $ServiceName AppRotateFiles 1
-    nssm set $ServiceName AppRotateBytes 10485760
-    Write-Ok "Service registered via NSSM"
-} else {
-    # Fallback: create a scheduled task that runs at startup
-    Write-Status "NSSM not found. Registering as scheduled task..."
-
-    $taskName = $ServiceName
-    Unregister-ScheduledTask -TaskName $taskName -Confirm:$false -ErrorAction SilentlyContinue
-
-    $action = New-ScheduledTaskAction `
-        -Execute "C:\Users\robert\AppData\Local\Programs\Python\Python312\python.exe" `
-        -Argument "-m agent" `
-        -WorkingDirectory $InstallDir
-
-    $trigger = New-ScheduledTaskTrigger -AtStartup
-
-    $principal = New-ScheduledTaskPrincipal -UserId "SYSTEM" -LogonType ServiceAccount -RunLevel Highest
-
-    Register-ScheduledTask `
-        -TaskName $taskName `
-        -Action $action `
-        -Trigger $trigger `
-        -Principal $principal `
-        -Description "Mission Control Agent - outbound heartbeat and command execution" `
-        | Out-Null
-
-    Write-Ok "Scheduled task registered (runs at startup as SYSTEM)"
+if (-not $nssm) {
+    Write-Status "Downloading NSSM..."
+    $nssmDir = "$InstallDir\tools"
+    New-Item -ItemType Directory -Path $nssmDir -Force | Out-Null
+    $arch = if ([Environment]::Is64BitOperatingSystem) { "win64" } else { "win32" }
+    $nssmUrl = "https://nssm.cc/release/nssm-$arch.zip"
+    $nssmZip = "$env:TEMP\nssm.zip"
+    try {
+        [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+        Invoke-WebRequest -Uri $nssmUrl -OutFile $nssmZip -UseBasicParsing
+        Expand-Archive -Path $nssmZip -DestinationPath $nssmDir -Force
+        $nssmExe = Get-ChildItem $nssmDir -Recurse -Filter "nssm.exe" | Select-Object -First 1
+        if ($nssmExe) {
+            $env:Path += ";$nssmDir"
+            $nssm = $nssmExe.FullName
+            Write-Ok "NSSM installed: $nssm"
+        } else {
+            throw "nssm.exe not found in archive"
+        }
+    } catch {
+        Write-Fail "Failed to download NSSM: $_"
+        Write-Fail "Download manually from https://nssm.cc/download and place nssm.exe in $nssmDir"
+        exit 1
+    }
 }
+
+Write-Status "Installing service with NSSM..."
+nssm stop $ServiceName 2>&1 | Out-Null
+nssm remove $ServiceName confirm 2>&1 | Out-Null
+
+nssm install $ServiceName "$pythonExe" "-m agent --log-file `"$LogDir\agent.log`""
+nssm set $ServiceName DisplayName "Mission Control Edge Agent"
+nssm set $ServiceName Description "Outbound-only edge collector for Mission Control - pulls config, collects inventory locally"
+nssm set $ServiceName Start SERVICE_AUTO_START
+nssm set $ServiceName AppDirectory $InstallDir
+nssm set $ServiceName AppStdout "$LogDir\service-stdout.log"
+nssm set $ServiceName AppStderr "$LogDir\service-stderr.log"
+nssm set $ServiceName AppRotateFiles 1
+nssm set $ServiceName AppRotateBytes 10485760
+nssm set $ServiceName AppExit 0 "Ignore"
+nssm set $ServiceName AppRestartDelay 5000
+
+Write-Ok "Service registered: $ServiceName"
 
 # ── Start the agent ──────────────────────────────────────
 

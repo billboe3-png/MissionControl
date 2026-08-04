@@ -29,17 +29,17 @@ class AgentService:
 
     def start(self) -> None:
         """Start the agent as a background service."""
-        from agent.agent import MissionControlAgent
+        from agent.edge_core import EdgeCore
 
-        logger.info("Service starting...")
+        logger.info("Edge service starting...")
         self._state = "starting"
         self._start_time = time.monotonic()
         self._state = "running"
-        logger.info("Service started")
+        logger.info("Edge service started")
 
         import asyncio
 
-        self._agent = MissionControlAgent(self.config)
+        self._agent = EdgeCore(self.config)
 
         try:
             asyncio.run(self._agent.start())
@@ -47,7 +47,7 @@ class AgentService:
             logger.info("Interrupted")
         except Exception as e:
             self._state = "error"
-            logger.error("Agent failed: %s", e)
+            logger.error("Edge agent failed: %s", e)
             raise
 
     def stop(self) -> None:
@@ -148,12 +148,12 @@ Environment=MC_LOG_LEVEL={self.config.log_level if hasattr(self.config, 'log_lev
 WantedBy=multi-user.target
 """
 
-        unit_path = "/etc/systemd/system/mission-control-agent.service"
+        unit_path = "/etc/systemd/system/mc-edge-agent.service"
         try:
             with open(unit_path, "w") as f:
                 f.write(unit_content)
             logger.info("systemd unit written to %s", unit_path)
-            logger.info("Run: systemctl daemon-reload && systemctl enable --now mission-control-agent")
+            logger.info("Run: systemctl daemon-reload && systemctl enable --now mc-edge-agent")
         except PermissionError:
             logger.error("Permission denied writing %s. Run as root.", unit_path)
         except OSError as e:

@@ -238,7 +238,7 @@ class VeeamRESTProvider(VeeamProvider):
     # ------------------------------------------------------------------ #
 
     async def get_jobs(self) -> dict:
-        if self.data_source == "ssh":
+        if self._has_ssh():
             return await self._get_jobs_from_pg()
         try:
             data = await self._get("/api/v1/jobs")
@@ -250,17 +250,6 @@ class VeeamRESTProvider(VeeamProvider):
             )
             return {"success": True, "jobs": items, "count": total}
         except Exception as exc:
-            # Veeam v13's /api/v1/jobs can 500 server-side. Fall back to the
-            # SSH+PostgreSQL bridge when configured, so the backup tab still
-            # shows jobs.
-            if self._has_ssh():
-                logger.warning(
-                    "Veeam REST /jobs failed (%s); falling back to SSH+PostgreSQL bridge",
-                    exc,
-                )
-                pg_jobs = await self._get_jobs_from_pg()
-                if pg_jobs.get("success") and pg_jobs.get("jobs"):
-                    return pg_jobs
             logger.exception("Veeam get_jobs failed")
             return {"success": False, "error": str(exc), "jobs": []}
 

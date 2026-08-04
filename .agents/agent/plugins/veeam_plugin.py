@@ -11,7 +11,9 @@ import json
 import logging
 import os
 import platform
+import tempfile
 import time
+from pathlib import Path
 from typing import Any
 
 from agent.plugin import AgentPlugin
@@ -126,7 +128,19 @@ class VeeamPlugin(AgentPlugin):
 
         if system == "Windows":
             if self._api_base and self._username:
+                # Check if this Veeam server is also an SSH remote target
+                if not self._ssh_target:
+                    self._ssh_target = self._find_remote_target_for_api_base()
+                if self._ssh_target and (self._ssh_target.get("protocol") or "").lower() == "ssh":
+                    self._use_relay = True
+                    self._use_rest = False
+                    logger.info(
+                        "Veeam plugin initialized for Windows via SSH relay (%s)",
+                        self._ssh_target.get("hostname"),
+                    )
+                    return
                 self._use_rest = True
+                self._use_relay = False
                 logger.info("Veeam plugin initialized for Windows REST API (%s)", self._api_base)
                 return
             self._has_module = await self._check_veeam()
@@ -180,10 +194,7 @@ class VeeamPlugin(AgentPlugin):
 
     async def _ensure_configured(self) -> None:
         """Refresh integration-profile settings if they were updated after init."""
-        if getattr(self, "_configured_from_context", False):
-            return
         await self._configure_from_context()
-        self._configured_from_context = True
 
     # ------------------------------------------------------------------
     # OAuth2 / Bearer token handling
@@ -292,10 +303,17 @@ class VeeamPlugin(AgentPlugin):
 
     async def _collect_inventory_rest(self) -> dict[str, Any]:
         jobs = await self._rest_get("/api/v1/jobs")
+        logger.info("Veeam REST /jobs returned type=%s value=%s", type(jobs).__name__, str(jobs)[:200])
         if jobs is None:
             logger.info("Veeam REST /jobs failed, trying local PowerShell fallback on agent host")
             jobs = await self._run_collector("jobs") or []
             logger.info("Veeam local PowerShell jobs fallback returned %d jobs", len(jobs) if isinstance(jobs, list) else 0)
+        elif isinstance(jobs, list) and len(jobs) == 0:
+            logger.info("Veeam REST /jobs returned empty list, trying local PowerShell fallback")
+            local_jobs = await self._run_collector("jobs") or []
+            logger.info("Veeam local PowerShell jobs fallback returned %d jobs", len(local_jobs))
+            if local_jobs:
+                jobs = local_jobs
         sessions = await self._rest_get("/api/v1/sessions") or []
         repos = await self._rest_get("/api/v1/backupInfrastructure/repositories") or []
         managed_servers = await self._rest_get("/api/v1/backupInfrastructure/managedServers") or []
@@ -388,6 +406,42 @@ class VeeamPlugin(AgentPlugin):
                 "exit_code": proc.returncode,
                 "data": data,
             }
+        except asyncio.TimeoutError:
+            return {"success": False, "stdout": "", "stderr": "timeout", "exit_code": -1, "data": None}
+        except Exception as exc:
+            return {"success": False, "stdout": "", "stderr": str(exc), "exit_code": -1, "data": None}
+
+    async def _run_script_file(self, script: str, timeout: int = 60) -> dict[str, Any]:
+        try:
+            fd, path = tempfile.mkstemp(suffix=".ps1")
+            try:
+                with os.fdopen(fd, "w", encoding="utf-8") as f:
+                    f.write(script)
+                proc = await asyncio.create_subprocess_exec(
+                    "powershell",
+                    "-ExecutionPolicy", "Bypass",
+                    "-File", path,
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE,
+                )
+                stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout)
+                stdout_text = stdout.decode("utf-8", errors="replace").strip() if stdout else ""
+                stderr_text = stderr.decode("utf-8", errors="replace").strip() if stderr else ""
+                data = None
+                if stdout_text:
+                    try:
+                        data = json.loads(stdout_text)
+                    except json.JSONDecodeError:
+                        data = None
+                return {
+                    "success": proc.returncode == 0,
+                    "stdout": stdout_text,
+                    "stderr": stderr_text,
+                    "exit_code": proc.returncode,
+                    "data": data,
+                }
+            finally:
+                Path(path).unlink(missing_ok=True)
         except asyncio.TimeoutError:
             return {"success": False, "stdout": "", "stderr": "timeout", "exit_code": -1, "data": None}
         except Exception as exc:
@@ -590,6 +644,51 @@ class VeeamPlugin(AgentPlugin):
     # Relay fallback for Windows backend inventory
     # ------------------------------------------------------------------
 
+    async def _run_script_via_relay(self, script: str, timeout: int = 60) -> dict[str, Any]:
+        """Execute a PowerShell script on the Veeam server via SSH relay."""
+        remote_manager = (self._context.get("remote_manager") or None)
+        if remote_manager is None:
+            logger.warning("Veeam relay skipped: remote_manager not in plugin context")
+            return {"success": False, "stdout": "", "stderr": "no remote_manager", "exit_code": -1, "data": None}
+
+        if not self._api_base:
+            logger.warning("Veeam relay skipped: api_base not configured")
+            return {"success": False, "stdout": "", "stderr": "no api_base", "exit_code": -1, "data": None}
+
+        hostname = ""
+        api_base = self._api_base.strip()
+        if api_base.startswith("https://"):
+            api_base = api_base[len("https://"):]
+        if api_base.startswith("http://"):
+            api_base = api_base[len("http://"):]
+        hostname = api_base.split("/", 1)[0].split(":", 1)[0]
+
+        target_id = None
+        for tid, target in (getattr(remote_manager, "targets", {}) or {}).items():
+            if target.get("hostname") == hostname and (target.get("protocol") or "").lower() == "ssh":
+                target_id = tid
+                break
+
+        if target_id is None:
+            logger.warning("Veeam relay skipped: no SSH target for host %s", hostname)
+            return {"success": False, "stdout": "", "stderr": f"no ssh target for {hostname}", "exit_code": -1, "data": None}
+
+        encoded = self._encode_powershell(script)
+        ps_command = f"powershell -NoProfile -NonInteractive -EncodedCommand {encoded}"
+        logger.info("Veeam relay script -> target=%s host=%s", target_id, hostname)
+        result = await remote_manager.execute_on_target(
+            target_id=target_id,
+            command=ps_command,
+            timeout=timeout,
+        )
+        return {
+            "success": result.get("success", False),
+            "stdout": result.get("stdout", ""),
+            "stderr": result.get("stderr", ""),
+            "exit_code": result.get("exit_code", -1),
+            "data": None,
+        }
+
     async def _collect_jobs_via_relay(self) -> list[dict[str, Any]]:
         """Collect Veeam jobs from the Windows backend via agent SSH relay."""
         remote_manager = (self._context.get("remote_manager") or None)
@@ -620,71 +719,52 @@ class VeeamPlugin(AgentPlugin):
             logger.warning("Veeam jobs relay skipped: no SSH target for host %s", hostname)
             return []
 
-        script = (
-            "Import-Module Veeam.Backup.PowerShell -ErrorAction SilentlyContinue; "
-            "Get-VBRJob | ForEach-Object { "
-            "  $j = $_; "
-            "  $last = Get-VBRSession -Job $j -Last 1 | Select-Object -First 1; "
-            "  @{"
-            "    id=$j.Id.ToString(); "
-            "    name=$j.Name; "
-            "    type=$j.JobType.ToString(); "
-            "    state=if ($j.IsRunning) {'Running'} else {'Stopped'}; "
-            "    enabled=$j.Options.Enabled; "
-            "    schedule=if ($j.ScheduleOptions -and $j.ScheduleOptions.Enabled) {@{kind='periodic'}} else {$null}; "
-            "    lastRun=if ($last) @{"
-            "      id=$last.Id.ToString(); "
-            "      state=$last.State.ToString(); "
-            "      result=@{result=$last.Result.ToString()}; "
-            "      creationTime=$last.CreationTime.ToString('o'); "
-            "      endTime=$last.EndTime.ToString('o'); "
-            "      progressPercent=$last.Progress "
-            "    } else {$null}; "
-            "    includedObjects=@{objectsInJob=if ($j.Info) {$j.Info.LinkedObjects.Count} else {0}} "
-            "  } | ConvertTo-Json -Compress "
-            "}"
+        sql = (
+            "SELECT regexp_replace(js.job_name, ' - [A-Za-z0-9._]+$', '') AS job_name, "
+            "COUNT(*) AS session_count, "
+            "COALESCE(SUM(bs.total_size), 0), "
+            "COALESCE(SUM(bs.processed_size), 0), "
+            "COALESCE(SUM(bs.read_size), 0), "
+            "COALESCE(SUM(bs.stored_size), 0), "
+            "COALESCE(AVG(bs.avg_speed), 0), "
+            "MAX(js.creation_time) AS last_run, "
+            "SUM(CASE WHEN js.result = 0 THEN 1 ELSE 0 END) AS success_count, "
+            "SUM(CASE WHEN js.result = 1 THEN 1 ELSE 0 END) AS warning_count, "
+            "SUM(CASE WHEN js.result = 2 THEN 1 ELSE 0 END) AS failed_count "
+            "FROM \"backup.model.jobsessions\" js "
+            "LEFT JOIN \"backup.model.backupjobsessions\" bs ON bs.id = js.id "
+            "WHERE js.job_name NOT LIKE '%Resynchronize%' "
+            "AND js.job_name NOT LIKE '%Host Discovery%' "
+            "AND js.job_name NOT LIKE '%Foreign transform%' "
+            "AND js.job_name NOT LIKE '%Infrastructure update%' "
+            "AND js.job_name NOT LIKE '%Audit Logs%' "
+            "AND js.job_name NOT LIKE '%Catalog Cleanup%' "
+            "AND js.job_name NOT LIKE '%Shell run%' "
+            "AND js.job_name NOT LIKE '%Backup Configuration%' "
+            "AND js.job_name NOT LIKE '%Hyper-V CBT%' "
+            "AND js.job_name NOT LIKE '%Rescan%' "
+            "AND js.job_name NOT LIKE '%Checkpoint Removal%' "
+            "AND js.job_name NOT LIKE '%Retention job%' "
+            "AND js.job_name NOT LIKE '%Malware Detection%' "
+            "GROUP BY 1 "
+            "ORDER BY MAX(js.creation_time) DESC"
         )
-        logger.info("Veeam jobs relay via SSH target %s", target_id)
-        result = await self._run_script_via_relay(script, timeout=90)
-        if not result.get("success"):
-            return []
-        return self._parse_json_array(result.get("stdout", "[]")) or []
-
-    async def _run_script_via_relay(self, script: str, timeout: int = 60) -> dict[str, Any]:
-        """Execute a PowerShell script on the Veeam Windows backend via SSH relay."""
-        remote_manager = (self._context.get("remote_manager") or None)
-        if remote_manager is None:
-            return {"success": False, "stdout": "", "stderr": "remote_manager not configured", "exit_code": -1}
-
-        if not self._api_base:
-            return {"success": False, "stdout": "", "stderr": "Veeam API base not configured", "exit_code": -1}
-
-        hostname = ""
-        api_base = self._api_base.strip()
-        if api_base.startswith("https://"):
-            api_base = api_base[len("https://"):]
-        if api_base.startswith("http://"):
-            api_base = api_base[len("http://"):]
-        hostname = api_base.split("/", 1)[0].split(":", 1)[0]
-        if not hostname:
-            return {"success": False, "stdout": "", "stderr": "invalid api_base", "exit_code": -1}
-
-        target_id = None
-        for tid, target in (remote_manager.targets or {}).items():
-            if target.get("hostname") == hostname and (target.get("protocol") or "").lower() == "ssh":
-                target_id = tid
-                break
-        if target_id is None:
-            return {"success": False, "stdout": "", "stderr": f"no SSH target for host {hostname}", "exit_code": -1}
-
-        encoded = self._encode_powershell(script)
+        psql = r"C:\Program Files\PostgreSQL\15\bin\psql.exe"
+        ps_script = (
+            f"& '{psql}' -h 127.0.0.1 -U postgres -d VeeamBackup -t -A -c \"{sql}\""
+        )
+        encoded = self._encode_powershell(ps_script)
         ps_command = f"powershell -NoProfile -NonInteractive -EncodedCommand {encoded}"
-        logger.info("Veeam relay command -> target %s", target_id)
-        return await remote_manager.execute_on_target(
+        logger.info("Veeam DB relay via SSH target %s", target_id)
+        result = await remote_manager.execute_on_target(
             target_id=target_id,
             command=ps_command,
-            timeout=timeout,
+            timeout=120,
         )
+        if not result.get("success"):
+            logger.error("Veeam DB relay failed: stderr=%s", result.get("stderr", ""))
+            return []
+        return self._parse_db_rows(result.get("stdout", "")) or []
 
     @staticmethod
     def _encode_powershell(script: str) -> str:
@@ -692,6 +772,28 @@ class VeeamPlugin(AgentPlugin):
         import base64
         encoded = base64.b64encode(script.encode("utf-16-le")).decode("ascii")
         return encoded
+
+    def _parse_db_rows(self, raw: str) -> list[dict[str, Any]]:
+        rows = []
+        if not raw:
+            return rows
+        for line in raw.splitlines():
+            cols = line.split("|")
+            if len(cols) < 9:
+                continue
+            rows.append({
+                "job_name": cols[0].strip(),
+                "session_count": int(cols[1].strip() or 0),
+                "processed_bytes": int(cols[2].strip() or 0),
+                "read_bytes": int(cols[3].strip() or 0),
+                "stored_bytes": int(cols[4].strip() or 0),
+                "avg_speed": float(cols[5].strip() or 0),
+                "last_run": cols[6].strip() or None,
+                "success_count": int(cols[7].strip() or 0),
+                "warning_count": int(cols[8].strip() or 0),
+                "failed_count": int(cols[9].strip() or 0) if len(cols) > 9 else 0,
+            })
+        return rows
 
     # ------------------------------------------------------------------
     # Shared collectors
@@ -701,34 +803,72 @@ class VeeamPlugin(AgentPlugin):
         prefix = "Import-Module Veeam.Backup.PowerShell -ErrorAction SilentlyContinue; "
 
         if collector == "jobs":
-            script = (
-                prefix
-                + "Get-VBRJob | ForEach-Object { "
-                "  $j = $_; "
-                "  $last = Get-VBRSession -Job $j -Last 1 | Select-Object -First 1; "
-                "  @{"
-                "    id=$j.Id.ToString(); "
-                "    name=$j.Name; "
-                "    type=$j.JobType.ToString(); "
-                "    state=if ($j.IsRunning) {'Running'} else {'Stopped'}; "
-                "    enabled=$j.Options.Enabled; "
-                "    schedule=if ($j.ScheduleOptions -and $j.ScheduleOptions.Enabled) {@{kind='periodic'}} else {$null}; "
-                "    lastRun=if ($last) @{"
-                "      id=$last.Id.ToString(); "
-                "      state=$last.State.ToString(); "
-                "      result=@{result=$last.Result.ToString()}; "
-                "      creationTime=$last.CreationTime.ToString('o'); "
-                "      endTime=$last.EndTime.ToString('o'); "
-                "      progressPercent=$last.Progress "
-                "    } else {$null}; "
-                "    includedObjects=@{objectsInJob=if ($j.Info) {$j.Info.LinkedObjects.Count} else {0}} "
-                "  } | ConvertTo-Json -Compress "
-                "}"
-            )
-            result = await self._run_script(script, timeout=90)
+            ps1 = [
+                "Import-Module Veeam.Backup.PowerShell -ErrorAction SilentlyContinue",
+                "$jobsOut = @()",
+                "Get-VBRJob | ForEach-Object {",
+                "  $j = $_",
+                "  $lastRunTime = $null",
+                "  $lastResult = 'Unknown'",
+                "  try {",
+                "    $lastRun = $j.GetLastRun()",
+                "    if ($lastRun) {",
+                "      $lastRunTime = $lastRun.CreationTime.ToString('o')",
+                "      $lastResult = $lastRun.Result.ToString()",
+                "    }",
+                "  } catch {",
+                "    $lastRunTime = $null",
+                "    $lastResult = 'Unknown'",
+                "  }",
+                "  $objectsInJob = 0",
+                "  try {",
+                "    if ($j.Info -and $j.Info.LinkedObjects) { $objectsInJob = $j.Info.LinkedObjects.Count }",
+                "  } catch { $objectsInJob = 0 }",
+                "  $schedule = $null",
+                "  if ($j.ScheduleOptions -and $j.ScheduleOptions.Enabled) {",
+                "    $schedule = @{ kind = 'periodic' }",
+                "  }",
+                "  $lastRunBlock = $null",
+                "  if ($lastRunTime) {",
+                "    $lastRunBlock = @{",
+                "      state = $lastResult",
+                "      result = @{ result = $lastResult }",
+                "      creationTime = $lastRunTime",
+                "      progressPercent = 0",
+                "    }",
+                "  }",
+                "  $jobsOut += @{",
+                "    id = $j.Id.ToString()",
+                "    name = $j.Name",
+                "    type = $j.JobType.ToString()",
+                "    state = if ($j.IsRunning) { 'Running' } else { 'Stopped' }",
+                "    enabled = $j.Options.Enabled",
+                "    schedule = $schedule",
+                "    lastRun = $lastRunBlock",
+                "    includedObjects = @{ objectsInJob = $objectsInJob }",
+                "  }",
+                "}",
+                "$jobsOut | ConvertTo-Json -Depth 3 -Compress",
+                "",
+            ]
+            script = "\r\n".join(ps1)
+            result = await self._run_script_file(script, timeout=90)
             if not result["success"]:
+                logger.error("Veeam local PowerShell jobs collector failed: stderr=%s", result.get("stderr", ""))
                 return []
-            return self._parse_json_array(result["stdout"])
+            stdout = (result.get("stdout") or "").strip()
+            if not stdout:
+                logger.error("Veeam local PowerShell jobs collector returned empty stdout")
+                return []
+            jobs = self._parse_json_array(stdout)
+            logger.info("Veeam local PowerShell jobs collector returned %d jobs", len(jobs))
+            if len(jobs) == 0:
+                logger.warning("Local jobs collector returned 0 jobs, trying SSH relay fallback")
+                relay_jobs = await self._collect_jobs_via_relay()
+                if relay_jobs:
+                    logger.info("Veeam SSH relay jobs collector returned %d jobs", len(relay_jobs))
+                    return relay_jobs
+            return jobs
 
         if collector == "sessions":
             script = (

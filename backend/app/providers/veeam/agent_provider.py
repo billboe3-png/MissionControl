@@ -11,6 +11,7 @@ via the server's command queue.
 
 import json
 import logging
+from typing import Any, Callable, Optional
 
 from .base_provider import VeeamProvider
 
@@ -26,7 +27,7 @@ class AgentVeeamProvider(VeeamProvider):
         target_hostname: str = "",
         agent_id: int | None = None,
         target_id: int | None = None,
-        dispatch_cmd: callable | None = None,
+        dispatch_cmd: Optional[Callable[..., Any]] = None,
     ) -> None:
         self._inventory = inventory or {}
         self._hostname = target_hostname
