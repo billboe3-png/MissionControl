@@ -168,6 +168,7 @@ export const navigation: NavGroup[] = [
         icon: "⚙️",
         items: [
             { label: "General", path: "/settings", icon: "🔧" },
+            { label: "Profile", path: "/settings/profile", icon: "👤" },
             { label: "Users", path: "/settings/users", icon: "👥" },
             { label: "Agents", path: "/agents", icon: "🤖" },
             { label: "Integrations", path: "/settings/integrations", icon: "🔌" },
