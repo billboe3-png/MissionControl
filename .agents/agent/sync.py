@@ -38,7 +38,7 @@ class SyncResult:
 class EdgeSync:
     """Pull-based config sync + data push for the edge agent."""
 
-    def __init__(self, storage: EdgeStorage, base_url: str, api_key: str, agent_id: int):
+    def __init__(self, storage: EdgeStorage, base_url: str, api_key: str, agent_id: int, verify_ssl: bool = True):
         self._storage = storage
         self._base_url = base_url.rstrip("/")
         self._api_key = api_key
@@ -46,8 +46,11 @@ class EdgeSync:
         self._last_pull_attempt: str | None = None
         self._client = httpx.Client(
             timeout=httpx.Timeout(30.0, connect=10.0),
-            headers={"Authorization": f"Bearer {api_key}"},
+            verify=verify_ssl,
         )
+        if api_key:
+            self._client.headers["Authorization"] = f"Bearer {api_key}"
+            self._client.headers["X-Agent-API-Key"] = api_key
 
     def close(self) -> None:
         """Close the HTTP client."""

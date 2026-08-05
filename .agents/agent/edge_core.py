@@ -53,8 +53,8 @@ class EdgeCore:
         self._running = True
 
         # Initialize plugins
-        await self._plugin_manager.discover()
-        await self._plugin_manager.initialize_all()
+        await self._plugin_manager.discover_plugins()
+        await self._plugin_manager.initialize_plugins(context={})
 
         # Initialize sync
         self._sync = EdgeSync(
@@ -62,6 +62,7 @@ class EdgeCore:
             base_url=self.config.server_url,
             api_key=self.config.api_key,
             agent_id=self._agent_id or 0,
+            verify_ssl=self.config.verify_ssl,
         )
 
         # Run main loops
@@ -143,7 +144,7 @@ class EdgeCore:
 
     async def _run_all_plugins(self) -> None:
         """Execute all enabled plugins and store results."""
-        plugins = self._plugin_manager.list_plugins()
+        plugins = list(self._plugin_manager._plugins.keys())
         if not plugins:
             logger.debug("No plugins discovered")
             return
