@@ -97,6 +97,7 @@ import UniFiWirelessPage from "./pages/unifi/WirelessPage";
 import UniFiControllersPage from "./pages/unifi/ControllersPage";
 import UniFiSitesPage from "./pages/unifi/SitesPage";
 import NetworkTopologyPage from "./pages/network/NetworkTopologyPage";
+import TopologyPage from "./pages/agents/TopologyPage";
 
 export default function App() {
     return (
@@ -176,6 +177,9 @@ export default function App() {
 
                             {/* Network */}
                             <Route path="/network/topology" element={<NetworkTopologyPage />} />
+
+                            {/* Agents Topology */}
+                            <Route path="/agents/topology" element={<TopologyPage />} />
 
                             {/* UniFi */}
                             <Route path="/unifi" element={<UniFiDashboardPage />} />

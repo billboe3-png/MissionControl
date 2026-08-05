@@ -54,8 +54,9 @@ def main() -> None:
         "agent_id": args.agent_id,
         "agent_name": args.name,
         "heartbeat_interval": args.heartbeat_interval,
-        "verify_ssl": not args.no_ssl_verify,
     }
+    if args.no_ssl_verify:
+        overrides["verify_ssl"] = False
     for key, value in overrides.items():
         if value is not None:
             setattr(config, key, value)

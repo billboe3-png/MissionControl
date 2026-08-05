@@ -1,417 +1,102 @@
+#requires -RunAsAdministrator
 <#
 .SYNOPSIS
-    Install Mission Control Agent on Windows
+    Mission Control Edge Agent - One-Click Windows Installer
 .DESCRIPTION
-    Copies the agent to Program Files, creates a config file,
-    and registers it as a Windows service that starts automatically.
+    Downloads agent bundle, configures, and installs as SYSTEM scheduled task.
 .PARAMETER ServerUrl
-    Mission Control server URL (e.g. http://192.168.1.100:8000)
-.PARAMETER AgentName
-    Display name for this agent (defaults to computer name)
-.PARAMETER NoSslVerify
-    Disable SSL certificate verification
-.PARAMETER HeartbeatInterval
-    Seconds between heartbeats (default: 30)
-.PARAMETER Uninstall
-    Remove the agent service and files
+    Mission Control server URL (default: https://missioncontrol.optichosting.co.za)
+.PARAMETER AgentId
+    Agent ID (default: 1)
+.PARAMETER ApiKey
+    Agent API key
+.PARAMETER PythonPath
+    Full path to Python executable
+.PARAMETER WorkDir
+    Agent working directory
 .EXAMPLE
-    .\install-agent.ps1 -ServerUrl http://192.168.1.100:8000 -AgentName "EGGBERT-PC"
-.EXAMPLE
-    .\install-agent.ps1 -Uninstall
+    .\install-agent.ps1 -AgentId 2 -ApiKey "your-key"
 #>
-
 param(
-    [string]$ServerUrl = "",
-    [string]$AgentName = "",
-    [switch]$NoSslVerify,
-    [int]$HeartbeatInterval = 30,
-    [switch]$Uninstall,
-    [string]$InstallDir = "C:\MissionControlAgent"
+    [string]$ServerUrl = "https://missioncontrol.optichosting.co.za",
+    [string]$AgentId = "1",
+    [string]$ApiKey = "mc_agent_cd1a4b965593a04b05a4a919e0878222b8db924514a403a4f4129db59f2bb796",
+    [string]$PythonPath = "C:\Users\robert\AppData\Local\hermes\hermes-agent\venv\Scripts\python.exe",
+    [string]$WorkDir = "C:\MissionControlAgent"
 )
 
 $ErrorActionPreference = "Stop"
 
-# ── Check for admin ────────────────────────────────────────
-$currentPrincipal = New-Object Security.Principal.WindowsPrincipal([Security.Principal.WindowsIdentity]::GetCurrent())
-if (-not $currentPrincipal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
-    Write-Host "[-] Please run this script from an Administrator PowerShell." -ForegroundColor Red
-    Write-Host "    Right-click PowerShell -> Run as Administrator" -ForegroundColor Yellow
-    exit 1
-}
+Write-Host "`n=== Mission Control Edge Agent Installer ===" -ForegroundColor Cyan
+Write-Host "Server: $ServerUrl" -ForegroundColor Gray
+Write-Host "Agent ID: $AgentId`n" -ForegroundColor Gray
 
-$ServiceName = "MissionControlEdgeAgent"
-$InstallDir = $InstallDir
-$AgentScript = "$InstallDir\agent\edge_main.py"
-$ConfigDir = "$env:USERPROFILE\.config\mission-control-edge-agent"
-$ConfigFile = "$ConfigDir\config.yaml"
-$LogDir = "$InstallDir\logs"
-$ExeName = "mc-edge.exe"
+# 1. Create work directory
+Write-Host "[1/6] Creating work directory..." -ForegroundColor Yellow
+New-Item -Path $WorkDir -ItemType Directory -Force | Out-Null
 
-# ── Helpers ──────────────────────────────────────────────
+# 2. Download bundle
+Write-Host "[2/6] Downloading agent bundle..." -ForegroundColor Yellow
+$ts = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
+$bundleUrl = "$ServerUrl/api/v1/agents/$AgentId/bundles/download?t=$ts"
+$bundleZip = Join-Path $WorkDir "agent-bundle-live.zip"
 
-function Write-Status($msg) { Write-Host "[*] $msg" -ForegroundColor Cyan }
-function Write-Ok($msg)   { Write-Host "[+] $msg" -ForegroundColor Green }
-function Write-Fail($msg) { Write-Host "[-] $msg" -ForegroundColor Red }
-
-function Find-Python {
-    # Check common install locations first (avoids Windows Store stub)
-    $localPy = "C:\Users\$env:USERNAME\AppData\Local\Programs\Python\Python312\python.exe"
-    if (Test-Path $localPy) { return $localPy }
-
-    foreach ($cmd in @("python", "python3", "py")) {
-        try {
-            $ver = & $cmd --version 2>&1
-            if ($ver -match "Python 3\.(\d+)") {
-                $minor = [int]$Matches[1]
-                if ($minor -ge 11) {
-                    # Verify it's not the Windows Store stub
-                    $location = (Get-Command $cmd -ErrorAction SilentlyContinue).Source
-                    if ($location -notmatch "WindowsApps") {
-                        return $cmd
-                    }
-                }
-            }
-        } catch {}
-    }
-
-    # Last resort: check py launcher
-    try {
-        $ver = & py -3 --version 2>&1
-        if ($ver -match "Python 3\.(\d+)") {
-            $minor = [int]$Matches[1]
-            if ($minor -ge 11) { return "py -3" }
-        }
-    } catch {}
-
-    return $null
-}
-
-function Install-Python {
-    Write-Status "Python 3.11+ not found. Installing..."
-
-    # Try winget first (Windows 10/11 built-in)
-    $winget = Get-Command "winget" -ErrorAction SilentlyContinue
-    if ($winget) {
-        Write-Status "Installing Python via winget..."
-        winget install --id Python.Python.3.12 --accept-package-agreements --accept-source-agreements --silent 2>&1 | Out-Null
-        # Refresh PATH
-        $env:Path = [System.Environment]::GetEnvironmentVariable("Path", "Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path", "User")
-        $py = Find-Python
-        if ($py) { return $py }
-    }
-
-    # Try chocolatey
-    $choco = Get-Command "choco" -ErrorAction SilentlyContinue
-    if ($choco) {
-        Write-Status "Installing Python via Chocolatey..."
-        choco install python --version=3.12 -y 2>&1 | Out-Null
-        $env:Path = [System.Environment]::GetEnvironmentVariable("Path", "Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path", "User")
-        $py = Find-Python
-        if ($py) { return $py }
-    }
-
-    # Download and install directly
-    Write-Status "Downloading Python 3.12..."
-    $pyUrl = "https://www.python.org/ftp/python/3.12.4/python-3.12.4-amd64.exe"
-    $pyInstaller = "$env:TEMP\python-installer.exe"
-
-    try {
-        [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
-        Invoke-WebRequest -Uri $pyUrl -OutFile $pyInstaller -UseBasicParsing
-    } catch {
-        Write-Fail "Failed to download Python: $_"
-        return $null
-    }
-
-    Write-Status "Installing Python 3.12 (this may take a minute)..."
-    Start-Process -FilePath $pyInstaller -ArgumentList "/quiet", "InstallAllUsers=1", "PrependPath=1", "Include_test=0" -Wait -NoNewWindow
-    Remove-Item $pyInstaller -Force -ErrorAction SilentlyContinue
-
-    # Refresh PATH
-    $env:Path = [System.Environment]::GetEnvironmentVariable("Path", "Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path", "User")
-
-    $py = Find-Python
-    if ($py) {
-        Write-Ok "Python installed: $py"
-        return $py
-    }
-
-    Write-Fail "Python installation failed. Install manually from https://www.python.org/downloads/"
-    return $null
-}
-
-# ── Uninstall ────────────────────────────────────────────
-
-if ($Uninstall) {
-    Write-Status "Uninstalling Mission Control Edge Agent..."
-
-    $svc = Get-Service -Name $ServiceName -ErrorAction SilentlyContinue
-    if ($svc) {
-        Write-Status "Stopping service..."
-        Stop-Service -Name $ServiceName -Force -ErrorAction SilentlyContinue
-        sc.exe delete $ServiceName | Out-Null
-        Write-Ok "Service removed"
-    }
-
-    $task = Get-ScheduledTask -TaskName $ServiceName -ErrorAction SilentlyContinue
-    if ($task) {
-        Write-Status "Removing scheduled task..."
-        Unregister-ScheduledTask -TaskName $ServiceName -Confirm:$false -ErrorAction SilentlyContinue
-        Write-Ok "Scheduled task removed"
-    }
-
-    if (Test-Path $InstallDir) {
-        Remove-Item -Recurse -Force $InstallDir
-        Write-Ok "Removed $InstallDir"
-    }
-
-    if (Test-Path $ConfigDir) {
-        Remove-Item -Recurse -Force $ConfigDir
-        Write-Ok "Removed $ConfigDir"
-    }
-
-    Write-Ok "Uninstall complete."
-    exit 0
-}
-
-# ── Preflight checks ─────────────────────────────────────
-
-Write-Host ""
-Write-Host "========================================" -ForegroundColor White
-Write-Host "  Mission Control Agent Installer" -ForegroundColor White
-Write-Host "========================================" -ForegroundColor White
-Write-Host ""
-
-$python = Find-Python
-if (-not $python) {
-    $python = Install-Python
-    if (-not $python) {
-        exit 1
-    }
-}
-Write-Ok "Python found: $python"
-
-if (-not $ServerUrl) {
-    $ServerUrl = Read-Host "Server URL (e.g. http://192.168.1.100:8000)"
-}
-if (-not $ServerUrl) {
-    Write-Fail "Server URL is required."
-    exit 1
-}
-
-if (-not $AgentName) {
-    $AgentName = $env:COMPUTERNAME
-}
-Write-Ok "Agent name: $AgentName"
-Write-Ok "Server:    $ServerUrl"
-
-# ── Stop existing service ────────────────────────────────
-
-$existing = Get-Service -Name $ServiceName -ErrorAction SilentlyContinue
-if ($existing) {
-    Write-Status "Stopping existing service..."
-    Stop-Service -Name $ServiceName -Force -ErrorAction SilentlyContinue
-    Start-Sleep -Seconds 2
-}
-
-# ── Copy agent files ─────────────────────────────────────
-
-$ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
-$AgentSource = Join-Path $ScriptDir ".agents"
-if (-not (Test-Path $AgentSource)) {
-    $AgentSource = Join-Path $ScriptDir "agent"
-}
-if (-not (Test-Path $AgentSource)) {
-    Write-Fail "Agent source not found at $AgentSource"
-    Write-Fail "Expected '.agents\agent' or 'agent' next to this installer."
-    exit 1
-}
-
-$PackageRoot = $AgentSource
-if (Test-Path (Join-Path $AgentSource "agent")) {
-    $PackageRoot = Join-Path $AgentSource "agent"
-}
-
-Write-Status "Installing agent to $InstallDir..."
-if (Test-Path $InstallDir) {
-    Get-Process -Name "python*" -ErrorAction SilentlyContinue | Where-Object {
-        $_.Path -and $_.Path.StartsWith($InstallDir)
-    } | Stop-Process -Force -ErrorAction SilentlyContinue
-    Start-Sleep -Seconds 2
-
-    try {
-        Remove-Item -Recurse -Force $InstallDir
-    } catch {
-        Write-Status "Cleaning up locked files..."
-        cmd.exe /c "rmdir /s /q `"$InstallDir`"" 2>&1 | Out-Null
-        if (Test-Path $InstallDir) {
-            Write-Fail "Could not remove $InstallDir - run this script as Administrator"
-            exit 1
-        }
-    }
-}
-New-Item -ItemType Directory -Path $InstallDir -Force | Out-Null
-
-# Copy agent package
-$AgentDest = Join-Path $InstallDir "agent"
-if (-not (Test-Path $AgentDest)) {
-    New-Item -ItemType Directory -Path $AgentDest -Force | Out-Null
-}
-if ((Join-Path $PackageRoot ".") -ne $AgentDest) {
-    Copy-Item -Recurse -Force "$PackageRoot\*" "$AgentDest\" -ErrorAction SilentlyContinue
-}
-if (-not (Test-Path "$AgentDest\__main__.py")) {
-    Write-Fail "Agent package files were not found at $AgentDest"
-    exit 1
-}
-
-# Copy project metadata
-Copy-Item -Force "$ScriptDir\pyproject.toml" "$InstallDir\" -ErrorAction SilentlyContinue
-Copy-Item -Force "$ScriptDir\requirements.txt" "$InstallDir\" -ErrorAction SilentlyContinue
-
-Write-Ok "Agent files copied"
-
-# ── Install Python dependencies ──────────────────────────
-
-Write-Status "Installing Python dependencies..."
-$pyDir = Split-Path $python -Parent
-$pyExe = "$pyDir\python.exe"
-$prevEAP = $ErrorActionPreference
-$ErrorActionPreference = "Continue"
-& "$pyExe" -m pip install --quiet httpx psutil pydantic pydantic-settings pyyaml packaging paramiko pywinrm pysnmp pywin32 2>$null
-$ErrorActionPreference = $prevEAP
-Write-Ok "Dependencies installed"
-
-# ── Install as a package ─────────────────────────────────
-
-Write-Status "Installing agent package..."
-Push-Location $InstallDir
-$prevEAP = $ErrorActionPreference
-$ErrorActionPreference = "Continue"
-& "$pyExe" -m pip install --quiet --no-deps -e . 2>$null
-$ErrorActionPreference = $prevEAP
-Pop-Location
-Write-Ok "Agent package installed"
-
-# ── Create wrapper script ────────────────────────────────
-
-$WrapperPath = "$InstallDir\mc-agent.ps1"
-$WrapperContent = @"
-`$env:MC_SERVER_URL = '$ServerUrl'
-`$env:MC_AGENT_NAME = '$AgentName'
-`$env:MC_HEARTBEAT_INTERVAL = '$HeartbeatInterval'
-`$env:MC_LOG_LEVEL = 'INFO'
-`$env:MC_LOG_FILE = '$LogDir\agent.log'
-$(if ($NoSslVerify) { "`$env:MC_VERIFY_SSL = 'false'" })
-
-& $python -m agent --log-file "$LogDir\agent.log"
-"@
-Set-Content -Path $WrapperPath -Value $WrapperContent -Encoding UTF8
-Write-Ok "Wrapper script created"
-
-# ── Create config file ───────────────────────────────────
-
-Write-Status "Creating config file..."
-New-Item -ItemType Directory -Path $ConfigDir -Force | Out-Null
-
-$SslVerify = if ($NoSslVerify) { "false" } else { "true" }
-$LogDirFwd = $LogDir -replace '\\','/'
-$configYaml = @"
-# Mission Control Agent Configuration
-# Installed: $(Get-Date -Format "yyyy-MM-dd HH:mm:ss")
-
-server_url: "$ServerUrl"
-agent_name: "$AgentName"
-heartbeat_interval: $HeartbeatInterval
-inventory_interval: 300
-verify_ssl: $SslVerify
-log_level: "INFO"
-log_file: "$LogDirFwd/agent.log"
-command_timeout: 60
-"@
-# Write UTF-8 without BOM (YAML parsers reject BOM)
-$utf8NoBom = New-Object System.Text.UTF8Encoding $false
-[System.IO.File]::WriteAllText($ConfigFile, $configYaml, $utf8NoBom)
-Write-Ok "Config written to $ConfigFile"
-
-# ── Create log directory ─────────────────────────────────
-
-New-Item -ItemType Directory -Path $LogDir -Force | Out-Null
-
-# ── Register as Windows service ──────────────────────────
-
-Write-Status "Registering Windows service..."
-
-# Ensure NSSM is available
-$nssm = Get-Command "nssm" -ErrorAction SilentlyContinue
-if (-not $nssm) {
-    Write-Status "Downloading NSSM..."
-    $nssmDir = "$InstallDir\tools"
-    New-Item -ItemType Directory -Path $nssmDir -Force | Out-Null
-    $arch = if ([Environment]::Is64BitOperatingSystem) { "win64" } else { "win32" }
-    $nssmUrl = "https://nssm.cc/release/nssm-$arch.zip"
-    $nssmZip = "$env:TEMP\nssm.zip"
-    try {
-        [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
-        Invoke-WebRequest -Uri $nssmUrl -OutFile $nssmZip -UseBasicParsing
-        Expand-Archive -Path $nssmZip -DestinationPath $nssmDir -Force
-        $nssmExe = Get-ChildItem $nssmDir -Recurse -Filter "nssm.exe" | Select-Object -First 1
-        if ($nssmExe) {
-            $env:Path += ";$nssmDir"
-            $nssm = $nssmExe.FullName
-            Write-Ok "NSSM installed: $nssm"
-        } else {
-            throw "nssm.exe not found in archive"
-        }
-    } catch {
-        Write-Fail "Failed to download NSSM: $_"
-        Write-Fail "Download manually from https://nssm.cc/download and place nssm.exe in $nssmDir"
-        exit 1
-    }
-}
-
-Write-Status "Installing service with NSSM..."
-nssm stop $ServiceName 2>&1 | Out-Null
-nssm remove $ServiceName confirm 2>&1 | Out-Null
-
-nssm install $ServiceName "$pythonExe" "-m agent --log-file `"$LogDir\agent.log`""
-nssm set $ServiceName DisplayName "Mission Control Edge Agent"
-nssm set $ServiceName Description "Outbound-only edge collector for Mission Control - pulls config, collects inventory locally"
-nssm set $ServiceName Start SERVICE_AUTO_START
-nssm set $ServiceName AppDirectory $InstallDir
-nssm set $ServiceName AppStdout "$LogDir\service-stdout.log"
-nssm set $ServiceName AppStderr "$LogDir\service-stderr.log"
-nssm set $ServiceName AppRotateFiles 1
-nssm set $ServiceName AppRotateBytes 10485760
-nssm set $ServiceName AppExit 0 "Ignore"
-nssm set $ServiceName AppRestartDelay 5000
-
-Write-Ok "Service registered: $ServiceName"
-
-# ── Start the agent ──────────────────────────────────────
-
-Write-Status "Starting agent..."
-if ($nssm) {
-    nssm start $ServiceName 2>&1 | Out-Null
+if (-not (Test-Path $bundleZip)) {
+    curl.exe -k -L -X POST -o $bundleZip $bundleUrl 2>&1 | Out-Null
 } else {
-    Start-ScheduledTask -TaskName $ServiceName -ErrorAction SilentlyContinue
+    Write-Host "  Using existing bundle" -ForegroundColor Gray
 }
 
-Start-Sleep -Seconds 3
+if (-not (Test-Path $bundleZip)) {
+    throw "Bundle download failed from $bundleUrl"
+}
+$bundleSize = (Get-Item $bundleZip).Length
+Write-Host "  Downloaded: $bundleSize bytes" -ForegroundColor Green
 
-Write-Host ""
-Write-Host "========================================" -ForegroundColor Green
-Write-Host "  Installation Complete" -ForegroundColor Green
-Write-Host "========================================" -ForegroundColor Green
-Write-Host ""
-Write-Host "  Agent name:     $AgentName"
-Write-Host "  Server:         $ServerUrl"
-Write-Host "  Config:         $ConfigFile"
-Write-Host "  Logs:           $LogDir\agent.log"
-Write-Host "  Install dir:    $InstallDir"
-Write-Host ""
-Write-Host "  The agent will register with the server on first"
-Write-Host "  heartbeat and appear in the Agents page."
-Write-Host ""
-Write-Host "  To uninstall: .\install-agent.ps1 -Uninstall"
-Write-Host ""
+# 3. Extract bundle
+Write-Host "[3/6] Extracting bundle..." -ForegroundColor Yellow
+Remove-Item "$WorkDir\agent" -Recurse -Force -ErrorAction SilentlyContinue
+$extractScript = @"
+import zipfile, sys
+z = zipfile.ZipFile(sys.argv[1])
+z.extractall(sys.argv[2])
+print('Extracted', len(z.namelist()), 'files')
+"@
+$extractScript | Out-File -FilePath "$WorkDir\_extract.py" -Encoding ascii
+& $PythonPath "$WorkDir\_extract.py" $bundleZip $WorkDir
+Remove-Item "$WorkDir\_extract.py" -ErrorAction SilentlyContinue
+
+# 4. Write config.yaml
+Write-Host "[4/6] Writing config.yaml..." -ForegroundColor Yellow
+$config = @"
+server_url: $ServerUrl
+verify_ssl: false
+agent_id: $AgentId
+api_key: $ApiKey
+data_dir: "$WorkDir\data"
+config_dir: "$WorkDir"
+"@
+[System.IO.File]::WriteAllText("$WorkDir\config.yaml", $config)
+New-Item -Path "$WorkDir\data" -ItemType Directory -Force | Out-Null
+Write-Host "  Config written" -ForegroundColor Green
+
+# 5. Create scheduled task
+Write-Host "[5/6] Creating scheduled task..." -ForegroundColor Yellow
+schtasks /Delete /TN "MissionControlEdgeAgent" /F 2>&1 | Out-Null
+$action = New-ScheduledTaskAction -Execute $PythonPath -Argument '-m agent.edge_main' -WorkingDirectory $WorkDir
+$trigger = New-ScheduledTaskTrigger -AtLogOn
+$settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable -ExecutionTimeLimit (New-TimeSpan -Seconds 0)
+$principal = New-ScheduledTaskPrincipal -UserId 'SYSTEM' -LogonType ServiceAccount -RunLevel Highest
+Register-ScheduledTask -TaskName 'MissionControlEdgeAgent' -Action $action -Trigger $trigger -Settings $settings -Principal $principal -Force | Out-Null
+Write-Host "  Task created" -ForegroundColor Green
+
+# 6. Run and verify
+Write-Host "[6/6] Starting agent..." -ForegroundColor Yellow
+schtasks /Run /TN "MissionControlEdgeAgent"
+Start-Sleep -Seconds 20
+
+Write-Host "`n=== Installation Complete ===" -ForegroundColor Cyan
+Write-Host "Agent installed as scheduled task: MissionControlEdgeAgent" -ForegroundColor Green
+Write-Host "To restart later:" -ForegroundColor Gray
+Write-Host '  schtasks /End /TN "MissionControlEdgeAgent"' -ForegroundColor Gray
+Write-Host '  schtasks /Run /TN "MissionControlEdgeAgent"' -ForegroundColor Gray

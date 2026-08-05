@@ -12,10 +12,11 @@ import hashlib
 import json
 import logging
 from datetime import UTC, datetime
-
 from pathlib import Path
+from typing import Any
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.core.auth_dependency import get_current_user
@@ -23,6 +24,11 @@ from app.db import get_db
 from app.repositories.agent_repository import AgentRepository
 from app.schemas.agent import AgentHeartbeatRequest
 from app.services.agent_service import AgentService, agent_service
+
+try:
+    from app.ai.assistant import ai_assistant
+except Exception:  # pragma: no cover - optional dependency
+    ai_assistant = None
 
 logger = logging.getLogger(__name__)
 
@@ -33,6 +39,58 @@ def get_agent_service() -> AgentService:
     return agent_service
 
 
+def _resolve_api_key(x_agent_api_key: str | None, authorization: str | None) -> str:
+    """Accept either X-Agent-API-Key or Authorization: Bearer <key>."""
+    if x_agent_api_key:
+        return x_agent_api_key
+    if authorization:
+        parts = authorization.split(" ", 1)
+        if len(parts) == 2 and parts[0].lower() == "bearer":
+            return parts[1]
+        return authorization
+    raise HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Missing X-Agent-API-Key or Authorization header",
+    )
+
+
+# ------------------------------------------------------------------
+# Edge AI - server-side assistant for edge agents
+# ------------------------------------------------------------------
+
+
+class EdgeAIAskRequest(BaseModel):
+    question: str
+    context: dict[str, Any] | None = None
+    timestamp: str | None = None
+
+
+@router.post("/{agent_id}/ai/ask")
+async def edge_ai_ask(
+    agent_id: int,
+    payload: EdgeAIAskRequest,
+    x_agent_api_key: str = Header(..., alias="X-Agent-API-Key"),
+    db: Session = Depends(get_db),
+    service: AgentService = Depends(get_agent_service),
+):
+    """Server-side AI assistant for edge agents."""
+    agent = await service.authenticate_agent(db, x_agent_api_key)
+    if agent.id != agent_id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Agent ID mismatch")
+
+    if ai_assistant is None:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="AI assistant unavailable")
+
+    try:
+        result = await ai_assistant.query(payload.question, db)
+        result.setdefault("sources", [])
+        result.setdefault("timestamp", datetime.now(UTC).isoformat())
+        return result
+    except Exception as e:
+        logger.error("Edge AI query failed: %s", e)
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="AI query failed")
+
+
 # ------------------------------------------------------------------ #
 # Edge config pull
 # ------------------------------------------------------------------ #
@@ -41,12 +99,15 @@ def get_agent_service() -> AgentService:
 @router.get("/{agent_id}/config")
 async def get_edge_config(
     agent_id: int,
-    x_agent_api_key: str = Header(..., alias="X-Agent-API-Key"),
+    request: Request,
+    x_agent_api_key: str | None = Header(None, alias="X-Agent-API-Key"),
+    authorization: str | None = Header(None, alias="Authorization"),
     db: Session = Depends(get_db),
     service: AgentService = Depends(get_agent_service),
 ):
     """Return the current configuration manifest for an edge agent."""
-    agent = await service.authenticate_agent(db, x_agent_api_key)
+    api_key = _resolve_api_key(x_agent_api_key, authorization)
+    agent = await service.authenticate_agent(db, api_key)
     if agent.id != agent_id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Agent ID mismatch")
 
@@ -86,12 +147,14 @@ def _build_config_manifest(db: Session, agent, service: AgentService) -> dict:
 async def push_edge_inventory(
     agent_id: int,
     request: Request,
-    x_agent_api_key: str = Header(..., alias="X-Agent-API-Key"),
+    x_agent_api_key: str | None = Header(None, alias="X-Agent-API-Key"),
+    authorization: str | None = Header(None, alias="Authorization"),
     db: Session = Depends(get_db),
     service: AgentService = Depends(get_agent_service),
 ):
     """Accept inventory data from an edge agent."""
-    agent = await service.authenticate_agent(db, x_agent_api_key)
+    api_key = _resolve_api_key(x_agent_api_key, authorization)
+    agent = await service.authenticate_agent(db, api_key)
     if agent.id != agent_id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Agent ID mismatch")
 
@@ -105,7 +168,7 @@ async def push_edge_inventory(
     stored = 0
     for record in records:
         try:
-            await service.update_inventory(db, agent_id, record, x_agent_api_key)
+            await service.update_inventory(db, agent_id, record, api_key)
             stored += 1
         except Exception as e:
             logger.warning("Failed to store inventory record: %s", e)
@@ -118,12 +181,14 @@ async def push_edge_inventory(
 async def push_edge_heartbeat(
     agent_id: int,
     payload: AgentHeartbeatRequest,
-    x_agent_api_key: str = Header(..., alias="X-Agent-API-Key"),
+    x_agent_api_key: str | None = Header(None, alias="X-Agent-API-Key"),
+    authorization: str | None = Header(None, alias="Authorization"),
     db: Session = Depends(get_db),
     service: AgentService = Depends(get_agent_service),
 ):
     """Accept heartbeat from an edge agent."""
-    agent = await service.authenticate_agent(db, x_agent_api_key)
+    api_key = _resolve_api_key(x_agent_api_key, authorization)
+    agent = await service.authenticate_agent(db, api_key)
     if agent.id != agent_id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Agent ID mismatch")
 
@@ -146,12 +211,14 @@ async def push_edge_heartbeat(
 async def get_edge_plugin(
     agent_id: int,
     plugin_name: str,
-    x_agent_api_key: str = Header(..., alias="X-Agent-API-Key"),
+    x_agent_api_key: str | None = Header(None, alias="X-Agent-API-Key"),
+    authorization: str | None = Header(None, alias="Authorization"),
     db: Session = Depends(get_db),
     service: AgentService = Depends(get_agent_service),
 ):
     """Return a plugin source file for the edge agent."""
-    agent = await service.authenticate_agent(db, x_agent_api_key)
+    api_key = _resolve_api_key(x_agent_api_key, authorization)
+    agent = await service.authenticate_agent(db, api_key)
     if agent.id != agent_id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Agent ID mismatch")
 

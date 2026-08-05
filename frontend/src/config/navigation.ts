@@ -148,6 +148,7 @@ export const navigation: NavGroup[] = [
             { label: "Health Center", path: "/fleet/health", icon: "❤️" },
             { label: "Plugin Center", path: "/fleet/plugins", icon: "🧩" },
             { label: "Company Workspace", path: "/fleet/companies", icon: "🏢" },
+            { label: "Topology", path: "/agents/topology", icon: "🕸️" },
         ],
     },
     {

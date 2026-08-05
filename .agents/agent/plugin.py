@@ -172,6 +172,16 @@ class PluginManager:
             }
         return await plugin.execute_command(command, args)
 
+    async def execute(self, plugin_name: str) -> dict[str, Any]:
+        """Run collect_inventory for a discovered plugin."""
+        plugin = self._plugins.get(plugin_name)
+        if plugin is None:
+            return {"error": f"Plugin {plugin_name} not found"}
+        try:
+            return await plugin.collect_inventory()
+        except Exception as e:
+            return {"error": str(e)}
+
     def get_active_plugins(self) -> str:
         """Get comma-separated list of active plugins."""
         active = [
