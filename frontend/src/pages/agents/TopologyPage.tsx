@@ -23,7 +23,7 @@ export default function TopologyPage() {
     setError(null);
 
     agentsApi
-      .getAgents()
+      .list()
       .then((res) => {
         if (cancelled) return;
         const serverNode: TopologyNode = {
@@ -40,27 +40,7 @@ export default function TopologyPage() {
         };
 
         const proxyNodes: TopologyNode[] = (res.items ?? []).map((agent: Agent) => {
-          const targets: TopologyNode[] = (agent.remote_targets ?? []).map(
-            (target) => ({
-              id: `target-${target.id}`,
-              name: target.name,
-              type: "target",
-              status:
-                target.status === "online" || target.status === "reachable"
-                  ? "online"
-                  : target.status === "offline"
-                  ? "offline"
-                  : "unknown",
-              meta: {
-                hostname: target.hostname,
-                protocol: target.protocol,
-                port: target.port,
-                username: target.username,
-                tags: target.tags ?? "",
-              },
-            })
-          );
-
+          const targets: TopologyNode[] = [];
           return {
             id: `agent-${agent.id}`,
             name: agent.name ?? `Agent ${agent.id}`,
@@ -68,8 +48,8 @@ export default function TopologyPage() {
             status: agent.status === "online" ? "online" : "offline",
             meta: {
               agent_id: agent.id,
-              last_heartbeat: agent.last_heartbeat_at,
-              platform: agent.platform,
+              last_heartbeat: agent.last_heartbeat,
+              platform: agent.operating_system ?? "unknown",
               ip: agent.ip_address,
             },
             children: targets,

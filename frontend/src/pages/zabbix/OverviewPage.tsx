@@ -66,10 +66,10 @@ export default function ZabbixOverviewPage() {
           id: agent.id,
           name: agent.name ?? `Agent ${agent.id}`,
           status: agent.status === "online" ? "online" : "offline",
-          platform: agent.platform || "unknown",
+          platform: agent.operating_system || "unknown",
           ip: agent.ip_address || "—",
-          last_heartbeat: agent.last_heartbeat_at || "—",
-          target_count: agent.remote_targets?.length ?? 0,
+          last_heartbeat: agent.last_heartbeat || "—",
+          target_count: 0,
         }));
 
         const databases: DatabaseStatus[] = [
