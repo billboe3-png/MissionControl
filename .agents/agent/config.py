@@ -1,5 +1,6 @@
 """Mission Control Agent Configuration."""
 
+import sys
 from pathlib import Path
 
 import yaml
@@ -142,6 +143,10 @@ def load_config(config_path: str | Path | None = None) -> AgentSettings:
             for k, v in file_config.items()
             if v is not None
         }
+
+    if "log_file" not in settings_kwargs:
+        if sys.platform.startswith("win"):
+            settings_kwargs["log_file"] = str(_FALLBACK_ROOT / "logs" / "agent.log")
 
     # SYSTEM scheduled task fix: force data_dir into a writable, known location
     if "data_dir" not in settings_kwargs:
