@@ -20,6 +20,7 @@ from typing import Any
 from agent.config import AgentSettings
 from agent.logger import setup_logging
 from agent.plugin import PluginManager
+from agent.remote import RemoteManager
 from agent.storage import EdgeStorage, HeartbeatRecord, InventoryRecord, StorageConfig
 from agent.sync import EdgeSync, SyncResult
 
@@ -41,6 +42,9 @@ class EdgeCore:
         # Plugin manager
         self._plugin_manager = PluginManager(data_dir=config.data_dir)
 
+        # Remote manager
+        self._remote_manager = RemoteManager()
+
         # Sync manager
         self._sync: EdgeSync | None = None
 
@@ -52,11 +56,12 @@ class EdgeCore:
 
         self._running = True
 
-        # Initialize plugins
+        # Initialize plugins with a real RemoteManager so relay can work
+        # even before the first successful config pull.
         await self._plugin_manager.discover_plugins()
         await self._plugin_manager.initialize_plugins(context={
             "agent_id": self._agent_id,
-            "remote_manager": None,
+            "remote_manager": self._remote_manager,
             "integration_profiles": [],
             "remote_targets": [],
         })
