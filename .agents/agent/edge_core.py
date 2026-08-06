@@ -54,7 +54,12 @@ class EdgeCore:
 
         # Initialize plugins
         await self._plugin_manager.discover_plugins()
-        await self._plugin_manager.initialize_plugins(context={})
+        await self._plugin_manager.initialize_plugins(context={
+            "agent_id": self._agent_id,
+            "remote_manager": None,
+            "integration_profiles": [],
+            "remote_targets": [],
+        })
 
         # Initialize sync
         self._sync = EdgeSync(
