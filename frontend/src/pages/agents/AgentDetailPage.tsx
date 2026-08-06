@@ -3,6 +3,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import PageHeader from "../../components/common/PageHeader";
 import StatusBadge from "../../components/common/StatusBadge";
 import LoadingButton from "../../components/common/LoadingButton";
+import AgentRemoteTargetsTab from "./AgentRemoteTargetsTab";
 import {
     agentsApi,
     Agent,
@@ -17,6 +18,7 @@ type Tab =
     | "inventory"
     | "diagnostics"
     | "configuration"
+    | "remote_targets"
     | "history";
 
 function formatDuration(ms: number | null): string {
@@ -93,6 +95,7 @@ const TABS: { key: Tab; label: string; icon: string }[] = [
     { key: "inventory", label: "Inventory", icon: "📦" },
     { key: "diagnostics", label: "Diagnostics", icon: "🔍" },
     { key: "configuration", label: "Configuration", icon: "⚙️" },
+    { key: "remote_targets", label: "Remote Targets", icon: "🌐" },
     { key: "history", label: "History", icon: "📜" },
 ];
 
@@ -855,6 +858,15 @@ export default function AgentDetailPage() {
                                 Reset
                             </button>
                         </div>
+                    </div>
+                </div>
+            )}
+
+            {activeTab === "remote_targets" && (
+                <div>
+                    <div className="agent-section-title">Remote Targets</div>
+                    <div className="agent-section-card">
+                        <AgentRemoteTargetsTab agentId={agentId} />
                     </div>
                 </div>
             )}

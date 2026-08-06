@@ -202,23 +202,25 @@ export default function AgentRemoteTargetsTab({ agentId }: Props) {
                             />
                         </div>
                         <div className="form-row">
-                            <label>{form.protocol === "ssh" ? "SSH Key (optional)" : "Password"}</label>
-                            {form.protocol === "ssh" ? (
+                            <label>{form.protocol === "ssh" ? "Password (preferred)" : "Password"}</label>
+                            <input
+                                type="password"
+                                value={form.password || ""}
+                                onChange={(e) => setForm((f) => ({ ...f, password: e.target.value }))}
+                                placeholder={editingTarget ? "Leave blank to keep current" : ""}
+                            />
+                        </div>
+                        {form.protocol === "ssh" && (
+                            <div className="form-row">
+                                <label>SSH Key (optional)</label>
                                 <textarea
                                     value={form.ssh_key || ""}
                                     onChange={(e) => setForm((f) => ({ ...f, ssh_key: e.target.value }))}
                                     placeholder="Paste SSH private key (optional)"
                                     rows={3}
                                 />
-                            ) : (
-                                <input
-                                    type="password"
-                                    value={form.password || ""}
-                                    onChange={(e) => setForm((f) => ({ ...f, password: e.target.value }))}
-                                    placeholder={editingTarget ? "Leave blank to keep current" : ""}
-                                />
-                            )}
-                        </div>
+                            </div>
+                        )}
                         <div className="form-row">
                             <label>Tags</label>
                             <input
