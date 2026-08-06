@@ -38,7 +38,7 @@ class SyncResult:
 class EdgeSync:
     """Pull-based config sync + data push for the edge agent."""
 
-    def __init__(self, storage: EdgeStorage, base_url: str, api_key: str, agent_id: int, verify_ssl: bool = True):
+    def __init__(self, storage: EdgeStorage, base_url: str, api_key: str, agent_id: int, verify_ssl: bool = True, bundle_path: Path | None = None):
         self._storage = storage
         self._base_url = base_url.rstrip("/")
         self._api_key = api_key
@@ -51,6 +51,7 @@ class EdgeSync:
         if api_key:
             self._client.headers["Authorization"] = f"Bearer {api_key}"
             self._client.headers["X-Agent-API-Key"] = api_key
+        self._bundle_path = bundle_path or (Path.cwd() / "agent-bundle-live.zip")
 
     def close(self) -> None:
         """Close the HTTP client."""
@@ -104,8 +105,11 @@ class EdgeSync:
             response = self._client.get(endpoint)
             status = response.status_code
             if status == 200:
+                bundle_path = Path(bundle_path)
                 bundle_path.parent.mkdir(parents=True, exist_ok=True)
-                bundle_path.write_bytes(response.content)
+                tmp_path = bundle_path.with_suffix(".tmp")
+                tmp_path.write_bytes(response.content)
+                tmp_path.replace(bundle_path)
                 logger.info("Bundle pulled: %s bytes", len(response.content))
                 return SyncResult("pull-bundle", True, status, len(response.content), 0)
             logger.warning("Bundle pull unexpected status=%s", status)
@@ -222,8 +226,9 @@ class EdgeSync:
         }
 
     def run_sync_cycle(self) -> dict[str, SyncResult]:
-        """Run one full sync cycle: config pull then data push."""
+        """Run one full sync cycle: config pull, bundle pull, then data push."""
         results: dict[str, SyncResult] = {}
         results["config"] = self.pull_config()
+        results["bundle"] = self.pull_bundle(self._bundle_path)
         results["inventory"] = self.push_inventory()
         return results
