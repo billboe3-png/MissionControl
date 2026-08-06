@@ -103,6 +103,8 @@ class EdgeCore:
                 if self._sync:
                     results = self._sync.run_sync_cycle()
                     for name, result in results.items():
+                        if name == "config" and result.success:
+                            self._apply_pulled_manifest()
                         if result.success:
                             logger.debug("Sync %s: success", name)
                         else:
@@ -194,3 +196,41 @@ class EdgeCore:
                     "meta": {},
                 })()
             )
+
+    # ------------------------------------------------------------------ #
+    # Config application
+    # ------------------------------------------------------------------ #
+
+    def _apply_pulled_manifest(self) -> None:
+        """Apply the latest saved config manifest to plugins and remote manager."""
+        try:
+            manifest = self._storage.get_manifest()
+        except Exception as e:
+            logger.warning("Failed to load pulled manifest: %s", e)
+            return
+
+        if manifest is None:
+            return
+
+        remote_targets = list(getattr(manifest, "remote_targets", None) or [])
+        integration_profiles = list(getattr(manifest, "integration_profiles", None) or [])
+
+        logger.info(
+            "Applying pulled config manifest: %d targets, %d profiles",
+            len(remote_targets),
+            len(integration_profiles),
+        )
+
+        self._remote_manager.update_targets(remote_targets)
+
+        for plugin in self._plugin_manager._plugins.values():
+            if not hasattr(plugin, "_context"):
+                continue
+            plugin._context["remote_targets"] = remote_targets
+            plugin._context["integration_profiles"] = integration_profiles
+            plugin._context["remote_manager"] = self._remote_manager
+            if hasattr(plugin, "reinitialize"):
+                try:
+                    plugin.reinitialize()
+                except Exception as e:
+                    logger.debug("Plugin reinitialize skipped: %s", e)
