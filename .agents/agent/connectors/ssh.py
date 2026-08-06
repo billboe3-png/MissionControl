@@ -30,15 +30,24 @@ class SSHConnector(RemoteConnector):
             "timeout": 10,
             "allow_agent": False,
             "look_for_keys": False,
-            "gss_auth": False,
             "compress": False,
         }
 
+        pkey = None
         if self.ssh_key:
             import io
 
             key_file = io.StringIO(self.ssh_key)
-            pkey = paramiko.RSAKey.from_private_key(key_file)
+            try:
+                pkey = paramiko.RSAKey.from_private_key(key_file)
+            except (paramiko.ssh_exception.SSHException, ValueError):
+                logger.warning(
+                    "SSHConnector ignoring invalid RSA key for %s; falling back to password auth",
+                    self.hostname,
+                )
+                pkey = None
+
+        if pkey is not None:
             connect_kwargs["pkey"] = pkey
         elif self.password:
             connect_kwargs["password"] = self.password
