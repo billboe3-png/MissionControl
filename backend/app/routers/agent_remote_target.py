@@ -103,10 +103,16 @@ async def create_remote_target(
         "notes": payload.notes,
     }
 
-    if payload.password:
+    if payload.password is not None and payload.password != "":
         kwargs["password_encrypted"] = cipher.encrypt(payload.password)
-    if payload.ssh_key:
+    if payload.ssh_key is not None and payload.ssh_key != "":
         kwargs["ssh_key_encrypted"] = cipher.encrypt(payload.ssh_key)
+
+    if not kwargs.get("password_encrypted") and not kwargs.get("ssh_key_encrypted"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Password or SSH key is required",
+        )
 
     target = AgentRemoteTargetRepository.create(db, agent_id=agent_id, **kwargs)
     return RemoteTargetResponse.model_validate(target)
