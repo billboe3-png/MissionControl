@@ -16,8 +16,10 @@ from pathlib import Path
 from typing import Any
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
+from pathlib import Path
 
 from app.core.auth_dependency import get_current_user
 from app.db import get_db
@@ -247,3 +249,28 @@ def _plugin_file_for_agent(db: Session, agent, plugin_name: str) -> str | None:
         return fallback.read_text(encoding="utf-8")
 
     return None
+
+
+@router.get("/{agent_id}/bundle/download")
+async def download_edge_bundle(
+    agent_id: int,
+    x_agent_api_key: str | None = Header(None, alias="X-Agent-API-Key"),
+    authorization: str | None = Header(None, alias="Authorization"),
+    db: Session = Depends(get_db),
+    service: AgentService = Depends(get_agent_service),
+):
+    """Serve the current agent bundle ZIP for self-update."""
+    api_key = _resolve_api_key(x_agent_api_key, authorization)
+    agent = await service.authenticate_agent(db, api_key)
+    if agent.id != agent_id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Agent ID mismatch")
+
+    bundle_path = Path("/project/.agents/agent-bundle-live.zip")
+    if not bundle_path.exists():
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Bundle not found")
+
+    return FileResponse(
+        path=str(bundle_path),
+        media_type="application/zip",
+        filename="agent-bundle-live.zip",
+    )

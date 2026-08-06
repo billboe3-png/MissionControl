@@ -210,17 +210,18 @@ export default function AgentRemoteTargetsTab({ agentId }: Props) {
                                 placeholder={editingTarget ? "Leave blank to keep current" : ""}
                             />
                         </div>
-                        {form.protocol === "ssh" && (
-                            <div className="form-row">
-                                <label>SSH Key (optional)</label>
-                                <textarea
-                                    value={form.ssh_key || ""}
-                                    onChange={(e) => setForm((f) => ({ ...f, ssh_key: e.target.value }))}
-                                    placeholder="Paste SSH private key (optional)"
-                                    rows={3}
-                                />
-                            </div>
-                        )}
+                        <div className="form-row">
+                            <label>SSH Key</label>
+                            <textarea
+                                value={form.ssh_key || ""}
+                                onChange={(e) => setForm((f) => ({ ...f, ssh_key: e.target.value }))}
+                                placeholder="Leave empty unless password auth is unavailable"
+                                rows={3}
+                            />
+                            <small className="form-hint">
+                                Only used if no password is configured.
+                            </small>
+                        </div>
                         <div className="form-row">
                             <label>Tags</label>
                             <input
