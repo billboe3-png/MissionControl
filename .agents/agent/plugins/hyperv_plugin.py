@@ -30,15 +30,30 @@ class HyperVPlugin(AgentPlugin):
         self._ssh_target: dict[str, Any] | None = None
 
     async def initialize(self, context: dict[str, Any]) -> bool:
-        self._context = context
+        self._context = context or {}
         self._has_module = await self._check_hyper_v()
         self._use_relay = False
         self._ssh_target = None
         if not self._has_module:
             logger.warning("Hyper-V module not available on this host")
             return False
-        logger.info("Hyper-V plugin initialized for %s", platform.node())
+        await self._ensure_configured()
+        target = self._ssh_target
+        if target:
+            logger.info(
+                "Hyper-V plugin initialized for %s via %s (%s)",
+                platform.node(),
+                target.get("protocol"),
+                target.get("hostname"),
+            )
+        else:
+            logger.info("Hyper-V plugin initialized for %s", platform.node())
         return True
+
+    def reinitialize(self) -> None:
+        self._configured_from_context = False
+        self._use_relay = False
+        self._ssh_target = None
 
     async def collect_inventory(self) -> dict[str, Any]:
         await self._ensure_configured()
@@ -109,6 +124,8 @@ class HyperVPlugin(AgentPlugin):
             ssh_password = hv_profile.get("password") or self._password
             if ssh_host:
                 self._ssh_target = {
+                    "id": hv_profile.get("id"),
+                    "name": hv_profile.get("name") or ssh_host,
                     "hostname": ssh_host,
                     "port": ssh_port,
                     "username": ssh_username,
@@ -116,9 +133,7 @@ class HyperVPlugin(AgentPlugin):
                     "protocol": "ssh",
                 }
                 self._use_relay = True
-                logger.info(
-                    "Hyper-V plugin configured for SSH relay (%s)", ssh_host
-                )
+                logger.info("Hyper-V plugin using integration profile SSH relay (%s)", ssh_host)
                 return
 
         remote_targets = self._context.get("remote_targets") or []
@@ -134,11 +149,6 @@ class HyperVPlugin(AgentPlugin):
                 )
                 return
 
-    def reinitialize(self) -> None:
-        self._configured_from_context = False
-        self._use_relay = False
-        self._ssh_target = None
-
     # ------------------------------------------------------------------ #
     # Relay helpers
     # ------------------------------------------------------------------ #
@@ -146,9 +156,11 @@ class HyperVPlugin(AgentPlugin):
     async def _collect_inventory_relay(self) -> dict[str, Any]:
         remote_manager = self._context.get("remote_manager")
         if not remote_manager or not self._ssh_target:
+            logger.warning("Hyper-V relay blocked: missing remote_manager or ssh_target")
             return {"vm_count": 0, "vms": [], "switches": []}
         target_id = self._ssh_target.get("id")
         if target_id is None:
+            logger.warning("Hyper-V relay blocked: missing target id")
             return {"vm_count": 0, "vms": [], "switches": []}
 
         vms_script = (
@@ -178,6 +190,8 @@ class HyperVPlugin(AgentPlugin):
         )
         if vms_result.get("success"):
             vms = self._parse_json_array(vms_result.get("stdout") or "[]") or []
+        else:
+            logger.warning("Hyper-V VM relay failed: %s", vms_result.get("stderr") or vms_result.get("stdout"))
 
         switches_result = await remote_manager.execute_on_target(
             target_id=target_id,
@@ -186,6 +200,8 @@ class HyperVPlugin(AgentPlugin):
         )
         if switches_result.get("success"):
             switches = self._parse_json_array(switches_result.get("stdout") or "[]") or []
+        else:
+            logger.warning("Hyper-V switch relay failed: %s", switches_result.get("stderr") or switches_result.get("stdout"))
 
         return {
             "vm_count": len(vms),
