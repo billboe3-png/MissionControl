@@ -97,6 +97,24 @@ class EdgeSync:
             self._storage.log_sync("pull-config", endpoint, 0, error=error_msg)
             return SyncResult("pull-config", False, 0, 0, 0, error_msg)
 
+    def pull_bundle(self, bundle_path: Path) -> SyncResult:
+        """Pull latest agent bundle ZIP from the server."""
+        endpoint = f"{self._base_url}/api/v1/edge/{self._agent_id}/bundle/download"
+        try:
+            response = self._client.get(endpoint)
+            status = response.status_code
+            if status == 200:
+                bundle_path.parent.mkdir(parents=True, exist_ok=True)
+                bundle_path.write_bytes(response.content)
+                logger.info("Bundle pulled: %s bytes", len(response.content))
+                return SyncResult("pull-bundle", True, status, len(response.content), 0)
+            logger.warning("Bundle pull unexpected status=%s", status)
+            return SyncResult("pull-bundle", False, status)
+        except Exception as e:
+            error_msg = str(e)
+            logger.debug("Bundle pull failed: %s", error_msg)
+            return SyncResult("pull-bundle", False, 0, 0, 0, error_msg)
+
     def _parse_manifest(self, payload: dict[str, Any]) -> Any:
         """Parse cloud payload into a ConfigManifest."""
         from .storage import ConfigManifest

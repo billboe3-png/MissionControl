@@ -189,7 +189,12 @@ class HyperVPlugin(AgentPlugin):
             timeout=60,
         )
         if vms_result.get("success"):
-            vms = self._parse_json_array(vms_result.get("stdout") or "[]") or []
+            raw_vms = vms_result.get("stdout") or "[]"
+            parsed = self._parse_json_array(raw_vms)
+            if parsed is not None:
+                vms = parsed
+            else:
+                logger.warning("Hyper-V VM relay returned non-JSON stdout: %r", raw_vms[:500])
         else:
             logger.warning("Hyper-V VM relay failed: %s", vms_result.get("stderr") or vms_result.get("stdout"))
 
@@ -199,15 +204,22 @@ class HyperVPlugin(AgentPlugin):
             timeout=60,
         )
         if switches_result.get("success"):
-            switches = self._parse_json_array(switches_result.get("stdout") or "[]") or []
+            raw_switches = switches_result.get("stdout") or "[]"
+            parsed = self._parse_json_array(raw_switches)
+            if parsed is not None:
+                switches = parsed
+            else:
+                logger.warning("Hyper-V switch relay returned non-JSON stdout: %r", raw_switches[:500])
         else:
             logger.warning("Hyper-V switch relay failed: %s", switches_result.get("stderr") or switches_result.get("stdout"))
 
-        return {
+        result = {
             "vm_count": len(vms),
             "vms": vms,
             "switches": switches,
         }
+        logger.info("Hyper-V relay inventory result: %s", result)
+        return result
 
     async def _execute_relay(self, command: str, args: dict[str, Any]) -> dict[str, Any]:
         remote_manager = self._context.get("remote_manager")

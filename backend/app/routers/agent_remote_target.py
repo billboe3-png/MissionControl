@@ -156,16 +156,16 @@ async def update_remote_target(
 
     if "password" in update_data:
         pwd = update_data.pop("password")
-        if pwd is not None:
+        if pwd:
             update_data["password_encrypted"] = cipher.encrypt(pwd)
-        else:
+        elif "password_encrypted" not in update_data:
             update_data["password_encrypted"] = None
 
     if "ssh_key" in update_data:
         key = update_data.pop("ssh_key")
-        if key is not None:
+        if key:
             update_data["ssh_key_encrypted"] = cipher.encrypt(key)
-        else:
+        elif "ssh_key_encrypted" not in update_data:
             update_data["ssh_key_encrypted"] = None
 
     updated = AgentRemoteTargetRepository.update(db, target_id, **update_data)

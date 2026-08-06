@@ -33,24 +33,21 @@ class SSHConnector(RemoteConnector):
             "compress": False,
         }
 
-        pkey = None
-        if self.ssh_key:
+        # Always prefer password auth when available.
+        if self.password:
+            connect_kwargs["password"] = self.password
+        elif self.ssh_key:
             import io
 
             key_file = io.StringIO(self.ssh_key)
             try:
-                pkey = paramiko.RSAKey.from_private_key(key_file)
-            except (paramiko.ssh_exception.SSHException, ValueError):
+                connect_kwargs["pkey"] = paramiko.RSAKey.from_private_key(key_file)
+            except Exception as exc:
                 logger.warning(
-                    "SSHConnector ignoring invalid RSA key for %s; falling back to password auth",
+                    "SSHConnector ignoring invalid RSA key for %s; no password available: %s",
                     self.hostname,
+                    exc,
                 )
-                pkey = None
-
-        if pkey is not None:
-            connect_kwargs["pkey"] = pkey
-        elif self.password:
-            connect_kwargs["password"] = self.password
 
         logger.info(
             "SSHConnector connecting to %s:%s as %s (password=%s key=%s)",
