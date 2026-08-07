@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import PageHeader from "../../components/common/PageHeader";
 import StatusBadge from "../../components/common/StatusBadge";
 import { agentsApi, Agent } from "../../services/agents";
+import { formatDateTime } from "../../utils/dateFormat";
 
 type TopologyNode = {
   id: string;
@@ -108,7 +109,7 @@ export default function TopologyPage() {
         </div>
         {node.meta?.last_heartbeat && (
           <div style={{ fontSize: 12, color: "#64748b", marginTop: 2 }}>
-            Last heartbeat: {new Date(node.meta.last_heartbeat as string).toLocaleString()}
+            Last heartbeat: {formatDateTime(node.meta.last_heartbeat as string)}
           </div>
         )}
         {node.children?.map((child) => renderNode(child, depth + 1))}

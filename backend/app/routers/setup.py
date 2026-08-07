@@ -141,7 +141,16 @@ async def get_setup_status(
     db: Session = Depends(get_db),
 ) -> SetupStatusResponse:
     """Check whether the setup wizard is required."""
-    return SetupStatusResponse(setup_required=is_setup_required(db))
+    tz = "UTC"
+    try:
+        from app.services.company_service import CompanyService
+        service = CompanyService()
+        companies = service.get_all(db)
+        if companies and companies[0].timezone:
+            tz = companies[0].timezone
+    except Exception:
+        pass
+    return SetupStatusResponse(setup_required=is_setup_required(db), timezone=tz)
 
 
 @router.post(

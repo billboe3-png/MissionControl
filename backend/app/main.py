@@ -201,7 +201,11 @@ async def request_logging_middleware(request: Request, call_next):
     return response
 
 
-app.add_middleware(RateLimitMiddleware)
+app.add_middleware(
+    RateLimitMiddleware,
+    default_limit=settings.rate_limit_per_minute,
+    auth_limit=settings.rate_limit_auth_per_minute,
+)
 
 app.add_middleware(
     CORSMiddleware,

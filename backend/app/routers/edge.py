@@ -168,12 +168,32 @@ async def push_edge_inventory(
 
     records = payload.get("records", [])
     stored = 0
-    for record in records:
+    plugins = payload.get("plugins")
+
+    if not plugins and records:
+        plugins = {}
+        for record in records:
+            plugin_name = record.get("plugin_name")
+            if plugin_name is None:
+                continue
+            entry = dict(record)
+            entry.pop("plugin_name", None)
+            plugins.setdefault(plugin_name, {}).update(entry.get("data", {}) if isinstance(entry.get("data"), dict) else {"value": str(entry.get("data"))})
+    payload_to_store = {"plugins": plugins} if plugins else payload
+
+    if payload_to_store.get("plugins"):
         try:
-            await service.update_inventory(db, agent_id, record, api_key)
-            stored += 1
+            await service.update_inventory(db, agent_id, payload_to_store, api_key)
+            stored = 1
         except Exception as e:
-            logger.warning("Failed to store inventory record: %s", e)
+            logger.warning("Failed to store aggregated inventory payload: %s", e)
+    elif records:
+        for record in records:
+            try:
+                await service.update_inventory(db, agent_id, record, api_key)
+                stored += 1
+            except Exception as e:
+                logger.warning("Failed to store inventory record: %s", e)
 
     logger.info("Edge inventory: received %d, stored %d", len(records), stored)
     return {"status": "ok", "received": len(records), "stored": stored}
@@ -251,6 +271,7 @@ def _plugin_file_for_agent(db: Session, agent, plugin_name: str) -> str | None:
     return None
 
 
+@router.post("/{agent_id}/bundle/download")
 @router.get("/{agent_id}/bundle/download")
 async def download_edge_bundle(
     agent_id: int,
@@ -269,8 +290,13 @@ async def download_edge_bundle(
     if not bundle_path.exists():
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Bundle not found")
 
-    return FileResponse(
+    version_path = bundle_path.with_suffix(".version")
+    version = version_path.read_text(encoding="utf-8").strip() if version_path.exists() else ""
+    response = FileResponse(
         path=str(bundle_path),
         media_type="application/zip",
         filename="agent-bundle-live.zip",
     )
+    if version:
+        response.headers["X-Agent-Bundle-Version"] = version
+    return response

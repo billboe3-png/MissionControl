@@ -5,6 +5,7 @@ import DataTable, { Column } from "../../components/common/DataTable";
 import EmptyState from "../../components/common/EmptyState";
 import StatusBadge from "../../components/common/StatusBadge";
 import { remoteApi, CommandHistoryData } from "../../services/remote";
+import { formatDateTime } from "../../utils/dateFormat";
 
 export default function HistoryPage() {
     const [items, setItems] = useState<CommandHistoryData[]>([]);
@@ -62,7 +63,7 @@ export default function HistoryPage() {
         {
             key: "started_at",
             header: "Time",
-            render: (row) => new Date(row.started_at).toLocaleString(),
+            render: (row) => formatDateTime(row.started_at),
         },
     ];
 

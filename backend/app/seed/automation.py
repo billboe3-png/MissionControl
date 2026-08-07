@@ -546,6 +546,31 @@ PLAYBOOKS = [
         ],
         "variables": [{"name": "vm_name", "required": True}],
     },
+    {
+        "name": "Windows: Restart Server",
+        "description": "Restart a Windows server on a schedule",
+        "category": "Windows",
+        "steps": [
+            {"name": "Restart", "step_type": "powershell", "provider": "ssh",
+             "command": "Restart-Computer -Force",
+             "step_order": 1},
+        ],
+        "variables": [],
+    },
+    {
+        "name": "Windows: Install Updates and Restart",
+        "description": "Install pending Windows updates and restart only if required",
+        "category": "Windows",
+        "steps": [
+            {"name": "Install Updates", "step_type": "powershell", "provider": "ssh",
+             "command": "$updateSession = New-Object -ComObject Microsoft.Update.Session; $updateSearcher = $updateSession.CreateUpdateSearcher(); $searchResult = $updateSearcher.Search('IsInstalled=0'); if ($searchResult.Updates.Count -gt 0) { $updatesToInstall = New-Object -ComObject Microsoft.Update.UpdateColl; foreach ($update in $searchResult.Updates) { if ($update.InstallationBehavior.CanRequestUserInput -eq $false) { $updatesToInstall.Add($update) | Out-Null } }; if ($updatesToInstall.Count -gt 0) { $downloader = $updateSession.CreateUpdateDownloader(); $downloader.Updates = $updatesToInstall; $downloader.Download(); $installer = $updateSession.CreateUpdateInstaller(); $installer.Updates = $updatesToInstall; $result = $installer.Install(); if ($result.RebootRequired) { Restart-Computer -Force } else { Write-Output 'Updates installed; no restart required' } } else { Write-Output 'No applicable updates to install' } } else { Write-Output 'No pending updates found' }",
+             "step_order": 1},
+            {"name": "Verify", "step_type": "powershell", "provider": "ssh",
+             "command": "Get-HotFix | Sort-Object InstalledOn -Descending | Select-Object -First 5 | Format-Table HotFixID, InstalledOn, Description -AutoSize",
+             "step_order": 2},
+        ],
+        "variables": [],
+    },
     # ------------------------------------------------------------------ #
     # Microsoft 365 (5)                                                   #
     # ------------------------------------------------------------------ #

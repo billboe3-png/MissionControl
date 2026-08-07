@@ -3,6 +3,7 @@ import PageHeader from "../../components/common/PageHeader";
 import SearchInput from "../../components/common/SearchInput";
 import StatusBadge from "../../components/common/StatusBadge";
 import { apiClient } from "../../utils/apiClient";
+import { formatDateTime } from "../../utils/dateFormat";
 
 interface TimelineEvent {
     id: string;
@@ -172,7 +173,7 @@ export default function TimelinePage() {
                             </div>
                             <span className="timeline-time">
                                 {event.timestamp
-                                    ? new Date(event.timestamp).toLocaleString()
+                                    ? formatDateTime(event.timestamp)
                                     : "—"}
                             </span>
                         </div>

@@ -91,6 +91,11 @@ class EdgeCore:
             self._sync.close()
         self._storage.close()
 
+    def _request_restart(self) -> None:
+        """Request a graceful restart of the edge agent."""
+        logger.info("New bundle applied; requesting graceful restart")
+        self._running = False
+
     # ------------------------------------------------------------------ #
     # Sync loop
     # ------------------------------------------------------------------ #
@@ -105,6 +110,9 @@ class EdgeCore:
                     for name, result in results.items():
                         if name == "config" and result.success:
                             self._apply_pulled_manifest()
+                        if name == "bundle" and result.success and getattr(result, "restart_requested", False):
+                            logger.info("New bundle applied; requesting agent restart")
+                            self._request_restart()
                         if result.success:
                             logger.debug("Sync %s: success", name)
                         else:

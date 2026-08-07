@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import PageHeader from "../../components/common/PageHeader";
 import { useToast } from "../../contexts/ToastContext";
 import { projectsApi, Project } from "../../services/projects";
+import { formatDateTime } from "../../utils/dateFormat";
 
 type Status = "all" | "active" | "inactive";
 
@@ -138,7 +139,7 @@ export default function ProjectsPage() {
                                             {p.active ? "Active" : "Inactive"}
                                         </span>
                                     </td>
-                                    <td>{new Date(p.updated_at).toLocaleString()}</td>
+                                    <td>{formatDateTime(p.updated_at)}</td>
                                     <td onClick={(e) => e.stopPropagation()}>
                                         <button
                                             className="btn btn-sm"

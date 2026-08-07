@@ -139,9 +139,16 @@ class AgentHyperVProvider(HyperVProvider):
         paused = sum(1 for s in states if s == "paused")
         saved = sum(1 for s in states if s == "saved")
         total_mem = sum((v.get("memory_mb") or 0) for v in vms)
+        hostname = self._hostname
+        if not hostname and vms:
+            for key in ("ComputerName", "computer_name", "HostName", "hostname"):
+                values = [v.get(key) for v in vms if v.get(key)]
+                if values:
+                    hostname = max(set(values), key=values.count)
+                    break
         return {
             "connected": True,
-            "hostname": self._hostname,
+            "hostname": hostname,
             "total_vms": len(vms),
             "running": running,
             "stopped": stopped,
@@ -162,8 +169,8 @@ class AgentHyperVProvider(HyperVProvider):
         vms = self._get_vm_list()
         items = []
         for v in vms:
-            uptime_raw = v.get("uptime", 0)
             uptime_seconds = 0
+            uptime_raw = v.get("uptime", v.get("Uptime", 0))
             if isinstance(uptime_raw, (int, float)):
                 uptime_seconds = int(uptime_raw)
             elif isinstance(uptime_raw, str):
@@ -173,22 +180,38 @@ class AgentHyperVProvider(HyperVProvider):
                     uptime_seconds = 0
             elif isinstance(uptime_raw, dict):
                 uptime_seconds = int(uptime_raw.get("TotalSeconds", 0))
+
+            cpu_usage = float(v.get("cpu_usage", v.get("CPUUsage", 0)) or 0)
+            memory_assigned = v.get("memory_assigned_mb") or v.get("MemoryAssigned")
+            memory_startup = v.get("memory_startup_mb") or v.get("MemoryStartup")
+            if memory_assigned is not None:
+                memory_assigned = int(memory_assigned / (1024 * 1024))
+            else:
+                memory_assigned = 0
+            if memory_startup is not None:
+                memory_startup = int(memory_startup / (1024 * 1024))
+            else:
+                memory_startup = 0
+
+            name = v.get("name", v.get("Name", ""))
+            host_server = v.get("computer_name", v.get("ComputerName", self._hostname))
+
             items.append({
-                "id": v.get("vm_id", v.get("name", "")),
-                "name": v.get("name", ""),
-                "state": _HYPERV_STATE_MAP.get(v.get("state", -1), str(v.get("state", "unknown")).lower()),
+                "id": v.get("vm_id", v.get("VMId", name)),
+                "name": name,
+                "state": _HYPERV_STATE_MAP.get(v.get("state", v.get("State", -1)), str(v.get("state", v.get("State", "unknown"))).lower()),
                 "cpu_count": 0,
-                "memory_assigned_mb": int(v.get("memory_mb") or 0),
-                "memory_startup_mb": int(v.get("memory_startup_mb") or 0),
+                "cpu_usage_percent": cpu_usage,
+                "memory_assigned_mb": memory_assigned,
+                "memory_startup_mb": memory_startup,
                 "memory_demand_mb": 0,
                 "uptime_seconds": uptime_seconds,
-                "host_server": v.get("computer_name", self._hostname),
+                "host_server": host_server,
                 "guest_os": "",
                 "creation_time": "",
                 "last_checkpoint": None,
-                "status_message": v.get("status", ""),
+                "status_message": v.get("status", v.get("Status", "")),
                 "integration_services_enabled": True,
-                "cpu_usage_percent": float(v.get("cpu_usage") or 0),
                 "disk_read_mbps": 0.0,
                 "disk_write_mbps": 0.0,
                 "network_receive_mbps": 0.0,

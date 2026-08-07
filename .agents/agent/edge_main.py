@@ -66,14 +66,19 @@ def main() -> None:
         log_file=args.log_file or config.log_file,
     )
 
-    core = EdgeCore(config)
-    try:
-        asyncio.run(core.start())
-    except KeyboardInterrupt:
-        logging.info("Edge agent stopped by user")
-    except Exception as e:
-        logging.error("Edge agent failed: %s", e)
-        sys.exit(1)
+    while True:
+        core = EdgeCore(config)
+        try:
+            asyncio.run(core.start())
+        except KeyboardInterrupt:
+            logging.info("Edge agent stopped by user")
+            break
+        except Exception as e:
+            logging.error("Edge agent failed: %s", e)
+        if not getattr(core, "_running", False):
+            logging.info("Edge agent restarting...")
+            continue
+        break
 
 
 if __name__ == "__main__":

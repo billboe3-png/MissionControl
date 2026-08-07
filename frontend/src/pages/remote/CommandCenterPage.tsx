@@ -3,6 +3,7 @@ import PageHeader from "../../components/common/PageHeader";
 import StatusBadge from "../../components/common/StatusBadge";
 import SearchInput from "../../components/common/SearchInput";
 import { agentsApi, AgentCommand } from "../../services/agents";
+import { formatDateTime } from "../../utils/dateFormat";
 
 type StatusFilter = "all" | "pending" | "running" | "completed" | "failed" | "cancelled";
 
@@ -149,7 +150,7 @@ export default function CommandCenterPage() {
                                         <td>{formatDuration(cmd.duration_ms)}</td>
                                         <td>
                                             {cmd.created_at
-                                                ? new Date(cmd.created_at).toLocaleString()
+                                                ? formatDateTime(cmd.created_at)
                                                 : "—"}
                                         </td>
                                         <td>

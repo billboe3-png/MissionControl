@@ -271,12 +271,12 @@ class Settings(BaseSettings):
     # ------------------------------------------------------------------
 
     rate_limit_per_minute: int = Field(
-        default=60,
+        default=300,
         description="Max requests per minute per IP",
     )
 
     rate_limit_auth_per_minute: int = Field(
-        default=5,
+        default=20,
         description="Max login attempts per minute per IP",
     )
 

@@ -3,6 +3,7 @@ import PageHeader from "../../components/common/PageHeader";
 import EmptyState from "../../components/common/EmptyState";
 import StatusBadge from "../../components/common/StatusBadge";
 import { useToast } from "../../contexts/ToastContext";
+import { formatDateTime } from "../../utils/dateFormat";
 import {
     automationApi,
     ApprovalRequestData,
@@ -91,7 +92,7 @@ export default function ApprovalsPage() {
                                         Execution #{item.execution_id} · Workflow #{item.workflow_id}
                                     </div>
                                     <div className="text-muted" style={{ fontSize: "0.85rem" }}>
-                                        Requested by: {item.requested_by ?? "Unknown"} · {new Date(item.requested_at).toLocaleString()}
+                                        Requested by: {item.requested_by ?? "Unknown"} · {formatDateTime(item.requested_at)}
                                     </div>
                                 </div>
                                 <div style={{ display: "flex", gap: "0.5rem" }}>

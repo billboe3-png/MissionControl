@@ -12,9 +12,18 @@ import logging
 import sys
 from pathlib import Path
 
+_bootstrap_candidate = Path(__file__).resolve().parent
+if str(_bootstrap_candidate) not in sys.path:
+    sys.path.insert(0, str(_bootstrap_candidate))
+
 from agent.config import AgentSettings, load_config
 from agent.edge_core import EdgeCore
 from agent.logger import setup_logging
+
+try:
+    from agent.agent import MissionControlAgent
+except Exception:  # pragma: no cover - optional full-agent runtime
+    MissionControlAgent = None
 
 
 def parse_args() -> argparse.Namespace:
@@ -69,14 +78,28 @@ def main() -> None:
         log_file=args.log_file or config.log_file,
     )
 
-    core = EdgeCore(config)
-    try:
-        asyncio.run(core.start())
-    except KeyboardInterrupt:
-        logging.info("Edge agent stopped by user")
-    except Exception as e:
-        logging.error("Edge agent failed: %s", e)
-        sys.exit(1)
+    if (
+        MissionControlAgent is not None
+        and config.api_key
+        and config.agent_id is not None
+    ):
+        core = MissionControlAgent(config)
+        try:
+            asyncio.run(core.start())
+        except KeyboardInterrupt:
+            logging.info("Agent stopped by user")
+        except Exception as e:
+            logging.error("Agent failed: %s", e)
+            sys.exit(1)
+    else:
+        core = EdgeCore(config)
+        try:
+            asyncio.run(core.start())
+        except KeyboardInterrupt:
+            logging.info("Edge agent stopped by user")
+        except Exception as e:
+            logging.error("Edge agent failed: %s", e)
+            sys.exit(1)
 
 
 if __name__ == "__main__":

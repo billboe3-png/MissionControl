@@ -57,14 +57,32 @@ class HyperVPlugin(AgentPlugin):
 
     async def collect_inventory(self) -> dict[str, Any]:
         await self._ensure_configured()
+        local_vms: list[dict[str, Any]] = []
+        local_switches: list[dict[str, Any]] = []
+        local_inventory: dict[str, Any] = {}
+        if self._has_module:
+            local_vms = await self._get_vms()
+            local_switches = await self._get_switches()
+            local_inventory = {
+                "vm_count": len(local_vms),
+                "vms": local_vms,
+                "switches": local_switches,
+            }
+        relay_vms: list[dict[str, Any]] = []
+        relay_switches: list[dict[str, Any]] = []
+        relay_inventory: dict[str, Any] = {}
         if self._use_relay and self._ssh_target:
-            return await self._collect_inventory_relay()
-        vms = await self._get_vms()
-        switches = await self._get_switches()
+            relay = await self._collect_inventory_relay()
+            relay_vms = relay.get("vms") or []
+            relay_switches = relay.get("switches") or []
+            relay_inventory = {
+                "vm_count": len(relay_vms),
+                "vms": relay_vms,
+                "switches": relay_switches,
+            }
         return {
-            "vm_count": len(vms),
-            "vms": vms,
-            "switches": switches,
+            "local": local_inventory,
+            "remote": relay_inventory,
         }
 
     async def execute_command(self, command: str, args: dict[str, Any]) -> dict[str, Any]:

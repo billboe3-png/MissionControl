@@ -11,6 +11,7 @@ class SetupStatusResponse(BaseModel):
     """Whether the setup wizard is required."""
 
     setup_required: bool
+    timezone: str | None = "UTC"
 
 
 class BootstrapRequest(BaseModel):

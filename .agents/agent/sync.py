@@ -25,13 +25,14 @@ class SyncResult:
     """Result of a sync operation."""
 
     def __init__(self, direction: str, success: bool, status_code: int = 0,
-                 bytes_in: int = 0, bytes_out: int = 0, error: str = ""):
+                 bytes_in: int = 0, bytes_out: int = 0, error: str = "", restart_requested: bool = False):
         self.direction = direction
         self.success = success
         self.status_code = status_code
         self.bytes_in = bytes_in
         self.bytes_out = bytes_out
         self.error = error
+        self.restart_requested = restart_requested
         self.timestamp = datetime.now(UTC).isoformat()
 
 
@@ -102,16 +103,34 @@ class EdgeSync:
         """Pull latest agent bundle ZIP from the server."""
         endpoint = f"{self._base_url}/api/v1/edge/{self._agent_id}/bundle/download"
         try:
-            response = self._client.get(endpoint)
+            response = self._client.post(endpoint)
             status = response.status_code
             if status == 200:
                 bundle_path = Path(bundle_path)
                 bundle_path.parent.mkdir(parents=True, exist_ok=True)
+                remote_version = response.headers.get("X-Agent-Bundle-Version", "")
+                current_version = ""
+                version_path = bundle_path.with_suffix(".version")
+                if version_path.exists():
+                    current_version = version_path.read_text(encoding="utf-8").strip()
+                if remote_version and remote_version == current_version:
+                    logger.debug("Bundle version unchanged: %s", remote_version)
+                    return SyncResult("pull-bundle", True, status, 0, 0)
                 tmp_path = bundle_path.with_suffix(".tmp")
                 tmp_path.write_bytes(response.content)
                 tmp_path.replace(bundle_path)
-                logger.info("Bundle pulled: %s bytes", len(response.content))
-                return SyncResult("pull-bundle", True, status, len(response.content), 0)
+                if remote_version:
+                    version_path.write_text(remote_version, encoding="utf-8")
+                logger.info(
+                    "Bundle pulled: %s bytes, version=%s",
+                    len(response.content),
+                    remote_version or "unknown",
+                )
+                extracted = self._extract_bundle(bundle_path)
+                return SyncResult(
+                    "pull-bundle", True, status, len(response.content), 0,
+                    restart_requested=extracted,
+                )
             logger.warning("Bundle pull unexpected status=%s", status)
             return SyncResult("pull-bundle", False, status)
         except Exception as e:
@@ -119,6 +138,25 @@ class EdgeSync:
             logger.debug("Bundle pull failed: %s", error_msg)
             return SyncResult("pull-bundle", False, 0, 0, 0, error_msg)
 
+    def _extract_bundle(self, bundle_path: Path) -> bool:
+        """Extract bundle ZIP to the agent package directory."""
+        try:
+            import zipfile
+
+            extract_root = bundle_path.parent
+            logger.info("Extracting bundle to %s", extract_root)
+            with zipfile.ZipFile(bundle_path, "r") as zf:
+                for member in zf.namelist():
+                    if member.endswith("/"):
+                        continue
+                    target = extract_root / member
+                    target.parent.mkdir(parents=True, exist_ok=True)
+                    target.write_bytes(zf.read(member))
+            logger.info("Bundle extracted successfully")
+            return True
+        except Exception as e:
+            logger.error("Bundle extraction failed: %s", e)
+            return False
     def _parse_manifest(self, payload: dict[str, Any]) -> Any:
         """Parse cloud payload into a ConfigManifest."""
         from .storage import ConfigManifest
@@ -145,8 +183,12 @@ class EdgeSync:
         if not records:
             return SyncResult("push-inventory", True, 0, 0, 0)
 
+        plugins: dict[str, Any] = {}
+        for r in records:
+            plugins.setdefault(r.plugin_name, {}).update(r.data if isinstance(r.data, dict) else {"value": str(r.data)})
         payload = {
             "agent_id": self._agent_id,
+            "plugins": plugins,
             "records": [self._serialize_inventory(r) for r in records],
         }
         compressed = gzip.compress(json.dumps(payload).encode("utf-8"))

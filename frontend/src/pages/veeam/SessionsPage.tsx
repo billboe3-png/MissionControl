@@ -3,6 +3,7 @@ import PageHeader from "../../components/common/PageHeader";
 import StatusBadge from "../../components/common/StatusBadge";
 import { veeamApi, VeeamSession, VeeamSessionStat } from "../../services/veeam";
 import { formatBytes } from "../../services/veeam";
+import { formatDateTime } from "../../utils/dateFormat";
 
 const SKIP_TYPES = new Set(["ConfigurationResynchronize", "MalwareDetection"]);
 
@@ -170,8 +171,8 @@ export default function VeeamSessionsPage() {
                                 <td>{s.name}</td>
                                 <td>{s.platformName ?? s.sessionType}</td>
                                 <td><StatusBadge status={st.status} label={st.label} /></td>
-                                <td>{s.creationTime ? new Date(s.creationTime).toLocaleString() : "-"}</td>
-                                <td>{s.endTime ? new Date(s.endTime).toLocaleString() : "-"}</td>
+                                <td>{s.creationTime ? formatDateTime(s.creationTime) : "-"}</td>
+                                <td>{s.endTime ? formatDateTime(s.endTime) : "-"}</td>
                                 <td>{formatDuration(s.creationTime, s.endTime)}</td>
                                 {sshAvailable && (
                                     <td>{ss ? formatBytes(ss.processed_bytes) : "-"}</td>

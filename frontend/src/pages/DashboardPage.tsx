@@ -9,9 +9,11 @@ import ActivityWidget from "../components/dashboard/ActivityWidget";
 import { api } from "../services/api";
 import { DashboardResponse } from "../types/dashboard";
 
+import { formatDateTime } from "../utils/dateFormat";
+
 function formatTimestamp(d: Date | null) {
     if (!d) return "—";
-    return d.toLocaleTimeString();
+    return formatDateTime(d.toISOString());
 }
 
 export default function DashboardPage() {
