@@ -292,10 +292,11 @@ async def download_edge_bundle(
 
     version_path = bundle_path.with_suffix(".version")
     version = version_path.read_text(encoding="utf-8").strip() if version_path.exists() else ""
+    versioned_name = f"agent-bundle-{version}.zip" if version else "agent-bundle-live.zip"
     response = FileResponse(
         path=str(bundle_path),
         media_type="application/zip",
-        filename="agent-bundle-live.zip",
+        filename=versioned_name,
     )
     if version:
         response.headers["X-Agent-Bundle-Version"] = version
