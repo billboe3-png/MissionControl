@@ -24,7 +24,7 @@ version_text = f'v0.{minor}.{patch}'
 
 with zipfile.ZipFile(bundle, 'w', zipfile.ZIP_DEFLATED) as zf:
     for f in root.rglob('*'):
-        if f.is_file() and f.name != 'agent.py':
+        if f.is_file():
             arc = Path('agent') / f.relative_to(root)
             zf.write(f, arc)
 version_file.write_text(version_text, encoding='utf-8')
