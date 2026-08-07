@@ -4,6 +4,7 @@ import LoadingButton from "../../components/common/LoadingButton";
 import EmptyState from "../../components/common/EmptyState";
 import HyperVHostSelector, { useSelectedHost } from "../../components/hyperv/HyperVHostSelector";
 import { hypervApi, HyperVCheckpoint, HyperVVm } from "../../services/hyperv";
+import { formatDateTime } from "../../utils/dateFormat";
 
 function formatBytes(bytes: number): string {
     if (bytes >= 1073741824) return `${(bytes / 1073741824).toFixed(1)} GB`;
@@ -99,7 +100,7 @@ export default function CheckpointsPage() {
                                     <td>{cp.vm_name}</td>
                                     <td>{cp.checkpoint_type}</td>
                                     <td>{formatBytes(cp.size_bytes)}</td>
-                                    <td>{cp.creation_time ? new Date(cp.creation_time).toLocaleString() : "—"}</td>
+                                    <td>{cp.creation_time ? formatDateTime(cp.creation_time) : "—"}</td>
                                     <td>
                                         <button
                                             className="btn btn-danger btn-sm"

@@ -16,6 +16,7 @@ import HypervConfigModal from "../../components/modals/HypervConfigModal";
 import ProxmoxConfigModal from "../../components/modals/ProxmoxConfigModal";
 import VeeamConfigModal from "../../components/modals/VeeamConfigModal";
 import UniFiConfigModal from "../../components/modals/UniFiConfigModal";
+import { formatDateTime } from "../../utils/dateFormat";
 
 type ConfigModalType = "zabbix" | "active_directory" | "microsoft_365" | "hyperv" | "proxmox" | "veeam" | "unifi" | null;
 
@@ -306,7 +307,7 @@ export default function IntegrationsPage() {
                                                                     <span>SSH: {profile.ssh_host}</span>
                                                                 )}
                                                                 {profile.last_test && (
-                                                                    <span>Last tested: {new Date(profile.last_test).toLocaleString()}</span>
+                                                                    <span>Last tested: {formatDateTime(profile.last_test)}</span>
                                                                 )}
                                                             </div>
                                                         </div>

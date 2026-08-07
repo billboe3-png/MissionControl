@@ -11,6 +11,7 @@ import logging
 import platform
 
 from .base_provider import HyperVProvider
+from .agent_provider import _vm_command, _checkpoint_identity
 
 logger = logging.getLogger(__name__)
 
@@ -23,9 +24,10 @@ class LocalAgentHyperVProvider(HyperVProvider):
     Write operations are intentionally disabled for this local path.
     """
 
-    def __init__(self, inventory: dict, hostname: str = "") -> None:
+    def __init__(self, inventory: dict, hostname: str = "", dispatch_cmd = None) -> None:
         self._inventory = inventory
         self._hostname = hostname
+        self._dispatch_cmd = dispatch_cmd
 
     # ------------------------------------------------------------------ #
     # Read-only data accessors                                             #
@@ -149,35 +151,52 @@ class LocalAgentHyperVProvider(HyperVProvider):
         }
 
     # ------------------------------------------------------------------ #
-    # Write operations not supported for local read-only path             #
+    # Write operations via agent command queue                            #
     # ------------------------------------------------------------------ #
 
+    async def _dispatch(self, command_str: str) -> dict:
+        """Dispatch a PowerShell command to the local agent."""
+        if not self._dispatch_cmd:
+            return {
+                "success": False,
+                "error": "No agent dispatch available for local host operations",
+            }
+        try:
+            return await self._dispatch_cmd(command_str)
+        except Exception as exc:  # pragma: no cover
+            logger.exception("Local agent dispatch failed")
+            return {"success": False, "error": str(exc)}
+
     async def start_vm(self, vm_id: str) -> dict:
-        return {"success": False, "error": "Local host operations are read-only; use an IntegrationProfile for remote management."}
+        return await self._dispatch(_vm_command(vm_id, "Start-VM"))
 
     async def stop_vm(self, vm_id: str, force: bool = False) -> dict:
-        return {"success": False, "error": "Local host operations are read-only; use an IntegrationProfile for remote management."}
+        force_flag = " -Force" if force else ""
+        return await self._dispatch(_vm_command(vm_id, "Stop-VM") + force_flag)
 
     async def restart_vm(self, vm_id: str) -> dict:
-        return {"success": False, "error": "Local host operations are read-only; use an IntegrationProfile for remote management."}
+        return await self._dispatch(_vm_command(vm_id, "Restart-VM"))
 
     async def pause_vm(self, vm_id: str) -> dict:
-        return {"success": False, "error": "Local host operations are read-only; use an IntegrationProfile for remote management."}
+        return await self._dispatch(_vm_command(vm_id, "Suspend-VM"))
 
     async def resume_vm(self, vm_id: str) -> dict:
-        return {"success": False, "error": "Local host operations are read-only; use an IntegrationProfile for remote management."}
+        return await self._dispatch(_vm_command(vm_id, "Resume-VM"))
 
     async def create_checkpoint(self, vm_id: str, name: str | None = None) -> dict:
-        return {"success": False, "error": "Local host operations are read-only; use an IntegrationProfile for remote management."}
+        name_flag = f" -SnapshotName '{name}'" if name else ""
+        return await self._dispatch(_vm_command(vm_id, "Checkpoint-VM") + name_flag)
 
     async def delete_checkpoint(self, vm_id: str, checkpoint_id: str) -> dict:
-        return {"success": False, "error": "Local host operations are read-only; use an IntegrationProfile for remote management."}
+        return await self._dispatch(
+            f"{_checkpoint_identity(checkpoint_id)} | Remove-VMCheckpoint"
+        )
 
     async def create_snapshot(self, vm_id: str, name: str | None = None) -> dict:
-        return {"success": False, "error": "Local host operations are read-only; use an IntegrationProfile for remote management."}
+        return await self.create_checkpoint(vm_id, name)
 
     async def delete_snapshot(self, vm_id: str, snapshot_id: str) -> dict:
-        return {"success": False, "error": "Local host operations are read-only; use an IntegrationProfile for remote management."}
+        return await self.delete_checkpoint(vm_id, snapshot_id)
 
     async def get_snapshots(self, vm_id: str | None = None) -> dict:
         return {"connected": True, "count": 0, "items": []}

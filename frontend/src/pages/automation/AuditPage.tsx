@@ -3,6 +3,7 @@ import PageHeader from "../../components/common/PageHeader";
 import EmptyState from "../../components/common/EmptyState";
 import StatusBadge from "../../components/common/StatusBadge";
 import { useToast } from "../../contexts/ToastContext";
+import { formatDateTime } from "../../utils/dateFormat";
 import {
     automationApi,
     AuditTrailData,
@@ -125,7 +126,7 @@ export default function AuditPage() {
                                     {item.actor ?? "System"}
                                 </div>
                                 <div className="text-muted" style={{ fontSize: "0.8rem" }}>
-                                    {new Date(item.timestamp).toLocaleString()}
+                                    {formatDateTime(item.timestamp)}
                                 </div>
                             </div>
                         </div>

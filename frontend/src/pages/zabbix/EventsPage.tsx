@@ -4,6 +4,7 @@ import PageHeader from "../../components/common/PageHeader";
 import StatusBadge from "../../components/common/StatusBadge";
 import DataTable, { Column } from "../../components/common/DataTable";
 import { zabbixApi, ZabbixEvent, ZabbixEventsResponse } from "../../services/zabbix";
+import { formatDateTime } from "../../utils/dateFormat";
 
 const SEVERITIES = [
     { key: "not_classified", label: "Not classified", color: "#6c757d" },

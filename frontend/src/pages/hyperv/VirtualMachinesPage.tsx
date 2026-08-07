@@ -5,6 +5,7 @@ import StatusBadge from "../../components/common/StatusBadge";
 import EmptyState from "../../components/common/EmptyState";
 import HyperVHostSelector, { useSelectedHost } from "../../components/hyperv/HyperVHostSelector";
 import { hypervApi, HyperVVm } from "../../services/hyperv";
+import { formatDateTime } from "../../utils/dateFormat";
 
 function formatUptime(seconds: number): string {
     if (seconds === 0) return "—";
@@ -32,6 +33,7 @@ export default function VirtualMachinesPage() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [actionId, setActionId] = useState<string | null>(null);
+    const [hostFilter, setHostFilter] = useState<string>("all");
 
     const load = async () => {
         try { setVms(await hypervApi.listVms(selectedHostId)); }
@@ -42,8 +44,13 @@ export default function VirtualMachinesPage() {
     useEffect(() => {
         if (hostsLoading) return;
         setLoading(true);
+        setHostFilter("all");
         load();
     }, [selectedHostId, hostsLoading]);
+
+    const hostServers = Array.from(new Set(vms.map((vm) => vm.host_server).filter(Boolean)));
+
+    const visibleVms = hostFilter === "all" ? vms : vms.filter((vm) => vm.host_server === hostFilter);
 
     const doAction = async (vmId: string, action: () => Promise<unknown>) => {
         setActionId(vmId);
@@ -61,6 +68,21 @@ export default function VirtualMachinesPage() {
                 subtitle="Manage Hyper-V virtual machines"
                 actions={<HyperVHostSelector hosts={hosts} selectedHostId={selectedHostId} onChange={setSelectedHostId} />}
             />
+            {hostServers.length > 1 && (
+                <div className="hyperv-host-selector" style={{ marginBottom: 16 }}>
+                    <label className="hyperv-host-selector-label">Host:</label>
+                    <select
+                        className="hyperv-host-selector-select"
+                        value={hostFilter}
+                        onChange={(e) => setHostFilter(e.target.value)}
+                    >
+                        <option value="all">All hosts</option>
+                        {hostServers.map((host) => (
+                            <option key={host} value={host}>{host}</option>
+                        ))}
+                    </select>
+                </div>
+            )}
             {error && (
                 <div className="error-banner">
                     {error}
@@ -69,11 +91,11 @@ export default function VirtualMachinesPage() {
             )}
             {loading ? (
                 <div className="loading-bar" />
-            ) : vms.length === 0 ? (
+            ) : visibleVms.length === 0 ? (
                 <EmptyState icon="🖥️" title="No virtual machines" description="No VMs found on the connected Hyper-V host." />
             ) : (
                 <div className="hyperv-vm-grid">
-                    {vms.map((vm) => (
+                    {visibleVms.map((vm) => (
                         <div key={vm.id} className={`hyperv-vm-card state-${vm.state}`}>
                             <div className="hyperv-vm-header">
                                 <h3>{vm.name}</h3>
@@ -82,11 +104,12 @@ export default function VirtualMachinesPage() {
                             <div className="hyperv-vm-meta">
                                 <span>Host: {vm.host_server}</span>
                                 {vm.guest_os && <span>OS: {vm.guest_os}</span>}
-                                <span>CPU: {vm.cpu_count} cores</span>
+                                <span>CPU: {vm.cpu_count ? `${vm.cpu_count} cores` : `—`}</span>
+                                {vm.cpu_usage_percent ? <span>CPU usage: {vm.cpu_usage_percent}%</span> : null}
                                 <span>RAM: {formatBytes(vm.memory_assigned_mb)} / {formatBytes(vm.memory_startup_mb)}</span>
                                 <span>Uptime: {formatUptime(vm.uptime_seconds)}</span>
                                 {vm.last_checkpoint && (
-                                    <span>Last checkpoint: {new Date(vm.last_checkpoint).toLocaleDateString()}</span>
+                                    <span>Last checkpoint: {formatDateTime(vm.last_checkpoint)}</span>
                                 )}
                             </div>
                             <div className="hyperv-vm-actions">

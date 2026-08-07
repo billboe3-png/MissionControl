@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import PageHeader from "../../components/common/PageHeader";
 import StatusBadge from "../../components/common/StatusBadge";
 import { zabbixPluginApi, ZabbixPluginServer } from "../../services/zabbixPlugin";
+import { formatDateTime } from "../../utils/dateFormat";
 
 export default function ZabbixServersPage() {
     const [servers, setServers] = useState<ZabbixPluginServer[]>([]);
@@ -75,7 +76,7 @@ export default function ZabbixServersPage() {
                                     <td>{s.version ?? "—"}</td>
                                     <td>
                                         {s.last_sync_at
-                                            ? new Date(s.last_sync_at).toLocaleString()
+                                            ? formatDateTime(s.last_sync_at)
                                             : "Never"}
                                     </td>
                                     <td>

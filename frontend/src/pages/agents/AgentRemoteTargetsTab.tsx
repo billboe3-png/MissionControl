@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import LoadingButton from "../../components/common/LoadingButton";
 import StatusBadge from "../../components/common/StatusBadge";
+import { formatDateTime } from "../../utils/dateFormat";
 import {
     agentRemoteTargetApi,
     RemoteTarget,
@@ -293,7 +294,7 @@ export default function AgentRemoteTargetsTab({ agentId }: Props) {
                                         </td>
                                         <td>
                                             {t.last_collected_at
-                                                ? new Date(t.last_collected_at).toLocaleString()
+                                                ? formatDateTime(t.last_collected_at)
                                                 : "Never"}
                                         </td>
                                         <td>

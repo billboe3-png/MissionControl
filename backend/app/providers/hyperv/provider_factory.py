@@ -66,6 +66,7 @@ def list_hyperv_hosts(db: Session) -> list[dict]:
     ]
 
     agent_hosts: list[dict] = []
+    seen_hostnames: set[str] = set()
     try:
         from app.models.db.agent import Agent
         from app.models.db.agent_remote_target import AgentRemoteTarget
@@ -81,6 +82,7 @@ def list_hyperv_hosts(db: Session) -> list[dict]:
         )
         for target, agent in targets:
             inv = {}
+            target_data = {}
             if agent.inventory_json:
                 try:
                     full_inv = json.loads(agent.inventory_json)
@@ -97,12 +99,40 @@ def list_hyperv_hosts(db: Session) -> list[dict]:
                     hyperv = plugins.get("hyperv")
                 except (json.JSONDecodeError, TypeError):
                     pass
-            if hyperv and hyperv.get("vm_count", 0) > 0:
-                agent_hosts.append({
-                    "id": -target.id,
-                    "name": f"{target.name} (Agent)",
-                    "host": target.hostname,
-                })
+            if not hyperv:
+                continue
+            if isinstance(hyperv, dict):
+                remote_hyperv = (target_data.get("inventory", {}).get("hyperv") or {}).get("remote")
+                if remote_hyperv:
+                    hyperv = remote_hyperv
+                else:
+                    plugins_hyperv = hyperv.get("remote")
+                    if not plugins_hyperv:
+                        plugins_hyperv = hyperv.get("local") or hyperv
+                    hyperv = plugins_hyperv
+            vm_count = 0
+            if isinstance(hyperv, dict):
+                vm_count = hyperv.get("vm_count", 0)
+            elif isinstance(hyperv, list):
+                vm_count = len(hyperv)
+            if vm_count > 0:
+                host = target.hostname
+                try:
+                    raw = hyperv.get("vms") if isinstance(hyperv, dict) else (hyperv if isinstance(hyperv, list) else [])
+                    if isinstance(raw, str):
+                        raw = json.loads(raw)
+                    if isinstance(raw, dict):
+                        raw = raw.get("vms", [])
+                    names = [v.get("ComputerName") or v.get("computer_name") for v in raw if isinstance(v, dict)]
+                    if names:
+                        host = max(set(names), key=names.count)
+                except (json.JSONDecodeError, TypeError):
+                    pass
+                entry_id = -target.id
+                entry = {"id": entry_id, "name": host, "host": host}
+                if host not in seen_hostnames:
+                    seen_hostnames.add(host)
+                    agent_hosts.append(entry)
     except Exception as e:
         logger.debug("Could not load agent targets for host list: %s", e)
 
@@ -118,16 +148,40 @@ def list_hyperv_hosts(db: Session) -> list[dict]:
             try:
                 full_inv = json.loads(agent.inventory_json)
                 hyperv = full_inv.get("plugins", {}).get("hyperv")
-            except (json.JSONDecodeError, TypeError):
-                hyperv = None
-            if hyperv and hyperv.get("vm_count", 0) > 0:
+                plugin_data = hyperv or {}
+                local_data = plugin_data.get("local")
+                if not local_data:
+                    continue
+                if isinstance(local_data, dict):
+                    vm_count = local_data.get("vm_count", 0)
+                elif isinstance(local_data, list):
+                    vm_count = len(local_data)
+                else:
+                    vm_count = 0
+                if vm_count <= 0:
+                    continue
                 host_id = -(1000 + agent.id)
-                if not any(h.get("id") == host_id for h in agent_hosts):
+                hostname = agent.name
+                try:
+                    raw = local_data.get("vms") if isinstance(local_data, dict) else (local_data if isinstance(local_data, list) else [])
+                    if isinstance(raw, str):
+                        raw = json.loads(raw)
+                    if isinstance(raw, dict):
+                        raw = raw.get("vms", [])
+                    names = [v.get("ComputerName") or v.get("computer_name") for v in raw if isinstance(v, dict)]
+                    if names:
+                        hostname = max(set(names), key=names.count)
+                except (json.JSONDecodeError, TypeError):
+                    pass
+                if hostname not in seen_hostnames:
+                    seen_hostnames.add(hostname)
                     local_hosts.append({
                         "id": host_id,
-                        "name": f"{agent.name} (Local)",
-                        "host": agent.name,
+                        "name": hostname,
+                        "host": hostname,
                     })
+            except (json.JSONDecodeError, TypeError):
+                pass
     except Exception as e:
         logger.debug("Could not load local agent hosts for host list: %s", e)
 
@@ -141,7 +195,7 @@ def get_hyperv_provider(db: Session | None = None, host_id: int | None = None) -
     Negative host_id in (-999, 0): agent remote target inventory.
     Negative host_id <= -1000: local agent host inventory, mapped as -(1000 + agent.id).
     None: default provider.
-    Falls back to mock when no profile exists.
+    Falls back to agent inventory when the configured host is unreachable.
     """
     global _default_provider
 
@@ -153,7 +207,10 @@ def get_hyperv_provider(db: Session | None = None, host_id: int | None = None) -
             return _get_agent_provider(db, -host_id)
 
         if host_id in _providers:
-            return _providers[host_id]
+            cached = _providers[host_id]
+            if _is_agent_host(cached):
+                return cached
+            del _providers[host_id]
 
         if db is not None:
             try:
@@ -176,7 +233,10 @@ def get_hyperv_provider(db: Session | None = None, host_id: int | None = None) -
         logger.warning("Hyper-V host_id=%s not found, falling back to default", host_id)
 
     if _default_provider is not None:
-        return _default_provider
+        cached = _default_provider
+        if _is_agent_host(cached):
+            return cached
+        _default_provider = None
 
     if db is not None:
         try:
@@ -195,6 +255,11 @@ def get_hyperv_provider(db: Session | None = None, host_id: int | None = None) -
                     logger.warning("Failed to create default provider: %s", e)
         except Exception as e:
             logger.warning("Failed to load Hyper-V profile from DB: %s", e)
+
+    agent_default = _try_agent_default_provider(db)
+    if agent_default is not None:
+        _default_provider = agent_default
+        return _default_provider
 
     logger.info("Using mock Hyper-V provider")
     from .mock_provider import MockHyperVProvider
@@ -240,6 +305,13 @@ def _get_agent_provider(db: Session | None, target_id: int) -> HyperVProvider:
             pass
     if not hyperv:
         raise ValueError(f"No Hyper-V inventory collected for target {target_id}")
+
+    if isinstance(hyperv, dict):
+        remote_targets = json.loads(agent.inventory_json or "{}").get("remote_targets", {})
+        target_inventory = remote_targets.get(f"target-{target_id}", {}).get("inventory", {})
+        remote_hyperv = target_inventory.get("hyperv", {})
+        if isinstance(remote_hyperv, dict) and remote_hyperv.get("remote"):
+            hyperv = remote_hyperv["remote"]
 
     async def _dispatch_on_agent(command_str: str) -> dict:
         """Queue a PowerShell command for execution on the remote target."""
@@ -304,7 +376,8 @@ def _get_local_agent_provider(db: Session | None, agent_id: int) -> HyperVProvid
     import json
     try:
         full_inv = json.loads(agent.inventory_json)
-        hyperv = full_inv.get("plugins", {}).get("hyperv")
+        plugin_data = full_inv.get("plugins", {}).get("hyperv") or {}
+        hyperv = plugin_data.get("local") or plugin_data
     except (json.JSONDecodeError, TypeError) as exc:
         raise ValueError(f"Invalid inventory JSON for agent {agent_id}") from exc
 
@@ -340,14 +413,54 @@ def _get_local_agent_provider(db: Session | None, agent_id: int) -> HyperVProvid
             logger.exception("Failed to dispatch command to agent %s", agent.id)
             return {"success": False, "error": str(e)}
 
-    from .agent_provider import AgentHyperVProvider
-    return AgentHyperVProvider(
+    from .local_agent_provider import LocalAgentHyperVProvider
+    return LocalAgentHyperVProvider(
         hyperv,
-        target_hostname=agent.name or full_inv.get("system", {}).get("hostname", ""),
-        agent_id=agent.id,
-        target_id=agent.id,
+        hostname=agent.name or full_inv.get("system", {}).get("hostname", ""),
         dispatch_cmd=_dispatch_on_agent,
     )
+
+
+def _is_agent_host(provider: object) -> bool:
+    return provider.__class__.__name__ == "AgentHyperVProvider"
+
+
+def _try_agent_default_provider(db: Session | None) -> HyperVProvider | None:
+    """Return an agent-backed provider when the only configured host is unreachable."""
+    if db is None:
+        return None
+    try:
+        from app.models.db.agent import Agent
+        from app.providers.hyperv.agent_provider import AgentHyperVProvider
+
+        agent = (
+            db.query(Agent)
+            .filter(Agent.status != "offline", Agent.inventory_json.isnot(None))
+            .order_by(Agent.id.asc())
+            .first()
+        )
+        if agent is None:
+            return None
+
+        import json
+        full_inv = json.loads(agent.inventory_json) if agent.inventory_json else {}
+        plugin_data = full_inv.get("plugins", {}).get("hyperv") or {}
+        local_inventory = plugin_data.get("local") or {}
+        remote_inventory = plugin_data.get("remote") or {}
+        hyperv = local_inventory or remote_inventory or plugin_data
+        if not hyperv or (isinstance(hyperv, dict) and hyperv.get("vm_count", 0) <= 0):
+            return None
+
+        return AgentHyperVProvider(
+            hyperv,
+            target_hostname=agent.name or full_inv.get("system", {}).get("hostname", "Agent"),
+            agent_id=agent.id,
+            target_id=agent.id,
+            dispatch_cmd=lambda command_str: {"success": False, "error": "Agent offline for commands"},
+        )
+    except Exception as exc:
+        logger.debug("Agent-backed default Hyper-V provider failed: %s", exc)
+        return None
 
 
 def reset_hyperv_provider(host_id: int | None = None) -> None:

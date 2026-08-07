@@ -443,7 +443,18 @@ class AgentService:
                 detail="API key mismatch",
             )
 
-        inventory_json = json.dumps(inventory_data)
+        # Merge with existing inventory so partial plugin payloads don't wipe data
+        existing = {}
+        if agent.inventory_json:
+            try:
+                existing = json.loads(agent.inventory_json)
+            except json.JSONDecodeError:
+                existing = {}
+        merged_plugins = {**existing.get("plugins", {}), **inventory_data.get("plugins", {})}
+        merged = {**existing, **inventory_data}
+        merged["plugins"] = merged_plugins
+
+        inventory_json = json.dumps(merged)
         AgentRepository.update(
             db,
             agent_id,

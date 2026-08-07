@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import PageHeader from "../../components/common/PageHeader";
+import { formatDateTime } from "../../utils/dateFormat";
 
 type ServerStatus = {
   name: string;
@@ -284,7 +285,7 @@ export default function ZabbixOverviewPage() {
                 <td style={{ padding: 8 }}>{renderStatus(p.status)}</td>
                 <td style={{ padding: 8 }}>
                   {p.last_heartbeat !== "—"
-                    ? new Date(p.last_heartbeat).toLocaleString()
+                    ? formatDateTime(p.last_heartbeat)
                     : "—"}
                 </td>
                 <td style={{ padding: 8 }}>{p.target_count}</td>

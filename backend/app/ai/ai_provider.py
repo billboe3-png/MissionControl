@@ -11,6 +11,7 @@ Sprint 2.6.0 - AI Operations Engine.
 """
 
 import logging
+import os
 from abc import ABC, abstractmethod
 
 logger = logging.getLogger(__name__)
@@ -668,12 +669,24 @@ def get_ai_provider() -> AIProvider:
     """
     Return the singleton AI provider.
 
-    Checks IntegrationProfile DB for an enabled ai_provider type.
-    Falls back to RuleBasedProvider.
+    Priority:
+    1. Environment variables: OPENROUTER_API_KEY + OPENROUTER_MODEL
+    2. IntegrationProfile DB for an enabled ai_provider type.
+    3. Falls back to RuleBasedProvider.
     """
     global _ai_provider
 
     if _ai_provider is not None:
+        return _ai_provider
+
+    # ------------------------------------------------------------------
+    # 1. Env-var shortcut: instant OpenRouter without DB setup
+    # ------------------------------------------------------------------
+    env_api_key = os.getenv("OPENROUTER_API_KEY", "").strip()
+    env_model = os.getenv("OPENROUTER_MODEL", "mistralai/mistral-7b-instruct:free").strip()
+    if env_api_key:
+        _ai_provider = OpenRouterProvider(api_key=env_api_key, model=env_model)
+        logger.info("Created AI provider from env: openrouter/%s", env_model)
         return _ai_provider
 
     try:

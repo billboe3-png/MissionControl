@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import PageHeader from "../../components/common/PageHeader";
 import { useToast } from "../../contexts/ToastContext";
 import { resumesApi, Resume } from "../../services/resumes";
+import { formatDateTime } from "../../utils/dateFormat";
 
 export default function ResumesPage() {
     const [items, setItems] = useState<Resume[]>([]);
@@ -105,7 +106,7 @@ export default function ResumesPage() {
                                             {item.available ? "Active" : "Inactive"}
                                         </span>
                                     </td>
-                                    <td>{new Date(item.updated_at).toLocaleString()}</td>
+                                    <td>{formatDateTime(item.updated_at)}</td>
                                     <td style={{ textAlign: "right" }}>
                                         {!item.available && (
                                             <button className="btn btn-sm" onClick={() => handleSetActive(item)}>

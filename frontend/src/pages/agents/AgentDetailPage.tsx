@@ -4,6 +4,7 @@ import PageHeader from "../../components/common/PageHeader";
 import StatusBadge from "../../components/common/StatusBadge";
 import LoadingButton from "../../components/common/LoadingButton";
 import AgentRemoteTargetsTab from "./AgentRemoteTargetsTab";
+import { formatDateTime } from "../../utils/dateFormat";
 import {
     agentsApi,
     Agent,
@@ -512,7 +513,7 @@ export default function AgentDetailPage() {
                         <span className="agent-overview-label">Last Heartbeat</span>
                         <span className="agent-overview-value">
                             {agent.last_heartbeat
-                                ? new Date(agent.last_heartbeat).toLocaleString()
+                                ? formatDateTime(agent.last_heartbeat)
                                 : "Never"}
                         </span>
                     </div>
@@ -524,7 +525,7 @@ export default function AgentDetailPage() {
                         <span className="agent-overview-label">Registered</span>
                         <span className="agent-overview-value">
                             {agent.registered_at
-                                ? new Date(agent.registered_at).toLocaleString()
+                                ? formatDateTime(agent.registered_at)
                                 : "—"}
                         </span>
                     </div>
@@ -652,7 +653,7 @@ export default function AgentDetailPage() {
                                                 <td>{formatDuration(cmd.duration_ms)}</td>
                                                 <td>
                                                     {cmd.created_at
-                                                        ? new Date(cmd.created_at).toLocaleString()
+                                                        ? formatDateTime(cmd.created_at)
                                                         : "—"}
                                                 </td>
                                                 <td>
@@ -896,7 +897,7 @@ export default function AgentDetailPage() {
                                                 {cmd.command.length > 140 ? cmd.command.slice(0, 140) + "…" : cmd.command}
                                             </div>
                                             <div style={{ fontSize: 12, opacity: 0.7 }}>
-                                                {cmd.created_at ? new Date(cmd.created_at).toLocaleString() : ""}
+                                                {cmd.created_at ? formatDateTime(cmd.created_at) : ""}
                                             </div>
                                         </div>
                                     </div>

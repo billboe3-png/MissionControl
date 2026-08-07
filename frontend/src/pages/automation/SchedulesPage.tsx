@@ -3,6 +3,7 @@ import PageHeader from "../../components/common/PageHeader";
 import EmptyState from "../../components/common/EmptyState";
 import StatusBadge from "../../components/common/StatusBadge";
 import { useToast } from "../../contexts/ToastContext";
+import { formatDateTime } from "../../utils/dateFormat";
 import {
     automationApi,
     PlaybookScheduleData,
@@ -71,8 +72,8 @@ export default function SchedulesPage() {
                                     Playbook #{item.playbook_id} · {item.cron_expression}
                                 </div>
                                 <div className="text-muted" style={{ fontSize: "0.8rem" }}>
-                                    {item.last_run ? `Last: ${new Date(item.last_run).toLocaleString()}` : "Never run"}
-                                    {item.next_run ? ` · Next: ${new Date(item.next_run).toLocaleString()}` : ""}
+                                    {item.last_run ? `Last: ${formatDateTime(item.last_run)}` : "Never run"}
+                                    {item.next_run ? ` · Next: ${formatDateTime(item.next_run)}` : ""}
                                 </div>
                             </div>
                             <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>

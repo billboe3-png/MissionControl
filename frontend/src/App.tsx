@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "./contexts/AuthContext";
 import { SidebarProvider } from "./contexts/SidebarContext";
 import { ToastProvider } from "./contexts/ToastContext";
+import { SiteProvider } from "./contexts/SiteContext";
 import AppLayout from "./layouts/AppLayout";
 import RequireAuth from "./layouts/RequireAuth";
 import RequireSetup from "./layouts/RequireSetup";
@@ -105,7 +106,8 @@ export default function App() {
             <AuthProvider>
                 <SidebarProvider>
                     <ToastProvider>
-                        <Routes>
+                        <SiteProvider>
+                            <Routes>
                             <Route path="/setup" element={<SetupWizardPage />} />
                             <Route element={<RequireSetup />}>
                                 <Route path="/login" element={<LoginPage />} />
@@ -229,6 +231,7 @@ export default function App() {
                         </Route>
                         </Route>
                         </Routes>
+                    </SiteProvider>
                     </ToastProvider>
                 </SidebarProvider>
             </AuthProvider>
