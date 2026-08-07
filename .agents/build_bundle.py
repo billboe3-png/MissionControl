@@ -1,7 +1,8 @@
 import zipfile
 from pathlib import Path
+import shutil
 
-bundle_dir = Path('../.agents')
+bundle_dir = Path('.')
 version_file = bundle_dir / 'agent-bundle-live.version'
 root = Path('agent')
 
@@ -29,20 +30,11 @@ with zipfile.ZipFile(versioned_bundle, 'w', zipfile.ZIP_DEFLATED) as zf:
             arc = Path('agent') / f.relative_to(root)
             zf.write(f, arc)
 
-# Maintain backward-compatible symlink/copy for live path
 live_bundle = bundle_dir / 'agent-bundle-live.zip'
-try:
-    if live_bundle.exists() or live_bundle.is_symlink():
-        live_bundle.unlink()
-except FileNotFoundError:
-    pass
-# Use copy on Windows, symlink on Unix
-try:
-    live_bundle.symlink_to(versioned_bundle.name)
-except OSError:
-    import shutil
-    shutil.copy2(versioned_bundle, live_bundle)
+if live_bundle.exists():
+    live_bundle.unlink()
+shutil.copy2(versioned_bundle, live_bundle)
 
 version_file.write_text(version_text, encoding='utf-8')
-print('built', versioned_bundle, versioned_bundle.stat().st_size, 'version', version_text)
-print('live:', live_bundle)
+print('built', versioned_bundle.name, versioned_bundle.stat().st_size, 'version', version_text)
+print('live:', live_bundle.name, live_bundle.stat().st_size)
