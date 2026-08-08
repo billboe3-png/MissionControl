@@ -50,7 +50,6 @@ class EdgeSync:
             verify=verify_ssl,
         )
         if api_key:
-            self._client.headers["Authorization"] = f"Bearer {api_key}"
             self._client.headers["X-Agent-API-Key"] = api_key
         self._bundle_path = bundle_path or (Path.cwd() / "agent-bundle-live.zip")
 
