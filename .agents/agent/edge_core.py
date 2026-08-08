@@ -51,6 +51,7 @@ class EdgeCore:
     async def start(self) -> None:
         """Start the edge agent."""
         logger.info("Mission Control Edge Agent starting")
+logger.info("DEBUG server=%s agent_id=%s api_key_prefix=%s", self.config.server_url, self._agent_id, (self.config.api_key or "")[:12])
         logger.info("Data dir: %s", self.config.data_dir)
         logger.info("Server: %s | SSL verify: %s", self.config.server_url, self.config.verify_ssl)
 
