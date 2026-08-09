@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import logging
+import os
 import subprocess
 import sys
 import time
@@ -46,16 +47,17 @@ class EdgeAgentService(win32serviceutil.ServiceFramework):
             'agent',
         ]
         cwd = r'C:\MissionControlAgent'
-        env = dict(sys.environ)
+        env = dict(os.environ)
         env.update({
             'MC_SERVER_URL': 'https://missioncontrol.optichosting.co.za',
             'MC_API_KEY': 'mc_agent_cd1a4b965593a04b05a4a919e0878222b8db924514a403a4f4129db59f2bb796',
             'MC_AGENT_ID': '1',
         })
         while True:
-            self.process = subprocess.Popen(
-                cmd, cwd=cwd, env=env, creationflags=subprocess.CREATE_NO_WINDOW
-            )
+            if self.process is None or self.process.poll() is not None:
+                self.process = subprocess.Popen(
+                    cmd, cwd=cwd, env=env, creationflags=subprocess.CREATE_NO_WINDOW
+                )
             rc = win32event.WaitForSingleObject(self.stop_event, 5000)
             if rc == win32event.WAIT_OBJECT_0:
                 try:
@@ -63,8 +65,6 @@ class EdgeAgentService(win32serviceutil.ServiceFramework):
                 except Exception:
                     pass
                 break
-            if self.process.poll() is not None:
-                time.sleep(5)
 
 
 if __name__ == "__main__":

@@ -266,6 +266,73 @@ class EdgeSync:
             "collected_at": record.collected_at,
         }
 
+    # ------------------------------------------------------------------ #
+    # Command pull (server -> edge agent)
+    # ------------------------------------------------------------------ #
+
+    def pull_commands(self) -> list[dict[str, Any]]:
+        """Pull pending commands for this edge agent. Returns [] when none."""
+        endpoint = f"{self._base_url}/api/v1/edge/{self._agent_id}/commands"
+        try:
+            response = self._client.get(endpoint)
+            status = response.status_code
+            if status == 200:
+                payload = response.json()
+                commands = payload.get("commands") or []
+                self._storage.log_sync(
+                    "pull-commands", endpoint, status,
+                    bytes_in=len(response.content),
+                )
+                if commands:
+                    logger.info("Pulled %d edge command(s)", len(commands))
+                return [c for c in commands if isinstance(c, dict)]
+            if status == 404:
+                logger.debug("Edge commands endpoint not found (old server)")
+                return []
+            logger.warning("Edge commands pull unexpected status=%s", status)
+            return []
+        except Exception as e:
+            logger.debug("Edge commands pull failed: %s", e)
+            self._storage.log_sync("pull-commands", endpoint, 0, error=str(e))
+            return []
+
+    def push_command_result(self, command_id: int, result: dict[str, Any]) -> SyncResult:
+        """Report a command execution result back to the server."""
+        endpoint = f"{self._base_url}/api/v1/edge/{self._agent_id}/command-result"
+        payload = {
+            "command_id": command_id,
+            "success": bool(result.get("success")),
+            "exit_code": result.get("exit_code"),
+            "stdout": result.get("stdout"),
+            "stderr": result.get("stderr"),
+            "duration_ms": result.get("duration_ms"),
+            "error_message": result.get("error_message") or result.get("error"),
+        }
+        try:
+            response = self._client.post(endpoint, json=payload)
+            status = response.status_code
+            success = status == 200
+            self._storage.log_sync(
+                "push-command-result", endpoint, status,
+                bytes_in=len(json.dumps(payload).encode("utf-8")),
+                bytes_out=len(response.content),
+                error="" if success else f"status {status}",
+            )
+            if success:
+                logger.info("Command %s result pushed", command_id)
+            else:
+                logger.warning("Command %s result push failed: %s", command_id, status)
+            return SyncResult(
+                "push-command-result", success, status,
+                len(json.dumps(payload).encode("utf-8")),
+                len(response.content),
+                "" if success else f"status {status}",
+            )
+        except Exception as e:
+            logger.debug("Command %s result push error: %s", command_id, e)
+            self._storage.log_sync("push-command-result", endpoint, 0, error=str(e))
+            return SyncResult("push-command-result", False, 0, error=str(e))
+
     def run_sync_cycle(self) -> dict[str, SyncResult]:
         """Run one full sync cycle: config pull, bundle pull, then data push."""
         results: dict[str, SyncResult] = {}

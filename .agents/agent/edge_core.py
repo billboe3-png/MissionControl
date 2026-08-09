@@ -51,7 +51,7 @@ class EdgeCore:
     async def start(self) -> None:
         """Start the edge agent."""
         logger.info("Mission Control Edge Agent starting")
-logger.info("DEBUG server=%s agent_id=%s api_key_prefix=%s", self.config.server_url, self._agent_id, (self.config.api_key or "")[:12])
+        logger.info("DEBUG server=%s agent_id=%s api_key_prefix=%s", self.config.server_url, self._agent_id, (self.config.api_key or "")[:12])
         logger.info("Data dir: %s", self.config.data_dir)
         logger.info("Server: %s | SSL verify: %s", self.config.server_url, self.config.verify_ssl)
 
@@ -81,6 +81,7 @@ logger.info("DEBUG server=%s agent_id=%s api_key_prefix=%s", self.config.server_
             self._sync_loop(),
             self._heartbeat_loop(),
             self._inventory_loop(),
+            self._command_loop(),
         )
 
     async def stop(self) -> None:
@@ -148,6 +149,65 @@ logger.info("DEBUG server=%s agent_id=%s api_key_prefix=%s", self.config.server_
             except Exception as e:
                 logger.error("Heartbeat loop error: %s", e)
             await asyncio.sleep(interval)
+
+    # ------------------------------------------------------------------ #
+    # Command loop
+    # ------------------------------------------------------------------ #
+
+    async def _command_loop(self) -> None:
+        """Poll for pending commands and execute them via the command executor."""
+        from agent.executor import CommandExecutor
+
+        executor = CommandExecutor(timeout=120)
+        interval = max(10, self.config.heartbeat_interval or 60)
+        while self._running:
+            try:
+                if self._sync:
+                    commands = self._sync.pull_commands()
+                    for cmd in commands:
+                        command_id = cmd.get("id")
+                        if command_id is None:
+                            continue
+                        await self._execute_pulled_command(executor, cmd)
+            except Exception as e:
+                logger.error("Command loop error: %s", e)
+            await asyncio.sleep(interval)
+
+    async def _execute_pulled_command(self, executor, cmd: dict) -> None:
+        """Execute one pulled command and push its result."""
+        import time as _time
+        command_id = cmd.get("id")
+        command = cmd.get("command") or ""
+        command_type = cmd.get("command_type") or "execute"
+        timeout = cmd.get("timeout") or 120
+        file_path = cmd.get("file_path")
+        file_name = cmd.get("file_name")
+        file_content_b64 = cmd.get("file_content_b64")
+        logger.info(
+            "Executing edge command %s (type=%s)", command_id, command_type
+        )
+        start = _time.monotonic()
+        try:
+            result = await executor.execute(
+                command=command,
+                command_type=command_type,
+                timeout=timeout,
+                file_path=file_path,
+                file_name=file_name,
+                file_content_b64=file_content_b64,
+            )
+        except Exception as e:
+            result = {
+                "success": False,
+                "error_message": str(e),
+                "exit_code": -1,
+            }
+        result["duration_ms"] = int((_time.monotonic() - start) * 1000)
+        if self._sync:
+            self._sync.push_command_result(command_id, result)
+        logger.info(
+            "Edge command %s finished: success=%s", command_id, result.get("success")
+        )
 
     # ------------------------------------------------------------------ #
     # Inventory loop

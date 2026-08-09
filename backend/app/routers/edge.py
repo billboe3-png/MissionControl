@@ -23,8 +23,12 @@ from pathlib import Path
 
 from app.core.auth_dependency import get_current_user
 from app.db import get_db
-from app.repositories.agent_repository import AgentRepository
-from app.schemas.agent import AgentHeartbeatRequest
+from app.repositories.agent_repository import AgentCommandRepository, AgentRepository
+from app.schemas.agent import (
+    AgentCommandResultRequest,
+    AgentHeartbeatRequest,
+    AgentPendingCommand,
+)
 from app.services.agent_service import AgentService, agent_service
 
 try:
@@ -222,6 +226,69 @@ async def push_edge_heartbeat(
     )
 
     return {"status": "ok", "agent_id": agent_id}
+
+
+# ------------------------------------------------------------------ #
+# Edge command pull (server -> edge agent)
+# ------------------------------------------------------------------ #
+
+
+@router.get("/{agent_id}/commands")
+async def get_edge_commands(
+    agent_id: int,
+    x_agent_api_key: str | None = Header(None, alias="X-Agent-API-Key"),
+    authorization: str | None = Header(None, alias="Authorization"),
+    db: Session = Depends(get_db),
+    service: AgentService = Depends(get_agent_service),
+):
+    """Return pending commands for an edge agent (pull-based dispatch)."""
+    api_key = _resolve_api_key(x_agent_api_key, authorization)
+    agent = await service.authenticate_agent(db, api_key)
+    if agent.id != agent_id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Agent ID mismatch")
+
+    pending = AgentCommandRepository.get_pending_for_agent(db, agent.id)
+    commands: list[AgentPendingCommand] = []
+    for cmd in pending:
+        AgentCommandRepository.update(
+            db, cmd.id, status="dispatched", started_at=datetime.now(UTC)
+        )
+        commands.append(
+            AgentPendingCommand(
+                id=cmd.id,
+                command_type=cmd.command_type,
+                command=cmd.command,
+                timeout=cmd.timeout,
+                file_path=cmd.file_path,
+                file_name=cmd.file_name,
+                file_content_b64=cmd.file_content_b64,
+            )
+        )
+
+    logger.info("Edge commands returned for agent %s: %d", agent_id, len(commands))
+    return {"commands": [c.model_dump() for c in commands]}
+
+
+@router.post("/{agent_id}/command-result")
+async def post_edge_command_result(
+    agent_id: int,
+    payload: AgentCommandResultRequest,
+    x_agent_api_key: str | None = Header(None, alias="X-Agent-API-Key"),
+    authorization: str | None = Header(None, alias="Authorization"),
+    db: Session = Depends(get_db),
+    service: AgentService = Depends(get_agent_service),
+):
+    """Record command execution result from an edge agent."""
+    api_key = _resolve_api_key(x_agent_api_key, authorization)
+    agent = await service.authenticate_agent(db, api_key)
+    if agent.id != agent_id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Agent ID mismatch")
+
+    result = await service.report_command_result(db, payload, agent_id)
+    logger.info(
+        "Edge command %s result recorded for agent %s", payload.command_id, agent_id
+    )
+    return result
 
 
 # ------------------------------------------------------------------ #
