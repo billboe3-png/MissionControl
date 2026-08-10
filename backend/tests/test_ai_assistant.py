@@ -406,7 +406,7 @@ class TestAIProvider:
 
         provider = RuleBasedProvider()
         import asyncio
-        info = asyncio.get_event_loop().run_until_complete(provider.get_provider_info())
+        info = asyncio.run(provider.get_provider_info())
         assert info["type"] == "rule_based"
         assert info["offline_capable"] is True
 
@@ -532,7 +532,7 @@ class TestAIEngine:
 
         engine = AIEngine()
         import asyncio
-        result = asyncio.get_event_loop().run_until_complete(engine.analyze_incidents([]))
+        result = asyncio.run(engine.analyze_incidents([]))
         assert result["summary"]["total_alerts"] == 0
         assert result["health_score"]["score"] == 100.0
 

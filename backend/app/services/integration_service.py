@@ -308,7 +308,17 @@ class IntegrationService:
                 detail="Integration profile not found",
             )
 
-        result = await self._test_profile(db, profile)
+        try:
+            result = await self._test_profile(db, profile)
+        except Exception as e:
+            logger.error("Connection test failed: %s", e)
+            IntegrationProfileRepository.update(
+                db,
+                profile_id,
+                last_test=datetime.now(UTC),
+                last_error=str(e),
+            )
+            return IntegrationTestResponse(success=False, error=str(e))
 
         now = datetime.now(UTC)
         update_kwargs: dict = {"last_test": now}

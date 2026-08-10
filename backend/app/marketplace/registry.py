@@ -189,8 +189,10 @@ class MarketplaceRegistry:
         """Restore registry state from a snapshot (rollback)."""
         self._plugins.clear()
         for pid, data in snapshot.items():
-            self._plugins[pid] = InstalledPlugin(**{k: v for k, v in data.items() if k != "plugin_id"})
-            self._plugins[pid].plugin_id = pid
+            self._plugins[pid] = InstalledPlugin(
+                plugin_id=pid,
+                **{k: v for k, v in data.items() if k != "plugin_id"},
+            )
         logger.info("Registry restored from snapshot: %d plugins", len(self._plugins))
 
     def summary(self) -> dict[str, Any]:
