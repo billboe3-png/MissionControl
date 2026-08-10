@@ -19,9 +19,7 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
-from pathlib import Path
 
-from app.core.auth_dependency import get_current_user
 from app.db import get_db
 from app.repositories.agent_repository import AgentCommandRepository, AgentRepository
 from app.schemas.agent import (
@@ -94,7 +92,7 @@ async def edge_ai_ask(
         return result
     except Exception as e:
         logger.error("Edge AI query failed: %s", e)
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="AI query failed")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="AI query failed") from e
 
 
 # ------------------------------------------------------------------ #

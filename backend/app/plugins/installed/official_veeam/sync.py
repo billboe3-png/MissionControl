@@ -5,9 +5,10 @@ Background synchronization classes that pull data from Veeam B&R
 and write to local cache tables.
 """
 
+import contextlib
 import logging
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, ClassVar
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -112,7 +113,7 @@ class RepositorySync:
 class JobSync:
     """Synchronize backup jobs from Veeam to local cache."""
 
-    JOB_TYPE_MAP = {
+    JOB_TYPE_MAP: ClassVar[dict[str, str]] = {
         "backup": "backup",
         "replica": "replication",
         "copy": "backup_copy",
@@ -196,12 +197,10 @@ class RestorePointSync:
 
             created_at = None
             if created_str:
-                try:
+                with contextlib.suppress(ValueError, TypeError):
                     created_at = datetime.fromisoformat(
                         str(created_str).replace("Z", "+00:00")
                     )
-                except (ValueError, TypeError):
-                    pass
 
             stmt = select(VeeamRestorePoint).where(
                 VeeamRestorePoint.server_id == server_id,

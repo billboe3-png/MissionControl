@@ -386,6 +386,7 @@ def _get_local_agent_provider(db: Session | None, agent_id: int) -> HyperVProvid
 
     async def _dispatch_on_agent(command_str: str) -> dict:
         from fastapi import HTTPException
+
         from app.schemas.agent import AgentCommandDispatchRequest
         from app.services.agent_service import agent_service
 

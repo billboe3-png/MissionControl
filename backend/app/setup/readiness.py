@@ -5,7 +5,9 @@ Scores the installation across multiple dimensions and provides
 an overall readiness assessment for production deployment.
 """
 
+import contextlib
 import os
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -178,15 +180,13 @@ class ReadinessChecker:
 
         valid = 0
         for manifest_path in manifests:
-            try:
+            with contextlib.suppress(Exception):
                 import json
 
                 with open(manifest_path, encoding="utf-8") as f:
                     data = json.load(f)
                 if "name" in data and "version" in data:
                     valid += 1
-            except Exception:
-                continue
 
         checks.append({"label": f"Valid manifests ({valid}/{len(manifests)})", "pass": valid == len(manifests)})
 
@@ -383,10 +383,11 @@ class ReadinessChecker:
 
     def _check_docker_available(self) -> bool:
         try:
-            result = subprocess.run(
-                ["docker", "info"],
+            result = subprocess.run(  # noqa: S603 - static command list, no shell
+                [shutil.which("docker") or "docker", "info"],
                 capture_output=True,
                 timeout=10,
+                shell=False,
             )
             return result.returncode == 0
         except Exception:

@@ -5,6 +5,7 @@ Background synchronization classes that pull data from Docker hosts
 and write to local cache tables.
 """
 
+import contextlib
 import logging
 from datetime import UTC, datetime
 from typing import Any
@@ -82,12 +83,10 @@ class ContainerSync:
             started_str = c.get("StartedAt", "")
             started_at = None
             if started_str:
-                try:
+                with contextlib.suppress(ValueError, TypeError):
                     started_at = datetime.fromisoformat(
                         started_str.replace("Z", "+00:00")
                     )
-                except (ValueError, TypeError):
-                    pass
 
             stmt = select(DockerContainer).where(
                 DockerContainer.host_id == host_id,
@@ -160,12 +159,10 @@ class ImageSync:
             created_str = img.get("Created", "")
             created_at = None
             if created_str:
-                try:
+                with contextlib.suppress(ValueError, TypeError):
                     created_at = datetime.fromisoformat(
                         created_str.replace("Z", "+00:00")
                     )
-                except (ValueError, TypeError):
-                    pass
 
             containers = client.get_containers_sync(all=True)
             in_use = any(

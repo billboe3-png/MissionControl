@@ -380,7 +380,7 @@ class MockHyperVProvider(HyperVProvider):
             }
         return {
             "connected": True,
-            "latency_ms": random.randint(5, 25),
+            "latency_ms": random.randint(5, 25),  # noqa: S311 - mock latency jitter (non-crypto)
             "message": "Connected to Hyper-V host (mock)",
             "version": "10.0.20348",
             "hostname": "HV-HOST01",
@@ -518,7 +518,7 @@ class MockHyperVProvider(HyperVProvider):
                     "success": True,
                     "message": f"Checkpoint '{cp_name}' created",
                     "checkpoint": {
-                        "id": f"cp-{random.randint(100,999)}",
+                        "id": f"cp-{random.randint(100,999)}",  # noqa: S311 - mock checkpoint id (non-crypto)
                         "name": cp_name,
                         "vm_name": vm["name"],
                         "vm_id": vm_id,

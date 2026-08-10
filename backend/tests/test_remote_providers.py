@@ -1210,7 +1210,7 @@ async def test_ssh_connection_reuse_across_commands():
 def test_ssh_stream_command_default_implementation():
     """Test stream_command yields from execute_command result."""
     import asyncio
-    from unittest.mock import MagicMock  # noqa: I001
+    from unittest.mock import MagicMock
     from unittest.mock import patch as _patch
 
     from app.providers.remote.base_provider import RemoteBaseProvider
@@ -1260,28 +1260,29 @@ def test_ssh_stream_command_default_implementation():
     async def fake_execute(**kwargs):
         return mock_result
 
-    with _patch.object(provider, "execute_command", side_effect=fake_execute):
-        with _patch("asyncio.get_event_loop") as mock_get_loop:
-            mock_loop = MagicMock()
-            mock_loop.run_until_complete = MagicMock(
-                side_effect=lambda coro: asyncio.get_event_loop_policy()
-                .new_event_loop()
-                .run_until_complete(coro)
-            )
-            mock_get_loop.return_value = mock_loop
+    with _patch.object(
+        provider, "execute_command", side_effect=fake_execute
+    ), _patch("asyncio.get_event_loop") as mock_get_loop:
+        mock_loop = MagicMock()
+        mock_loop.run_until_complete = MagicMock(
+            side_effect=lambda coro: asyncio.get_event_loop_policy()
+            .new_event_loop()
+            .run_until_complete(coro)
+        )
+        mock_get_loop.return_value = mock_loop
 
-            chunks = list(
-                provider.stream_command(
-                    hostname="test",
-                    port=22,
-                    username="user",
-                    password=None,
-                    ssh_key=None,
-                    command="echo ok",
-                    shell="bash",
-                    ip_address=None,
-                )
+        chunks = list(
+            provider.stream_command(
+                hostname="test",
+                port=22,
+                username="user",
+                password=None,
+                ssh_key=None,
+                command="echo ok",
+                shell="bash",
+                ip_address=None,
             )
+        )
 
     types = [c["type"] for c in chunks]
     assert "stdout" in types

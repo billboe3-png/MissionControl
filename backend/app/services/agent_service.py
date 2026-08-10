@@ -7,12 +7,11 @@ command dispatch, inventory updates, and file transfer.
 
 import base64
 import hashlib
-import os
 import json
 import logging
+import os
 import secrets
 from datetime import UTC, datetime
-
 from pathlib import Path
 
 from fastapi import HTTPException, status
@@ -284,10 +283,10 @@ class AgentService:
         self, db: Session, agent_id: int
     ) -> list[dict]:
         """Return enabled integration profiles relevant to this agent."""
+        from app.models.db.agent import Agent
         from app.repositories.integration_profile_repository import (
             IntegrationProfileRepository,
         )
-        from app.models.db.agent import Agent
 
         agent = db.get(Agent, agent_id)
         if agent is None:
@@ -686,8 +685,8 @@ class AgentService:
                         AgentCommand.__table__
                     ).where(AgentCommand.status == "pending")
                 ).scalar() or 0
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.debug("cmd_queue depth query failed: %s", exc)
 
             return {
                 "total_agents": total,
@@ -998,7 +997,6 @@ class AgentService:
             updated_at=agent.updated_at,
             registered_at=agent.registered_at,
         )
-        return response
 
 
     def _plugin_updates_for_agent(

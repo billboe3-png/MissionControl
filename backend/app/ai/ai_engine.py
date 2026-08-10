@@ -176,10 +176,7 @@ class AIEngine:
                     }
                 )
 
-        if not factors:
-            score = 50.0
-        else:
-            score = sum(factors.values()) / len(factors)
+        score = 50.0 if not factors else sum(factors.values()) / len(factors)
 
         score = round(score, 1)
         grade = self._score_to_grade(score)

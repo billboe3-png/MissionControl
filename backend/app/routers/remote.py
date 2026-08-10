@@ -4,12 +4,30 @@ Mission Control Remote Operations Router
 Sprint 2.1.8 - Remote Operations Finalization.
 """
 
-from fastapi import APIRouter, Depends, Query, status
+import asyncio
+import contextlib
+import json
+import logging
+
+import paramiko
+from fastapi import (
+    APIRouter,
+    Depends,
+    Query,
+    WebSocket,
+    WebSocketDisconnect,
+    status,
+)
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
 from app.core.auth_dependency import get_current_user
 from app.db import get_db
+from app.providers.remote.ssh_provider import SSHProvider
+from app.repositories.credential_profile_repository import (
+    CredentialProfileRepository,
+)
+from app.repositories.remote_host_repository import RemoteHostRepository
 from app.schemas.bulk_command import (
     BulkExecuteRequest,
     BulkExecuteResponse,
@@ -55,7 +73,13 @@ from app.schemas.scheduled_command import (
     ScheduledCommandResponse,
     ScheduledCommandUpdate,
 )
-from app.services.remote_service import RemoteService, remote_service
+from app.services.remote_service import (
+    RemoteService,
+    _decrypt_credential,
+    remote_service,
+)
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(
     prefix="/remote",
@@ -441,21 +465,6 @@ async def get_metrics(
 # Interactive Console (WebSocket)                                     #
 # ------------------------------------------------------------------ #
 
-import asyncio  # noqa: E402
-import json  # noqa: E402
-import logging  # noqa: E402
-
-from fastapi import WebSocket, WebSocketDisconnect  # noqa: E402
-
-from app.providers.remote.ssh_provider import SSHProvider  # noqa: E402
-from app.repositories.credential_profile_repository import (  # noqa: E402
-    CredentialProfileRepository,
-)
-from app.repositories.remote_host_repository import RemoteHostRepository  # noqa: E402
-from app.services.remote_service import _decrypt_credential  # noqa: E402
-
-logger = logging.getLogger(__name__)
-
 
 @router.websocket("/console")
 async def console_ws(
@@ -534,7 +543,7 @@ async def console_ws(
         read_task = asyncio.create_task(read_ssh())
         write_task = asyncio.create_task(read_ws())
 
-        done, pending = await asyncio.wait(
+        _done, pending = await asyncio.wait(
             [read_task, write_task],
             return_when=asyncio.FIRST_COMPLETED,
         )
@@ -545,18 +554,12 @@ async def console_ws(
         pass
     except Exception as e:
         logger.warning("WebSocket console error: %s", e)
-        try:
+        with contextlib.suppress(Exception):
             await websocket.send_json({"type": "error", "message": str(e)})
-        except Exception:
-            pass
     finally:
         if chan is not None:
-            try:
+            with contextlib.suppress(Exception):
                 chan.close()
-            except Exception:
-                pass
         if client is not None:
-            try:
+            with contextlib.suppress(Exception):
                 client.close()
-            except Exception:
-                pass

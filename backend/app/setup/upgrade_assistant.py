@@ -5,6 +5,8 @@ Detects upgrade readiness by checking database schema,
 configuration compatibility, plugin SDK versions, and system requirements.
 """
 
+import contextlib
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -113,7 +115,7 @@ class UpgradeAssistant:
 
         for manifest_path in plugins_dir.glob("*/manifest.json"):
             total += 1
-            try:
+            with contextlib.suppress(Exception):
                 import json
 
                 with open(manifest_path, encoding="utf-8") as f:
@@ -125,8 +127,6 @@ class UpgradeAssistant:
                         "sdk_version": sdk_version,
                         "required": EXPECTED_SCHEMA_VERSION,
                     })
-            except Exception:
-                continue
 
         status = "ok"
         message = f"All {total} plugins are SDK compatible"
@@ -153,11 +153,12 @@ class UpgradeAssistant:
 
     def check_docker_version(self) -> dict:
         try:
-            result = subprocess.run(
-                ["docker", "--version"],
+            result = subprocess.run(  # noqa: S603 - static command list, no shell
+                [shutil.which("docker") or "docker", "--version"],
                 capture_output=True,
                 text=True,
                 timeout=10,
+                shell=False,
             )
             output = result.stdout.strip()
             return {
@@ -182,7 +183,7 @@ class UpgradeAssistant:
         agents: list[dict] = []
 
         if self.db is not None:
-            try:
+            with contextlib.suppress(Exception):
                 from sqlalchemy import text
 
                 result = self.db.execute(text("SELECT name, version FROM agents"))
@@ -190,8 +191,6 @@ class UpgradeAssistant:
                     name, version = row[0], row[1]
                     if version and version != EXPECTED_SCHEMA_VERSION:
                         agents.append({"name": name, "version": version})
-            except Exception:
-                pass
 
         status = "ok"
         message = "All agents are up to date"

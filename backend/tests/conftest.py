@@ -19,12 +19,6 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
-# Import plugin models so their tables are included in Base.metadata.create_all()
-# These models are normally imported during app startup (plugin loading), but tests
-# need them registered before create_all() is called.
-from app.plugins.installed.git.models import GitRepository  # noqa: F401
-from app.plugins.installed.official_docker.models import DockerHost  # noqa: F401
-
 from app.core.auth_dependency import get_current_user
 from app.core.config import get_settings
 from app.db.database import Base, get_db
@@ -32,6 +26,12 @@ from app.main import app
 from app.models.db.credential_profile import CredentialProfile
 from app.models.db.project import Project
 from app.models.db.remote_host import RemoteHost
+
+# Import plugin models so their tables are included in Base.metadata.create_all()
+# These models are normally imported during app startup (plugin loading), but tests
+# need them registered before create_all() is called.
+from app.plugins.installed.git.models import GitRepository  # noqa: F401
+from app.plugins.installed.official_docker.models import DockerHost  # noqa: F401
 
 
 class _FakeUser:

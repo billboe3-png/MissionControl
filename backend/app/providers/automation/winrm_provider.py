@@ -51,7 +51,7 @@ class WinRMAutomationProvider(AutomationProvider):
                         f"{{{{{key}}}}}", value
                     )
 
-            result = await provider.execute_command(
+            result = await provider.execute_command(  # noqa: S604 - shell selects transport protocol, not subprocess shell=True
                 hostname=hostname,
                 port=5985,
                 username="",

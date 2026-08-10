@@ -11,6 +11,7 @@ and caches results into local DB tables for dashboard widgets and REST API.
 """
 
 import asyncio
+import contextlib
 import logging
 from datetime import UTC, datetime
 from typing import Any
@@ -74,7 +75,7 @@ class HyperVPlugin(ServerPluginSDK):
         hosts = await asyncio.to_thread(_load)
 
         for host in hosts:
-            def _upsert_host():
+            def _upsert_host(host=host):
                 session = SessionLocal()
                 try:
                     existing = session.execute(
@@ -129,10 +130,8 @@ class HyperVPlugin(ServerPluginSDK):
         """Cancel sync task."""
         if self._sync_task and not self._sync_task.done():
             self._sync_task.cancel()
-            try:
+            with contextlib.suppress(asyncio.CancelledError):
                 await self._sync_task
-            except asyncio.CancelledError:
-                pass
         logger.info("Hyper-V plugin stopped")
 
     # ------------------------------------------------------------------ #

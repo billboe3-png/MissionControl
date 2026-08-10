@@ -1,7 +1,7 @@
+import asyncio
 import logging
 import os
 import time
-import asyncio
 from collections import defaultdict
 
 from fastapi import FastAPI, Request
@@ -19,6 +19,9 @@ from app.core.logging_config import (
 )
 
 _TESTING = os.getenv("TESTING", "0") == "1"
+
+# Holds background task references so they are not garbage collected.
+_background_tasks: set[asyncio.Task] = set()
 
 
 class RateLimitMiddleware(BaseHTTPMiddleware):
@@ -344,8 +347,8 @@ async def _startup_banner():
                             enabled=True,
                         )
                         marketplace_registry.register(installed)
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.debug("Marketplace auto-registration failed: %s", exc)
         else:
             print("  Plugins: none discovered")
     except Exception as exc:
@@ -370,7 +373,7 @@ async def _startup_banner():
                     logger.warning("Stale agent sweep failed: %s", exc)
                 await asyncio.sleep(60)
 
-        _startup_task = asyncio.create_task(_stale_sweeper())
+        _background_tasks.add(asyncio.create_task(_stale_sweeper()))
         logger.info("Stale-agent sweeper started")
     except Exception as exc:
         logger.warning("Stale-agent sweaper failed to start: %s", exc)
@@ -385,5 +388,5 @@ async def _shutdown_plugins():
         from app.plugins.registry import plugin_registry
 
         await plugin_registry.stop_all()
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.warning("Plugin shutdown error: %s", exc)

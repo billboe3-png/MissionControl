@@ -148,8 +148,8 @@ async def get_setup_status(
         companies = service.get_all(db)
         if companies and companies[0].timezone:
             tz = companies[0].timezone
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.debug("Could not load timezone for setup status: %s", exc)
     return SetupStatusResponse(setup_required=is_setup_required(db), timezone=tz)
 
 

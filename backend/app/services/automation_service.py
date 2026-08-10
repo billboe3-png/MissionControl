@@ -8,6 +8,7 @@ and dry run mode.
 Sprint 2.8 - Automation & Playbooks.
 """
 
+import contextlib
 import json
 import logging
 from datetime import UTC, datetime
@@ -513,7 +514,10 @@ class AutomationService:
                         exit_code=-1,
                     )
 
-            assert last_result is not None
+            if last_result is None:
+                raise RuntimeError(
+                    f"Step '{step.name}' produced no result after {max_attempts} attempt(s)"
+                )
 
             ExecutionLogRepository.create(
                 db,
@@ -779,10 +783,8 @@ class AutomationService:
 
         variables = {}
         if execution.variables_used:
-            try:
+            with contextlib.suppress(json.JSONDecodeError, TypeError):
                 variables = json.loads(execution.variables_used)
-            except (json.JSONDecodeError, TypeError):
-                pass
 
         await self._execute_rollback(
             db, execution_id, steps, None, variables
@@ -979,12 +981,10 @@ class AutomationService:
                 )
                 variables = {}
                 if execution.variables_used:
-                    try:
+                    with contextlib.suppress(json.JSONDecodeError, TypeError):
                         variables = json.loads(
                             execution.variables_used
                         )
-                    except (json.JSONDecodeError, TypeError):
-                        pass
 
                 if playbook and steps:
                     await self._run_playbook_steps(

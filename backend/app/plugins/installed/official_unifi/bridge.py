@@ -10,7 +10,6 @@ plugin's in-memory client cache so changes take effect without a restart.
 from __future__ import annotations
 
 import logging
-from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session

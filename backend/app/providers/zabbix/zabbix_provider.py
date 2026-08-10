@@ -318,7 +318,7 @@ class ApiZabbixProvider(ZabbixProvider):
         available_count = sum(
             1 for h in hosts if h["status"] == "enabled" and h["available"] == "available"
         )
-        disabled_count = sum(1 for h in hosts if h["status"] == "disabled")
+        sum(1 for h in hosts if h["status"] == "disabled")
         unavailable_count = sum(
             1 for h in hosts if h["status"] == "enabled" and h["available"] == "unavailable"
         )

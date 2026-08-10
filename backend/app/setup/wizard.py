@@ -68,10 +68,7 @@ class SetupWizard:
                 for col in inspector.get_columns("users")
             }
 
-            if "role" not in user_columns:
-                return True
-
-            return False
+            return "role" not in user_columns
         except Exception:
             logger.debug("Schema version check failed, assuming current")
             return False

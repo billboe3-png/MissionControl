@@ -165,9 +165,11 @@ class RemoteService:
                     status_code=status.HTTP_404_NOT_FOUND,
                     detail="Credential profile not found",
                 )
-        if data.connection_type is not None:
-            if data.connection_type not in ("ssh", "winrm"):
-                raise HTTPException(
+        if data.connection_type is not None and data.connection_type not in (
+            "ssh",
+            "winrm",
+        ):
+            raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail="connection_type must be 'ssh' or 'winrm'",
                 )
@@ -257,11 +259,12 @@ class RemoteService:
                         status_code=status.HTTP_409_CONFLICT,
                         detail="Credential profile name already exists",
                     )
-        if data.authentication_type is not None:
-            if data.authentication_type not in (
-                "password", "ssh_key", "ntlm", "basic",
-            ):
-                raise HTTPException(
+        if (
+            data.authentication_type is not None
+            and data.authentication_type
+            not in ("password", "ssh_key", "ntlm", "basic")
+        ):
+            raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail="authentication_type must be password, ssh_key, ntlm, or basic",
                 )
@@ -828,7 +831,7 @@ class RemoteService:
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Scheduled command not found",
             )
-        request = RemoteExecuteRequest(
+        request = RemoteExecuteRequest(  # noqa: S604 - pydantic field selects translation shell, not subprocess
             host_id=schedule.host_id,
             command=schedule.command,
             shell="bash",

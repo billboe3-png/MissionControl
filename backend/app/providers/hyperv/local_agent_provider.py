@@ -10,8 +10,8 @@ import json
 import logging
 import platform
 
+from .agent_provider import _checkpoint_identity, _vm_command
 from .base_provider import HyperVProvider
-from .agent_provider import _vm_command, _checkpoint_identity
 
 logger = logging.getLogger(__name__)
 

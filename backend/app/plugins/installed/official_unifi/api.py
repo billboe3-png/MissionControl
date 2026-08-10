@@ -8,7 +8,7 @@ Handles authentication via API token and data retrieval.
 import asyncio
 import concurrent.futures
 import logging
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import Any
 
 import httpx

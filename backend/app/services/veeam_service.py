@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 async def _safe_call(name: str, coro_factory) -> tuple[str, Any | None, str | None]:
     try:
         return name, await asyncio.wait_for(coro_factory(), timeout=8), None
-    except asyncio.TimeoutError:
+    except TimeoutError:
         logger.debug("Veeam provider %s timed out", name)
         return name, None, f"{name}: timeout"
     except Exception as exc:
@@ -35,8 +35,8 @@ class VeeamService:
         self, db: Session | None = None
     ) -> list[tuple[str, Any]]:
         from app.providers.veeam.provider_factory import (
-            get_all_veeam_providers,
             get_agent_local_veeam_provider,
+            get_all_veeam_providers,
         )
 
         providers = get_all_veeam_providers(db)
@@ -76,7 +76,8 @@ class VeeamService:
                                 target_id=int(tid_str.replace("target-", "")) if tid_str.startswith("target-") else None,
                             ))
                         )
-                except Exception:
+                except Exception as exc:
+                    logger.debug("Veeam agent target parse failed: %s", exc)
                     continue
         except Exception as exc:
             logger.debug("Agent remote target Veeam providers unavailable: %s", exc)
@@ -93,7 +94,7 @@ class VeeamService:
             try:
                 data = await asyncio.wait_for(p.get_summary(), timeout=8)
                 return name, data, None
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 logger.debug("Veeam provider %s timed out", name)
                 return name, {}, f"{name}: timeout"
             except Exception as exc:
@@ -138,7 +139,7 @@ class VeeamService:
     async def test_connection(self, db: Session | None = None) -> dict:
         providers = self._get_providers(db)
         if len(providers) == 1:
-            name, p = providers[0]
+            _name, p = providers[0]
             return await p.test_connection()
 
         async def _fetch(name: str, p: Any) -> tuple[str, dict, str | None]:
@@ -157,7 +158,7 @@ class VeeamService:
     async def get_health(self, db: Session | None = None) -> dict:
         providers = self._get_providers(db)
         if len(providers) == 1:
-            name, p = providers[0]
+            _name, p = providers[0]
             return await asyncio.wait_for(p.get_health(), timeout=8)
 
         async def _fetch(name: str, p: Any) -> tuple[str, dict, str | None]:
@@ -344,7 +345,7 @@ class VeeamService:
     async def get_license(self, db: Session | None = None) -> dict:
         providers = self._get_providers(db)
         if len(providers) == 1:
-            name, p = providers[0]
+            _name, p = providers[0]
             return await asyncio.wait_for(p.get_license(), timeout=8)
 
         async def _fetch(name: str, p: Any) -> tuple[str, dict, str | None]:
