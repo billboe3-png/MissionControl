@@ -1,4 +1,3 @@
-import json
 """
 Mission Control Identity Service
 
@@ -8,6 +7,7 @@ and Microsoft 365 data retrieval through provider layer.
 Sprint 2.2.0 - Microsoft 365 & Active Directory Integration.
 """
 
+import json
 import logging
 
 from sqlalchemy.orm import Session
@@ -82,8 +82,8 @@ def _get_ad_provider_from_db(db: Session, profile_id: int | None = None):
                 try:
                     cipher = CredentialCipher(settings.missioncontrol_secret_key)
                     password = cipher.decrypt(profile.encrypted_secret)
-                except Exception:
-                    pass
+                except Exception as exc:
+                    logger.debug("Could not decrypt AD credential: %s", exc)
 
             config = {
                 "server": profile.domain,
@@ -138,8 +138,8 @@ def _get_m365_provider_from_db(db: Session, profile_id: int | None = None):
                 try:
                     cipher = CredentialCipher(settings.missioncontrol_secret_key)
                     client_secret = cipher.decrypt(profile.client_secret_encrypted)
-                except Exception:
-                    pass
+                except Exception as exc:
+                    logger.debug("Could not decrypt Microsoft 365 client secret: %s", exc)
 
             config = {
                 "tenant_id": profile.tenant_id,

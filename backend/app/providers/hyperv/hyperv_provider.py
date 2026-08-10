@@ -9,6 +9,7 @@ import asyncio
 import base64
 import json
 import logging
+import tempfile
 
 import requests
 import winrm
@@ -79,7 +80,7 @@ async def _run_powershell_winrm(
             friendly = str(e)
         logger.warning("WinRM connection to %s:%s failed: %s", host, port, friendly)
         return {"success": False, "stdout": "", "stderr": friendly, "exit_code": -1}
-    except Exception as e:  # noqa: BLE001
+    except Exception as e:
         msg = str(e)
         low = msg.lower()
         if "nameresolutionerror" in low or "failed to resolve" in low or "getaddrinfo" in low:
@@ -119,7 +120,7 @@ async def _run_powershell_ssh(
             *cmd,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
-            env={"HOME": "/tmp", "PATH": "/usr/local/bin:/usr/bin:/bin"},
+            env={"HOME": tempfile.gettempdir(), "PATH": "/usr/local/bin:/usr/bin:/bin"},
         )
         stdout, stderr = await asyncio.wait_for(
             proc.communicate(), timeout=timeout

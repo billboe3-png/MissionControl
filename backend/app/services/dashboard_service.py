@@ -16,6 +16,7 @@ import logging
 from datetime import UTC, datetime
 
 from sqlalchemy.orm import Session
+
 from app.providers.health_provider import health_provider
 from app.providers.note_provider import note_provider
 from app.providers.parking_lot_provider import parking_lot_provider
@@ -126,8 +127,8 @@ class DashboardService:
                 )
                 if data:
                     return data
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("Dashboard: Git plugin data failed: %s", exc)
 
         try:
             from app.plugins.installed.git.cache import cache_manager
@@ -164,8 +165,8 @@ class DashboardService:
                 return await plugin_registry.get_widget_data(
                     "zabbix", "zabbix-summary"
                 )
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("Dashboard: Zabbix plugin data failed: %s", exc)
 
         # Fall back to direct provider call
         try:
@@ -193,8 +194,8 @@ class DashboardService:
                 return await plugin_registry.get_widget_data(
                     "official_veeam", "veeam-summary"
                 )
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("Dashboard: Veeam plugin data failed: %s", exc)
 
         try:
             from app.providers.veeam.provider_factory import get_veeam_provider
@@ -222,8 +223,8 @@ class DashboardService:
                 return await plugin_registry.get_widget_data(
                     "official_unifi", "unifi-summary"
                 )
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("Dashboard: UniFi plugin data failed: %s", exc)
 
         try:
             from app.plugins.installed.official_unifi.cache import cache_manager
@@ -254,8 +255,8 @@ class DashboardService:
                 )
                 if data:
                     return data
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("Dashboard: Docker plugin data failed: %s", exc)
 
         try:
             from app.plugins.installed.official_docker.cache import cache_manager

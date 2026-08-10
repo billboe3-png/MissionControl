@@ -7,6 +7,7 @@ Auto-detects which database engine the Veeam server uses.
 
 import asyncio
 import base64
+import contextlib
 import logging
 
 import paramiko
@@ -126,10 +127,8 @@ def _ssh_connect(ssh_host: str, ssh_port: int, ssh_username: str, ssh_password: 
 def _upload_sql(client: paramiko.SSHClient, sql: str) -> str:
     """Upload SQL to a temp file via SFTP, return the remote path."""
     sftp = client.open_sftp()
-    try:
+    with contextlib.suppress(OSError):
         sftp.mkdir(SSH_TEMP_DIR)
-    except OSError:
-        pass
     sql_path = f"{SSH_TEMP_DIR}/mc_query.sql"
     with sftp.open(sql_path, "w") as f:
         f.write(sql)

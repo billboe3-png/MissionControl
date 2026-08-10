@@ -13,9 +13,6 @@ import logging
 from app.providers.identity.ad_provider import (
     MockActiveDirectoryProvider,
 )
-from app.providers.identity.agent_ad_provider import (
-    AgentActiveDirectoryProvider,
-)
 from app.providers.identity.base_provider import (
     ActiveDirectoryProvider,
     Microsoft365Provider,

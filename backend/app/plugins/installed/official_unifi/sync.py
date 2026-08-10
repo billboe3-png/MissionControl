@@ -5,9 +5,10 @@ Background synchronization classes that pull data from UniFi controllers
 and write to local cache tables.
 """
 
+import contextlib
 import logging
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, ClassVar
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -97,7 +98,7 @@ class SiteSync:
 class DeviceSync:
     """Synchronize devices from UniFi API to local cache."""
 
-    DEVICE_TYPE_MAP = {
+    DEVICE_TYPE_MAP: ClassVar[dict[str, str]] = {
         "usw": "switch",
         "uap": "access_point",
         "udm": "gateway",
@@ -298,10 +299,8 @@ class AlertSync:
 
             ts = None
             if ts_str:
-                try:
+                with contextlib.suppress(ValueError, TypeError):
                     ts = datetime.fromisoformat(str(ts_str).replace("Z", "+00:00"))
-                except (ValueError, TypeError):
-                    pass
 
             stmt = select(UniFiAlert).where(
                 UniFiAlert.controller_id == controller_id,

@@ -9,7 +9,6 @@ import logging
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
 

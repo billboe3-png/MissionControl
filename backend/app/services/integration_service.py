@@ -7,8 +7,8 @@ encryption/decryption of secrets, and provider injection.
 Sprint 2.3.1 - Integration Management (Production Configuration UI).
 """
 
-import logging
 import asyncio
+import logging
 from datetime import UTC, datetime
 
 from fastapi import HTTPException, status
@@ -16,15 +16,17 @@ from sqlalchemy.orm import Session
 
 from app.core.security import CredentialCipher
 from app.models.db.integration_profile import IntegrationProfile
+from app.plugins.installed.official_unifi.bridge import (
+    delete_profile_controllers as _unifi_delete_controllers,
+)
+from app.plugins.installed.official_unifi.bridge import (
+    sync_profile_to_controllers as _unifi_sync_controllers,
+)
 from app.providers.hyperv.provider_factory import reset_hyperv_provider
 from app.providers.proxmox.provider_factory import reset_proxmox_provider
 from app.repositories.agent_repository import AgentCommandRepository
 from app.repositories.integration_profile_repository import (
     IntegrationProfileRepository,
-)
-from app.plugins.installed.official_unifi.bridge import (
-    delete_profile_controllers as _unifi_delete_controllers,
-    sync_profile_to_controllers as _unifi_sync_controllers,
 )
 from app.schemas.integration import (
     IntegrationProfileCreate,
@@ -368,9 +370,9 @@ class IntegrationService:
         )
         dispatch = await agent_service.dispatch_command(db, cmd)
         pending = AgentCommandRepository.get_pending_for_agent(db, profile.agent_id)
-        sent_pending = [c for c in pending if c.command_type == "integration_test" and c.command == profile.integration_type and c.status == "dispatched"]
+        [c for c in pending if c.command_type == "integration_test" and c.command == profile.integration_type and c.status == "dispatched"]
         timeout = max(profile.timeout or 30, 60)
-        start = datetime.now(UTC)
+        datetime.now(UTC)
         target = dispatch.id
         poll = 0.2
         waited = 0.0
@@ -533,10 +535,7 @@ class IntegrationService:
         if not token_id:
             return {"connected": False, "error": "Proxmox API token ID is required"}
 
-        if token_secret:
-            full_token = f"{token_id}={token_secret}"
-        else:
-            full_token = token_id
+        full_token = f"{token_id}={token_secret}" if token_secret else token_id
 
         provider = ProxmoxRESTProvider(
             base_url=base_url,
@@ -559,7 +558,7 @@ class IntegrationService:
         from app.providers.veeam.provider_factory import _build_provider
 
         settings = get_settings()
-        cipher = CredentialCipher(settings.missioncontrol_secret_key)
+        CredentialCipher(settings.missioncontrol_secret_key)
         try:
             provider = _build_provider(profile)
         except ValueError as e:

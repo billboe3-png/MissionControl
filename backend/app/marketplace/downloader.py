@@ -7,6 +7,7 @@ Supports HTTP/HTTPS downloads with progress tracking and retries.
 Sprint 3.10.4 - Plugin Marketplace.
 """
 
+import contextlib
 import hashlib
 import logging
 import tempfile
@@ -127,10 +128,8 @@ class PluginDownloader:
 
     def cleanup(self, zip_path: str) -> None:
         """Remove a downloaded zip file."""
-        try:
+        with contextlib.suppress(Exception):
             Path(zip_path).unlink(missing_ok=True)
-        except Exception:
-            pass
 
 
 plugin_downloader = PluginDownloader()

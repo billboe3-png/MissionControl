@@ -10,6 +10,7 @@ DashboardService remains the only frontend data source.
 """
 
 import asyncio
+import contextlib
 import logging
 from datetime import UTC, datetime
 from typing import Any
@@ -106,10 +107,8 @@ class VeeamPlugin(ServerPluginSDK):
         """Cancel sync task and close all API clients."""
         if self._sync_task and not self._sync_task.done():
             self._sync_task.cancel()
-            try:
+            with contextlib.suppress(asyncio.CancelledError):
                 await self._sync_task
-            except asyncio.CancelledError:
-                pass
         self._clients.clear()
         logger.info("Veeam plugin stopped")
 

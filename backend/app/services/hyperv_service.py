@@ -7,6 +7,7 @@ Configuration comes from IntegrationProfile — never from config.py.
 """
 
 import logging
+
 from sqlalchemy.orm import Session
 
 logger = logging.getLogger(__name__)
@@ -44,6 +45,7 @@ class HyperVService:
             return None
         try:
             import asyncio
+
             from app.models.db.agent import Agent
             from app.providers.hyperv.agent_provider import AgentHyperVProvider
 
@@ -132,6 +134,7 @@ class HyperVService:
             return None
         try:
             import asyncio
+
             from app.models.db.agent import Agent
             from app.providers.hyperv.agent_provider import AgentHyperVProvider
 

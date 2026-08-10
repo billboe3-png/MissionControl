@@ -10,6 +10,7 @@ results into local DB tables for dashboard widgets and REST API.
 """
 
 import asyncio
+import contextlib
 import logging
 import os
 from datetime import UTC, datetime
@@ -110,10 +111,8 @@ class GitPlugin(ServerPluginSDK):
         """Cancel sync task."""
         if self._sync_task and not self._sync_task.done():
             self._sync_task.cancel()
-            try:
+            with contextlib.suppress(asyncio.CancelledError):
                 await self._sync_task
-            except asyncio.CancelledError:
-                pass
         self._clients.clear()
         logger.info("Git plugin stopped")
 

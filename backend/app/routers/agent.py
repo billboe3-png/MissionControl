@@ -8,11 +8,10 @@ Sprint 2.7 - Mission Control Agent.
 """
 
 import logging
+from pathlib import Path
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Response, status
 from fastapi.responses import JSONResponse
-from pathlib import Path
-
 from sqlalchemy.orm import Session
 
 from app.core.auth_dependency import get_current_user
@@ -408,7 +407,7 @@ async def download_agent_bundle(agent_id: int) -> Response:
         media_type="application/zip",
         headers={
             "Cache-Control": "no-store",
-            "Content-Disposition": f'attachment; filename="missioncontrol-agent-3.0.0-rc1.zip"',
+            "Content-Disposition": 'attachment; filename="missioncontrol-agent-3.0.0-rc1.zip"',
         },
     )
 

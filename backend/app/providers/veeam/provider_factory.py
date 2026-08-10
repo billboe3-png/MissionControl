@@ -6,6 +6,7 @@ Also supports agent-relayed Veeam inventory via negative host IDs.
 Falls back to mock when no profile is configured.
 """
 
+import contextlib
 import json
 import logging
 from typing import Any
@@ -284,7 +285,7 @@ def get_agent_local_veeam_provider(db: Session | None = None) -> Any | None:
         for agent in agents:
             if not agent.inventory_json:
                 continue
-            try:
+            with contextlib.suppress(Exception):
                 inv = agent.inventory_json
                 if isinstance(inv, str):
                     import json
@@ -296,10 +297,8 @@ def get_agent_local_veeam_provider(db: Session | None = None) -> Any | None:
                         veeam_inventory=veeam,
                         target_hostname=agent.hostname or agent.name,
                     )
-            except Exception:
-                continue
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.debug("Could not load agent Veeam inventory: %s", exc)
     return None
 
 
