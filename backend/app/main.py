@@ -32,11 +32,13 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         app,
         default_limit: int = 60,
         auth_limit: int = 5,
+        authenticated_limit: int = 600,
         window: int = 60,
     ):
         super().__init__(app)
         self.default_limit = default_limit
         self.auth_limit = auth_limit
+        self.authenticated_limit = authenticated_limit
         self.window = window
         self._requests: dict[str, list[float]] = defaultdict(list)
         self._last_cleanup = time.time()
@@ -56,6 +58,25 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         stale = [k for k, v in self._requests.items() if not v or v[-1] < cutoff]
         for k in stale:
             del self._requests[k]
+
+    def _auth_identity(self, request: Request) -> str | None:
+        """Return a bucket key for the authenticated user (JWT 'sub').
+
+        Authenticated traffic is keyed per-user instead of per-IP: behind a
+        reverse proxy every request shares the proxy IP, so a per-IP bucket
+        would lock out ALL users once aggregate traffic exceeds the limit.
+        """
+        header = request.headers.get("authorization", "")
+        if not header.lower().startswith("bearer "):
+            return None
+        token = header.split(" ", 1)[1].strip()
+        try:
+            from app.services.auth_service import decode_access_token
+
+            sub = decode_access_token(token).get("sub")
+            return f"user:{sub}" if sub else None
+        except Exception:
+            return None
 
     async def dispatch(self, request: Request, call_next):
         if _TESTING:
@@ -85,8 +106,15 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
             key = f"{ip}|login|{await self._login_identity(request)}"
             limit = self.auth_limit
         else:
-            key = ip
-            limit = self.default_limit
+            # Authenticated traffic is bucketed per user so a shared proxy IP
+            # cannot exhaust one global budget for every logged-in user.
+            user_key = self._auth_identity(request)
+            if user_key is not None:
+                key = user_key
+                limit = self.authenticated_limit
+            else:
+                key = ip
+                limit = self.default_limit
 
         self._requests[key] = [t for t in self._requests.get(key, []) if t > cutoff]
         timestamps = self._requests[key]
@@ -208,6 +236,8 @@ app.add_middleware(
     RateLimitMiddleware,
     default_limit=settings.rate_limit_per_minute,
     auth_limit=settings.rate_limit_auth_per_minute,
+    authenticated_limit=settings.rate_limit_authenticated_per_minute,
+    window=60,
 )
 
 app.add_middleware(
@@ -274,7 +304,7 @@ async def _startup_banner():
 
     print("")
     print("  Mission Control v3.0.0-rc1")
-    print("  ─────────────────────────────────────")
+    print("  ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ")
 
     # Run comprehensive startup validation
     try:

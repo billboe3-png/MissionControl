@@ -280,6 +280,11 @@ class Settings(BaseSettings):
         description="Max login attempts per minute per IP",
     )
 
+    rate_limit_authenticated_per_minute: int = Field(
+        default=600,
+        description="Max requests per minute per authenticated user",
+    )
+
     # ------------------------------------------------------------------
     # API
     # ------------------------------------------------------------------
