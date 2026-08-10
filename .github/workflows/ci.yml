@@ -56,7 +56,7 @@ jobs:
       - name: Run tests
         working-directory: backend
         env:
-          MISSIONCONTROL_SECRET_KEY: test-key-for-ci-only-1234567890abcdefghij
+          MISSIONCONTROL_SECRET_KEY: abFXX2hk0HAUdJTgpf-pPCuJXrQi9B2ldfVSsM1GhVU=
           POSTGRES_DB: mission_control
           POSTGRES_USER: mission_control
           POSTGRES_PASSWORD: mission_control
