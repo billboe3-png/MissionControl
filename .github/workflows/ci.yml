@@ -62,10 +62,12 @@ jobs:
           POSTGRES_PASSWORD: mission_control
           POSTGRES_HOST: localhost
           POSTGRES_PORT: 5432
-          REDIS_HOST: localhost
+          REDIS_HOST: redis
           REDIS_PORT: 6379
           BACKEND_CORS_ORIGINS: http://localhost
-        run: python -m pytest tests/ -q --tb=short
+        run: |
+          alembic upgrade head
+          python -m pytest tests/ -q --tb=short
 
   frontend:
     runs-on: ubuntu-latest

@@ -126,7 +126,12 @@ class DashboardService:
                     "git", "git-summary"
                 )
                 if data:
-                    return data
+                    return {
+                        "available": data.get("available", False),
+                        "current_branch": None,
+                        "latest_commit": None,
+                        **data,
+                    }
         except Exception as exc:
             logger.debug("Dashboard: Git plugin data failed: %s", exc)
 
@@ -162,9 +167,17 @@ class DashboardService:
             from app.plugins.registry import plugin_registry
 
             if plugin_registry.has_plugin("zabbix"):
-                return await plugin_registry.get_widget_data(
+                data = await plugin_registry.get_widget_data(
                     "zabbix", "zabbix-summary"
                 )
+                if data:
+                    return {
+                        "connected": bool(
+                            data.get("host_count", 0) > 0
+                            or data.get("server_count", 0) > 0
+                        ),
+                        **data,
+                    }
         except Exception as exc:
             logger.debug("Dashboard: Zabbix plugin data failed: %s", exc)
 
@@ -254,7 +267,12 @@ class DashboardService:
                     "official_docker", "docker-summary"
                 )
                 if data:
-                    return data
+                    return {
+                        "engine": "running" if data.get("available") else "stopped",
+                        "connected": bool(data.get("available")),
+                        "containers": [],
+                        **data,
+                    }
         except Exception as exc:
             logger.debug("Dashboard: Docker plugin data failed: %s", exc)
 

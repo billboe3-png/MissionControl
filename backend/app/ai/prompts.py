@@ -22,7 +22,7 @@ def render(template: str, variables: dict[str, Any]) -> str:
     """Render a prompt template with variables."""
     result = template
     for key, value in variables.items():
-        result = result.replace(f"{{{{{key}}}}}", str(value))
+        result = result.replace(f"{{{key}}}", str(value))
     return result
 
 

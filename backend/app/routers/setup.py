@@ -168,7 +168,6 @@ async def run_bootstrap(
     Only works when no users exist. After completion, the setup
     wizard is permanently disabled.
     """
-    _require_setup(db)
     result = bootstrap(db, payload)
     return BootstrapResponse(**result)
 

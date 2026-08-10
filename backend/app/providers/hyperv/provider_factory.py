@@ -234,7 +234,7 @@ def get_hyperv_provider(db: Session | None = None, host_id: int | None = None) -
 
     if _default_provider is not None:
         cached = _default_provider
-        if _is_agent_host(cached):
+        if not _is_agent_host(cached):
             return cached
         _default_provider = None
 

@@ -159,6 +159,25 @@ def mock_docker(monkeypatch):
         fake_remote_data,
     )
 
+    def fake_docker_summary(_session):
+        return {
+            "available": True,
+            "host_count": 1,
+            "container_count": 2,
+            "running": 2,
+            "stopped": 0,
+            "unhealthy": 0,
+            "containers": [
+                {"id": "abc", "name": "test"},
+                {"id": "def", "name": "web"},
+            ],
+        }
+
+    monkeypatch.setattr(
+        "app.plugins.installed.official_docker.cache.cache_manager.get_summary",
+        fake_docker_summary,
+    )
+
 
 @pytest.fixture
 def sample_project(db_session):
