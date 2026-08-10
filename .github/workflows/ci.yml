@@ -66,6 +66,7 @@ jobs:
           REDIS_PORT: 6379
           BACKEND_CORS_ORIGINS: http://localhost
         run: |
+          echo "127.0.0.1 redis" | sudo tee -a /etc/hosts >/dev/null
           alembic upgrade head
           python -m pytest tests/ -q --tb=short
 
