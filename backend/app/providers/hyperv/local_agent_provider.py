@@ -10,7 +10,12 @@ import json
 import logging
 import platform
 
-from .agent_provider import _checkpoint_identity, _vm_command
+from .agent_provider import (
+    _checkpoint_identity,
+    _most_common_hostname,
+    _uptime_seconds,
+    _vm_command,
+)
 from .base_provider import HyperVProvider
 
 logger = logging.getLogger(__name__)
@@ -49,7 +54,8 @@ class LocalAgentHyperVProvider(HyperVProvider):
         stopped = sum(1 for s in states if s == "stopped")
         paused = sum(1 for s in states if s == "paused")
         saved = sum(1 for s in states if s == "saved")
-        total_mem = sum((v.get("memory_mb") or 0) for v in vms)
+        total_mb = sum((v.get("memory_startup_mb") or v.get("memory_mb") or 0) for v in vms)
+        used_mb = sum((v.get("memory_mb") or 0) for v in vms)
         return {
             "connected": True,
             "hostname": self._hostname,
@@ -59,8 +65,8 @@ class LocalAgentHyperVProvider(HyperVProvider):
             "paused": paused,
             "saved": saved,
             "total_cpu": sum(v.get("cpu_usage", 0) for v in vms),
-            "total_memory_gb": round(total_mem / 1024, 1),
-            "used_memory_gb": 0,
+            "total_memory_gb": round(total_mb / 1024, 1),
+            "used_memory_gb": round(used_mb / 1024, 1),
             "total_storage_gb": 0,
             "used_storage_gb": 0,
         }
@@ -131,18 +137,34 @@ class LocalAgentHyperVProvider(HyperVProvider):
 
     async def get_health(self) -> dict:
         vms = self._get_vm_list()
+        hostname = _most_common_hostname(vms, self._hostname)
+        total_mb = 0.0
+        used_mb = 0.0
+        cpu_usage = 0.0
+        uptime = 0
+        for v in vms:
+            startup = v.get("memory_startup_mb") or v.get("memory_mb") or 0
+            assigned = v.get("memory_mb") or 0
+            total_mb += float(startup)
+            used_mb += float(assigned)
+            if _STATE_MAP.get(v.get("state")) == "running":
+                cpu_usage = max(cpu_usage, float(v.get("cpu_usage") or 0))
+                uptime = max(uptime, _uptime_seconds(v.get("uptime", 0)))
+        total_gb = total_mb / 1024
+        used_gb = used_mb / 1024
+        mem_percent = round(used_gb / total_gb * 100, 1) if total_gb > 0 else 0.0
         return {
             "connected": True,
             "status": "healthy",
             "hosts": [
                 {
-                    "name": self._hostname,
+                    "name": hostname,
                     "status": "healthy",
-                    "cpu_percent": 0,
-                    "memory_percent": 0,
-                    "memory_used_gb": 0,
-                    "memory_total_gb": 0,
-                    "uptime_seconds": 0,
+                    "cpu_percent": round(cpu_usage, 1),
+                    "memory_percent": mem_percent,
+                    "memory_used_gb": round(used_gb, 1),
+                    "memory_total_gb": round(total_gb, 1),
+                    "uptime_seconds": uptime,
                     "vm_count": len(vms),
                     "version": "local-agent",
                 }
