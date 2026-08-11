@@ -49,6 +49,20 @@ _SWITCH_TYPE_MAP = {
 }
 
 
+def _switch_type_name(value) -> str:
+    """Map a switch type to a lowercase name.
+
+    Accepts Hyper-V int codes (0=external, 1=internal, 2=private) and
+    PascalCase/lowercase strings (``"External"``, ``"internal"``, ...).
+    """
+    if isinstance(value, str):
+        lowered = value.strip().lower()
+        if lowered in ("external", "internal", "private"):
+            return lowered
+        return lowered
+    return _SWITCH_TYPE_MAP.get(value, str(value).lower())
+
+
 def _uptime_seconds(raw) -> int:
     """Parse an uptime value into seconds.
 
@@ -314,16 +328,17 @@ class AgentHyperVProvider(HyperVProvider):
 
     async def get_networks(self) -> dict:
         switches = self._get_switch_list()
-        items = [
-            {
-                "id": s.get("name", str(i)),
-                "name": s.get("name", ""),
-                "switch_type": _SWITCH_TYPE_MAP.get(s.get("type", -1), str(s.get("type", "")).lower()),
-                "allow_management_os": False,
+        items = []
+        for i, s in enumerate(switches):
+            name = s.get("Name", s.get("name", ""))
+            items.append({
+                "id": s.get("Id", s.get("VMId", name or str(i))),
+                "name": name,
+                "switch_type": _switch_type_name(s.get("SwitchType", s.get("type", -1))),
+                "allow_management_os": bool(s.get("AllowManagementOS", s.get("allow_management_os", False))),
+                "net_adapter": s.get("NetAdapterInterfaceDescription", s.get("adapter")),
                 "status": "operational",
-            }
-            for i, s in enumerate(switches)
-        ]
+            })
         return {"connected": True, "count": len(items), "items": items}
 
     async def get_storage(self) -> dict:

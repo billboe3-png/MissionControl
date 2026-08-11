@@ -13,6 +13,7 @@ import platform
 from .agent_provider import (
     _checkpoint_identity,
     _most_common_hostname,
+    _switch_type_name,
     _uptime_seconds,
     _vm_command,
 )
@@ -117,16 +118,17 @@ class LocalAgentHyperVProvider(HyperVProvider):
 
     async def get_networks(self) -> dict:
         switches = self._get_switch_list()
-        items = [
-            {
-                "id": s.get("name", str(i)),
-                "name": s.get("name", ""),
-                "switch_type": _SWITCH_TYPE_MAP.get(s.get("type", -1), str(s.get("type", "")).lower()),
-                "allow_management_os": False,
+        items = []
+        for i, s in enumerate(switches):
+            name = s.get("Name", s.get("name", ""))
+            items.append({
+                "id": s.get("Id", s.get("VMId", name or str(i))),
+                "name": name,
+                "switch_type": _switch_type_name(s.get("SwitchType", s.get("type", -1))),
+                "allow_management_os": bool(s.get("AllowManagementOS", s.get("allow_management_os", False))),
+                "net_adapter": s.get("NetAdapterInterfaceDescription", s.get("adapter")),
                 "status": "operational",
-            }
-            for i, s in enumerate(switches)
-        ]
+            })
         return {"connected": True, "count": len(items), "items": items}
 
     async def get_storage(self) -> dict:
@@ -262,10 +264,4 @@ _STATE_MAP = {
     8: "saved",
     9: "paused",
     10: "running",
-}
-
-_SWITCH_TYPE_MAP = {
-    0: "external",
-    1: "internal",
-    2: "private",
 }
