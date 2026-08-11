@@ -18,6 +18,10 @@ export function SiteProvider({ children }: { children: ReactNode }) {
         let cancelled = false;
         (async () => {
             try {
+                const token = localStorage.getItem("mc_token");
+                if (!token) {
+                    return;
+                }
                 const list = await companiesApi.list();
                 const first = list[0];
                 if (first && first.timezone && !cancelled) {
