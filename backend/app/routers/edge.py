@@ -63,6 +63,75 @@ def _resolve_api_key(x_agent_api_key: str | None, authorization: str | None) -> 
 # ------------------------------------------------------------------
 
 
+def _extract_relayed_remote_targets(
+    db: Session, agent_id: int, records: list[dict]
+) -> dict[str, dict]:
+    """Normalize agent-relayed remote inventory into remote_targets structure.
+
+    The agent embeds remote-target inventory inside plugin record data
+    (e.g. hyperv.data.remote) rather than a top-level ``remote_targets``
+    key.  Pull that out and shape it as every provider expects:
+    ``remote_targets["target-<id>"]["inventory"]["hyperv"]["remote"]``.
+    """
+    from app.models.db.agent_remote_target import AgentRemoteTarget
+
+    targets = (
+        db.query(AgentRemoteTarget)
+        .filter(AgentRemoteTarget.agent_id == agent_id)
+        .all()
+    )
+    result: dict[str, dict] = {}
+    for record in records:
+        data = record.get("data")
+        if not isinstance(data, dict):
+            continue
+        remote = data.get("remote")
+        if not isinstance(remote, dict) or (remote.get("vm_count") or 0) <= 0:
+            continue
+
+        # Identify the target this relay belongs to by hostname.
+        hostname = ""
+        vms = remote.get("vms")
+        if isinstance(vms, list):
+            for vm in vms:
+                if not isinstance(vm, dict):
+                    continue
+                candidate = vm.get("ComputerName") or vm.get("computer_name")
+                if candidate:
+                    hostname = str(candidate)
+                    break
+        target = None
+        lowered = (hostname or "").strip().lower()
+        for t in targets:
+            if lowered and lowered == (t.hostname or "").strip().lower():
+                target = t
+                break
+        if target is None and lowered:
+            for t in targets:
+                if lowered and lowered == (t.name or "").strip().lower():
+                    target = t
+                    break
+        if target is None:
+            logger.warning(
+                "Relayed hyperv data has no matching remote target (hostname=%r)",
+                hostname,
+            )
+            continue
+
+        result[f"target-{target.id}"] = {
+            "inventory": {"hyperv": {"remote": remote}},
+            "status": "online",
+            "collected_at": record.get("collected_at"),
+        }
+        logger.info(
+            "Relayed hyperv inventory mapped to target-%s (%s), vm_count=%s",
+            target.id,
+            hostname,
+            remote.get("vm_count"),
+        )
+    return result
+
+
 class EdgeAIAskRequest(BaseModel):
     question: str
     context: dict[str, Any] | None = None
@@ -172,6 +241,13 @@ async def push_edge_inventory(
     stored = 0
     plugins = payload.get("plugins")
 
+    logger.info(
+        "Edge inventory payload: keys=%s records=%d plugins=%s",
+        list(payload.keys()),
+        len(records),
+        bool(plugins),
+    )
+
     if not plugins and records:
         plugins = {}
         for record in records:
@@ -183,7 +259,19 @@ async def push_edge_inventory(
             plugins.setdefault(plugin_name, {}).update(entry.get("data", {}) if isinstance(entry.get("data"), dict) else {"value": str(entry.get("data"))})
     payload_to_store = {"plugins": plugins} if plugins else payload
 
-    if payload_to_store.get("plugins"):
+    remote_targets = payload.get("remote_targets")
+    if remote_targets and "remote_targets" not in payload_to_store:
+        payload_to_store["remote_targets"] = remote_targets
+
+    relayed = _extract_relayed_remote_targets(db, agent_id, records)
+    if relayed:
+        merged_targets = dict(payload_to_store.get("remote_targets") or {})
+        merged_targets.update(relayed)
+        merged_targets.update(remote_targets or {})
+        payload_to_store["remote_targets"] = merged_targets
+        remote_targets = merged_targets
+
+    if payload_to_store.get("plugins") or remote_targets:
         try:
             await service.update_inventory(db, agent_id, payload_to_store, api_key)
             stored = 1
