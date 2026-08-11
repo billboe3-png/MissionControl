@@ -49,6 +49,53 @@ _SWITCH_TYPE_MAP = {
 }
 
 
+def _uptime_seconds(raw) -> int:
+    """Parse an uptime value into seconds.
+
+    Handles plain numbers, TimeSpan dicts, and the string repr of a
+    TimeSpan dict (e.g. ``"{'TotalSeconds': 174822.92, ...}"``).
+    """
+    if isinstance(raw, dict):
+        total = raw.get("TotalSeconds")
+        return int(total) if isinstance(total, (int, float)) else 0
+    if isinstance(raw, (int, float)):
+        return int(raw)
+    if isinstance(raw, str):
+        match = re.search(r"TotalSeconds['\"]?\s*:\s*([0-9.]+)", raw)
+        if match:
+            return int(float(match.group(1)))
+        try:
+            return int(float(raw.strip()))
+        except (ValueError, TypeError):
+            return 0
+    return 0
+
+
+def _most_common_hostname(vms: list[dict], fallback: str = "") -> str:
+    """Return the most common ComputerName among VMs, else the fallback."""
+    for key in ("ComputerName", "computer_name", "HostName", "hostname"):
+        values = [v.get(key) for v in vms if v.get(key)]
+        if values:
+            return max(set(values), key=values.count)
+    return fallback
+
+
+def _vm_memory_bytes(vm: dict) -> tuple[float, float]:
+    """Return (configured, assigned) memory in bytes for a VM record.
+
+    The agent relays ``MemoryStartup``/``MemoryAssigned`` as bytes, but
+    older/plugin records may carry ``*_mb`` fields in MB.  MB values are
+    treated as MB (< 1e6) and converted; byte values pass through.
+    """
+    startup = vm.get("MemoryStartup") or vm.get("memory_startup_mb") or 0
+    assigned = vm.get("MemoryAssigned") or vm.get("memory_assigned_mb") or 0
+    if startup and startup < 1e6:
+        startup *= 1024 * 1024
+    if assigned and assigned < 1e6:
+        assigned *= 1024 * 1024
+    return float(startup), float(assigned)
+
+
 def _vm_command(vm_id: str, cmdlet: str) -> str:
     """Build a PowerShell command that works with VM names or GUIDs."""
     if _GUID_RE.match(vm_id):
@@ -142,21 +189,19 @@ class AgentHyperVProvider(HyperVProvider):
     async def get_summary(self) -> dict:
         vms = self._get_vm_list()
         states = []
+        total_bytes = 0.0
+        used_bytes = 0.0
         for v in vms:
             state = v.get("state", v.get("State", ""))
             states.append(_HYPERV_STATE_MAP.get(state, str(state).lower()))
+            startup, assigned = _vm_memory_bytes(v)
+            total_bytes += startup
+            used_bytes += assigned
         running = sum(1 for s in states if s == "running")
         stopped = sum(1 for s in states if s == "stopped")
         paused = sum(1 for s in states if s == "paused")
         saved = sum(1 for s in states if s == "saved")
-        total_mem = sum((v.get("memory_mb") or 0) for v in vms)
-        hostname = self._hostname
-        if not hostname and vms:
-            for key in ("ComputerName", "computer_name", "HostName", "hostname"):
-                values = [v.get(key) for v in vms if v.get(key)]
-                if values:
-                    hostname = max(set(values), key=values.count)
-                    break
+        hostname = _most_common_hostname(vms, self._hostname)
         return {
             "connected": True,
             "hostname": hostname,
@@ -165,9 +210,9 @@ class AgentHyperVProvider(HyperVProvider):
             "stopped": stopped,
             "paused": paused,
             "saved": saved,
-            "total_cpu": sum(v.get("cpu_usage", 0) for v in vms),
-            "total_memory_gb": round(total_mem / 1024, 1),
-            "used_memory_gb": 0,
+            "total_cpu": sum(v.get("cpu_usage", v.get("CPUUsage", 0)) for v in vms),
+            "total_memory_gb": round(total_bytes / (1024 ** 3), 1),
+            "used_memory_gb": round(used_bytes / (1024 ** 3), 1),
             "total_storage_gb": 0,
             "used_storage_gb": 0,
         }
@@ -314,19 +359,36 @@ class AgentHyperVProvider(HyperVProvider):
     # ------------------------------------------------------------------ #
 
     async def get_health(self) -> dict:
+        vms = self._get_vm_list()
+        hostname = _most_common_hostname(vms, self._hostname)
+        total_bytes = 0.0
+        used_bytes = 0.0
+        cpu_usage = 0.0
+        uptime = 0
+        for v in vms:
+            startup, assigned = _vm_memory_bytes(v)
+            total_bytes += startup
+            used_bytes += assigned
+            state = v.get("state", v.get("State", ""))
+            if _HYPERV_STATE_MAP.get(state) == "running":
+                cpu_usage = max(cpu_usage, float(v.get("CPUUsage", v.get("cpu_usage", 0)) or 0))
+                uptime = max(uptime, _uptime_seconds(v.get("Uptime", v.get("uptime", 0))))
+        total_gb = total_bytes / (1024 ** 3)
+        used_gb = used_bytes / (1024 ** 3)
+        mem_percent = round(used_gb / total_gb * 100, 1) if total_gb > 0 else 0.0
         return {
             "connected": True,
             "status": "healthy",
             "hosts": [
                 {
-                    "name": self._hostname,
+                    "name": hostname,
                     "status": "healthy",
-                    "cpu_percent": 0,
-                    "memory_percent": 0,
-                    "memory_used_gb": 0,
-                    "memory_total_gb": 0,
-                    "uptime_seconds": 0,
-                    "vm_count": len(self._get_vm_list()),
+                    "cpu_percent": round(cpu_usage, 1),
+                    "memory_percent": mem_percent,
+                    "memory_used_gb": round(used_gb, 1),
+                    "memory_total_gb": round(total_gb, 1),
+                    "uptime_seconds": uptime,
+                    "vm_count": len(vms),
                     "version": "agent",
                 }
             ],
