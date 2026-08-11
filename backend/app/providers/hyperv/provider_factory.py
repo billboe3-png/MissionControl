@@ -96,7 +96,16 @@ def list_hyperv_hosts(db: Session) -> list[dict]:
                 try:
                     full_inv = json.loads(agent.inventory_json)
                     plugins = full_inv.get("plugins", {})
-                    hyperv = plugins.get("hyperv")
+                    plugin_hyperv = plugins.get("hyperv")
+                    if plugin_hyperv is not None:
+                        # Plugin-level relay block only belongs to the target
+                        # it was relayed from; otherwise another target (e.g.
+                        # VEEMA) would inherit CORHQDC01's VMs.
+                        relay_block = plugin_hyperv.get("remote") if isinstance(plugin_hyperv, dict) else None
+                        if not target_data and _relay_matches_target(target, relay_block):
+                            hyperv = relay_block
+                        elif _relay_matches_target(target, plugin_hyperv):
+                            hyperv = plugin_hyperv
                 except (json.JSONDecodeError, TypeError):
                     pass
             if not hyperv:
@@ -268,6 +277,39 @@ def get_hyperv_provider(db: Session | None = None, host_id: int | None = None) -
     return _default_provider
 
 
+def _relay_matches_target(target, relay_block) -> bool:
+    """Return True if a hyperv relay block belongs to the given target.
+
+    Determines ownership by comparing the hostname embedded in the VM
+    records (ComputerName/computer_name) against the target's name and
+    hostname.  Guards the plugin-level fallback so one target's relayed
+    VMs do not get attributed to an unrelated target.
+    """
+    if not isinstance(relay_block, dict):
+        return False
+    raw = relay_block.get("vms")
+    if isinstance(raw, str):
+        try:
+            raw = json.loads(raw)
+        except (json.JSONDecodeError, TypeError):
+            raw = []
+    if isinstance(raw, dict):
+        raw = raw.get("vms", []) if isinstance(raw.get("vms"), list) else []
+    if not isinstance(raw, list):
+        return False
+    names = [v.get("ComputerName") or v.get("computer_name") for v in raw if isinstance(v, dict)]
+    names = [str(n).strip().lower() for n in names if n]
+    if not names:
+        return False
+    most_common = max(set(names), key=names.count)
+    candidates = {
+        str(t).strip().lower()
+        for t in (getattr(target, "name", None), getattr(target, "hostname", None))
+        if t
+    }
+    return most_common in candidates
+
+
 def _get_agent_provider(db: Session | None, target_id: int) -> HyperVProvider:
     """Build an AgentHyperVProvider from stored remote target inventory.
 
@@ -300,7 +342,13 @@ def _get_agent_provider(db: Session | None, target_id: int) -> HyperVProvider:
         try:
             full_inv = json.loads(agent.inventory_json)
             plugins = full_inv.get("plugins", {})
-            hyperv = plugins.get("hyperv")
+            plugin_hyperv = plugins.get("hyperv")
+            if plugin_hyperv is not None:
+                relay_block = plugin_hyperv.get("remote") if isinstance(plugin_hyperv, dict) else None
+                if relay_block and _relay_matches_target(target, relay_block):
+                    hyperv = relay_block
+                elif _relay_matches_target(target, plugin_hyperv):
+                    hyperv = plugin_hyperv
         except (json.JSONDecodeError, TypeError):
             pass
     if not hyperv:

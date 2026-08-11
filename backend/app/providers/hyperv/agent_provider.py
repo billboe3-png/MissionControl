@@ -32,6 +32,14 @@ _HYPERV_STATE_MAP = {
     8: "saved",     # Saving
     9: "paused",    # Pausing
     10: "running",  # Resuming
+    "Running": "running",
+    "Off": "stopped",
+    "Stopped": "stopped",
+    "Paused": "paused",
+    "Saved": "saved",
+    "Stopping": "stopped",
+    "Saving": "saved",
+    "Pausing": "paused",
 }
 
 _SWITCH_TYPE_MAP = {
@@ -133,7 +141,10 @@ class AgentHyperVProvider(HyperVProvider):
 
     async def get_summary(self) -> dict:
         vms = self._get_vm_list()
-        states = [_HYPERV_STATE_MAP.get(v.get("state"), str(v.get("state", "")).lower()) for v in vms]
+        states = []
+        for v in vms:
+            state = v.get("state", v.get("State", ""))
+            states.append(_HYPERV_STATE_MAP.get(state, str(state).lower()))
         running = sum(1 for s in states if s == "running")
         stopped = sum(1 for s in states if s == "stopped")
         paused = sum(1 for s in states if s == "paused")
@@ -195,11 +206,12 @@ class AgentHyperVProvider(HyperVProvider):
 
             name = v.get("name", v.get("Name", ""))
             host_server = v.get("computer_name", v.get("ComputerName", self._hostname))
+            state = v.get("state", v.get("State", -1))
 
             items.append({
                 "id": v.get("vm_id", v.get("VMId", name)),
                 "name": name,
-                "state": _HYPERV_STATE_MAP.get(v.get("state", v.get("State", -1)), str(v.get("state", v.get("State", "unknown"))).lower()),
+                "state": _HYPERV_STATE_MAP.get(state, str(state).lower()),
                 "cpu_count": 0,
                 "cpu_usage_percent": cpu_usage,
                 "memory_assigned_mb": memory_assigned,
