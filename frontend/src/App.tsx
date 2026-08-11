@@ -106,13 +106,13 @@ export default function App() {
             <AuthProvider>
                 <SidebarProvider>
                     <ToastProvider>
+                        <SiteProvider>
                             <Routes>
                             <Route path="/setup" element={<SetupWizardPage />} />
                             <Route element={<RequireSetup />}>
                                 <Route path="/login" element={<LoginPage />} />
                             </Route>
                             <Route element={<RequireAuth />}>
-                            <SiteProvider>
                             <Route element={<AppLayout />}>
                             <Route path="/" element={<DashboardPage />} />
 
@@ -229,9 +229,9 @@ export default function App() {
                             <Route path="/ai/health" element={<AIHealthScorePage />} />
                             <Route path="/ai/history" element={<AIHistoryPage />} />
                         </Route>
-                        </SiteProvider>
                         </Route>
                         </Routes>
+                    </SiteProvider>
                     </ToastProvider>
                 </SidebarProvider>
             </AuthProvider>
