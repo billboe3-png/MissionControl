@@ -11,18 +11,6 @@ function formatUptime(seconds: number): string {
     return `${h}h`;
 }
 
-function UsageBar({ percent, label }: { percent: number; label: string }) {
-    const cls = percent >= 90 ? "danger" : percent >= 70 ? "warning" : "";
-    return (
-        <div className="hyperv-resource-item">
-            <span className="hyperv-resource-label">{label}: {percent}%</span>
-            <div className="hyperv-progress-bar">
-                <div className={`hyperv-progress-fill ${cls}`} style={{ width: `${percent}%` }} />
-            </div>
-        </div>
-    );
-}
-
 export default function HyperVHealthPage() {
     const [health, setHealth] = useState<HyperVHealthHost[]>([]);
     const [loading, setLoading] = useState(true);
@@ -65,34 +53,25 @@ export default function HyperVHealthPage() {
             {health.length === 0 ? (
                 <p className="settings-hint">No host data available.</p>
             ) : (
-                <div className="dashboard-section">
-                    <h3>Cluster Hosts</h3>
-                    <div className="hyperv-host-cards">
-                        {health.map((host) => (
-                            <div
-                                key={host.name}
-                                className={`hyperv-host-card ${host.status === "healthy" ? "healthy" : "warning"}`}
-                            >
-                                <div className="hyperv-host-card-header">
-                                    <StatusBadge
-                                        status={host.status === "healthy" ? "healthy" : "warning"}
-                                        label={host.name}
-                                    />
-                                    {host.version && (
-                                        <span className="hyperv-host-version">v{host.version}</span>
-                                    )}
-                                </div>
-                                <div className="hyperv-host-card-body">
-                                    <UsageBar percent={host.cpu_percent} label="CPU" />
-                                    <UsageBar percent={host.memory_percent} label={`Memory: ${host.memory_used_gb} / ${host.memory_total_gb} GB`} />
-                                </div>
-                                <div className="hyperv-host-card-footer">
-                                    <span>VMs: {host.vm_count}</span>
-                                    <span>Uptime: {formatUptime(host.uptime_seconds)}</span>
-                                </div>
+                <div className="hyperv-network-grid">
+                    {health.map((host) => (
+                        <div key={host.name} className="hyperv-network-card">
+                            <div className="hyperv-network-header">
+                                <h3>{host.name}</h3>
+                                <StatusBadge
+                                    status={host.status === "healthy" ? "healthy" : "warning"}
+                                    label={host.status}
+                                />
                             </div>
-                        ))}
-                    </div>
+                            <div className="hyperv-network-meta">
+                                <span>CPU: {host.cpu_percent}%</span>
+                                <span>Memory: {host.memory_used_gb} / {host.memory_total_gb} GB</span>
+                                <span>VMs: {host.vm_count}</span>
+                                <span>Uptime: {formatUptime(host.uptime_seconds)}</span>
+                                {host.version && <span>Version: {host.version}</span>}
+                            </div>
+                        </div>
+                    ))}
                 </div>
             )}
         </>
