@@ -98,6 +98,18 @@ class TestVeeamPluginModels:
 
         assert VeeamJobRun.__tablename__ == "veeam_job_runs"
 
+    def test_veeam_backup_server_live_fields(self):
+        from app.plugins.installed.official_veeam.models import VeeamBackupServer
+
+        assert VeeamBackupServer.__table__.c.edition is not None
+        assert VeeamBackupServer.__table__.c.data_source is not None
+        assert VeeamBackupServer.__table__.c.db_type is not None
+        assert VeeamBackupServer.__table__.c.column_case is not None
+        assert VeeamBackupServer.__table__.c.agent_id is not None
+        assert VeeamBackupServer.__table__.c.target_id is not None
+        assert VeeamBackupServer.__table__.c.rest_url is not None
+        assert VeeamBackupServer.__table__.c.last_diagnostic is not None
+
 
 # ------------------------------------------------------------------ #
 # Plugin class                                                         #
