@@ -68,6 +68,7 @@ export default function HyperVOverviewPage() {
 
     const handleHostClick = (hostId: number) => {
         setSelectedHostId(hostId);
+        navigate("/hyperv/vms");
     };
 
     if (hostsLoading) return <div className="loading-bar" />;
@@ -129,11 +130,11 @@ export default function HyperVOverviewPage() {
                     {allHostsHealth.length > 0 && (
                         <div className="dashboard-section">
                             <h3>Cluster Hosts</h3>
-                            <div className="hyperv-host-cards">
+                            <div className="hyperv-network-grid">
                                 {allHostsHealth.map((host) => (
                                     <div
                                         key={host.name}
-                                        className={`hyperv-host-card ${host.status === "healthy" ? "healthy" : "warning"}`}
+                                        className="hyperv-network-card"
                                         onClick={() => handleHostClick(hosts.find((h) => h.name === host.name)?.id ?? 0)}
                                         role="button"
                                         tabIndex={0}
@@ -141,23 +142,19 @@ export default function HyperVOverviewPage() {
                                             if (e.key === "Enter") handleHostClick(hosts.find((h) => h.name === host.name)?.id ?? 0);
                                         }}
                                     >
-                                        <div className="hyperv-host-card-header">
+                                        <div className="hyperv-network-header">
+                                            <h3>{host.name}</h3>
                                             <StatusBadge
                                                 status={host.status === "healthy" ? "healthy" : "warning"}
-                                                label={host.name}
+                                                label={host.status}
                                             />
-                                            {host.version && (
-                                                <span className="hyperv-host-version">v{host.version}</span>
-                                            )}
                                         </div>
-                                        <div className="hyperv-host-card-body">
-                                            <UsageBar percent={host.cpu_percent} label="CPU" />
-                                            <UsageBar percent={host.memory_percent} label={`Memory: ${host.memory_used_gb} / ${host.memory_total_gb} GB`} />
-                                        </div>
-                                        <div className="hyperv-host-card-footer">
+                                        <div className="hyperv-network-meta">
+                                            <span>CPU: {host.cpu_percent}%</span>
+                                            <span>Memory: {host.memory_used_gb} / {host.memory_total_gb} GB</span>
                                             <span>VMs: {host.vm_count}</span>
                                             <span>Uptime: {formatUptime(host.uptime_seconds)}</span>
-                                            <span className="hyperv-host-card-action">View VMs →</span>
+                                            {host.version && <span>Version: {host.version}</span>}
                                         </div>
                                     </div>
                                 ))}
