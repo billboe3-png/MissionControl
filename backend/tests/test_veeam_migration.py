@@ -1,11 +1,9 @@
 """Tests for the Veeam live-registry Alembic migration."""
 
-import pytest
-
 
 def test_migration_revision_chains_from_head():
-    from pathlib import Path
     import re
+    from pathlib import Path
 
     path = (
         Path(__file__).parent.parent
@@ -23,7 +21,6 @@ def test_migration_revision_chains_from_head():
 
 def test_migration_upgrade_backfills_from_integration_profiles():
     from pathlib import Path
-    import re
 
     path = (
         Path(__file__).parent.parent
