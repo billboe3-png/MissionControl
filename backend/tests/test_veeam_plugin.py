@@ -57,7 +57,18 @@ class TestVeeamPluginConfig:
         assert srv.verify_ssl is True
         assert srv.timeout == 30
         assert srv.data_source == "both"
-        assert srv.db_type == "postgresql"
+        assert srv.db_type == "auto"
+
+    def test_server_config_live_fields(self):
+        from app.plugins.installed.official_veeam.config import VeeamServerConfig
+
+        srv = VeeamServerConfig()
+        assert srv.edition == "enterprise"
+        assert srv.data_source == "both"
+        assert srv.db_type == "auto"
+        assert srv.column_case == "pascal"
+        assert srv.agent_id is None
+        assert srv.target_id is None
 
 
 # ------------------------------------------------------------------ #
@@ -395,3 +406,15 @@ class TestVeeamPluginRoutes:
         response = veeam_client.get("/api/v1/plugins/veeam/licenses")
         assert response.status_code == 200
         assert isinstance(response.json(), list)
+
+    def test_server_dict_has_live_fields(self, db_session):
+        from app.plugins.installed.official_veeam.cache import cache_manager
+        from app.plugins.installed.official_veeam.models import VeeamBackupServer
+
+        db_session.add(VeeamBackupServer(name="v1"))
+        db_session.commit()
+        row = cache_manager.get_servers(db_session)[0]
+        assert "edition" in row
+        assert "db_type" in row
+        assert "last_diagnostic" in row
+        assert row["name"] == "v1"

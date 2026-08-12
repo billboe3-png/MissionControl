@@ -12,6 +12,12 @@ class VeeamServerConfig(BaseModel):
     """Configuration for a single Veeam B&R server."""
 
     name: str = "default"
+    edition: str = "enterprise"
+    data_source: str = "both"
+    db_type: str = "auto"
+    column_case: str = "pascal"
+    agent_id: int | None = None
+    target_id: int | None = None
     url: str = ""
     username: str = ""
     password: str = ""
@@ -24,9 +30,6 @@ class VeeamServerConfig(BaseModel):
     ssh_port: int = 22
     ssh_username: str = ""
     ssh_password: str = ""
-    data_source: str = "both"
-    db_type: str = "postgresql"
-    column_case: str = "pascal"
 
 
 class VeeamPluginConfig(BaseModel):
