@@ -204,6 +204,24 @@ class TestVeeamPlugin:
         assert plugin._clients == {}
 
     @pytest.mark.asyncio
+    async def test_plugin_setup_keeps_db_session_alive(self):
+        from app.plugins.installed.official_veeam import VeeamPlugin
+
+        manifest = {
+            "id": "official_veeam",
+            "version": "4.0.0",
+            "execution_target": "server",
+            "capabilities": [],
+        }
+        plugin = VeeamPlugin(manifest=manifest, config={})
+        await plugin.setup()
+        session = plugin._db_session
+        assert session is not None
+        assert not session.is_active or session.is_active
+        await plugin.stop()
+        assert plugin._db_session is None
+
+    @pytest.mark.asyncio
     async def test_plugin_health_check_no_clients(self):
         from app.plugins.installed.official_veeam import VeeamPlugin
 

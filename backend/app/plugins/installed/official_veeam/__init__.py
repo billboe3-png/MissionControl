@@ -65,13 +65,19 @@ class VeeamPlugin(ServerPluginSDK):
                         clients[server.id] = VeeamApiClient.from_server(
                             db=session, server=server
                         )
-                    except ValueError as exc:
+                    except (ValueError, TypeError) as exc:
                         logger.warning(
                             "Skipping Veeam server %s: %s", server.name, exc
                         )
+                # Keep the session alive for the plugin's lifetime: the
+                # providers use it lazily for executor/rest access and the
+                # diagnostics db_type writeback. Closed here would silently
+                # no-op those writes. Closed in stop().
+                self._db_session = session
                 return clients
-            finally:
+            except Exception:
                 session.close()
+                raise
 
         self._clients = await asyncio.to_thread(_load)
 
@@ -96,6 +102,9 @@ class VeeamPlugin(ServerPluginSDK):
             with contextlib.suppress(asyncio.CancelledError):
                 await self._sync_task
         self._clients.clear()
+        if getattr(self, "_db_session", None) is not None:
+            self._db_session.close()
+            self._db_session = None
         logger.info("Veeam plugin stopped")
 
     # ------------------------------------------------------------------ #
