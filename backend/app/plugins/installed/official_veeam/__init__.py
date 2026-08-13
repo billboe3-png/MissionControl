@@ -5,8 +5,8 @@ Production-grade plugin for Veeam B&R integration.
 Provides background sync, cached data, dashboard widgets,
 plugin-scoped routes, and Event Bus integration.
 
-All API communication flows through VeeamRESTProvider.
-DashboardService remains the only frontend data source.
+All API communication flows through the plugin-native VeeamServerProvider
+built from each server row. DashboardService remains the only frontend data source.
 """
 
 import asyncio
@@ -50,44 +50,30 @@ class VeeamPlugin(ServerPluginSDK):
     # ------------------------------------------------------------------ #
 
     async def setup(self) -> None:
-        """Initialize: load server configs from DB and create API clients."""
-        def _load():
+        """Initialize: load enabled server rows and build API clients."""
+        def _load() -> dict[int, VeeamApiClient]:
             session = SessionLocal()
             try:
-                return list(
-                    session.execute(
-                        select(VeeamBackupServer).where(
-                            VeeamBackupServer.enabled.is_(True)
+                clients: dict[int, VeeamApiClient] = {}
+                servers = session.execute(
+                    select(VeeamBackupServer).where(
+                        VeeamBackupServer.enabled.is_(True)
+                    )
+                ).scalars().all()
+                for server in servers:
+                    try:
+                        clients[server.id] = VeeamApiClient.from_server(
+                            db=session, server=server
                         )
-                    ).scalars().all()
-                )
+                    except ValueError as exc:
+                        logger.warning(
+                            "Skipping Veeam server %s: %s", server.name, exc
+                        )
+                return clients
             finally:
                 session.close()
 
-        servers = await asyncio.to_thread(_load)
-
-        for server in servers:
-            if server.encrypted_password:
-                try:
-                    from app.core.config import get_settings
-                    from app.core.security import CredentialCipher
-                    cipher = CredentialCipher(
-                        get_settings().missioncontrol_secret_key
-                    )
-                    password = cipher.decrypt(server.encrypted_password)
-                except Exception:
-                    password = ""
-            else:
-                password = ""
-
-            client = VeeamApiClient(
-                base_url=server.url,
-                username=server.username,
-                password=password,
-                verify_ssl=server.verify_ssl,
-                timeout=server.timeout,
-            )
-            self._clients[server.id] = client
+        self._clients = await asyncio.to_thread(_load)
 
         logger.info(
             "Veeam plugin setup: %d server(s) configured",
