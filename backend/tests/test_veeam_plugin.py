@@ -5,6 +5,7 @@ Tests for the Veeam plugin components: config, models, plugin class,
 cache, routes, and registry integration.
 """
 
+import types
 from pathlib import Path
 
 import pytest
@@ -292,18 +293,46 @@ class TestVeeamPlugin:
 
 
 class TestVeeamApiClient:
-    """Tests for VeeamApiClient initialization."""
+    """Tests for VeeamApiClient initialization and provider delegation."""
 
     def test_api_client_init(self):
         from app.plugins.installed.official_veeam.api import VeeamApiClient
-
-        client = VeeamApiClient(
-            base_url="https://veeam.local:9398",
-            username="admin",
-            password="secret",
+        from app.plugins.installed.official_veeam.models import VeeamBackupServer
+        from app.plugins.installed.official_veeam.provider import (
+            VeeamServerProvider,
         )
-        assert client._provider is not None
-        assert client._provider.base_url == "https://veeam.local:9398"
+
+        server = VeeamBackupServer(
+            name="v1",
+            edition="enterprise",
+            data_source="both",
+            rest_url="https://veeam.local:9419",
+        )
+        client = VeeamApiClient.from_server(db=object(), server=server)
+        assert isinstance(client._provider, VeeamServerProvider)
+        assert client._provider.server.name == "v1"
+
+    @pytest.mark.asyncio
+    async def test_get_jobs_delegates_to_provider(self):
+        from app.plugins.installed.official_veeam.api import VeeamApiClient
+        from app.plugins.installed.official_veeam.models import VeeamBackupServer
+
+        server = VeeamBackupServer(
+            name="v1",
+            edition="enterprise",
+            data_source="both",
+            rest_url="https://veeam.local:9419",
+        )
+        client = VeeamApiClient.from_server(db=object(), server=server)
+
+        async def fake_get_jobs(provider):
+            return {"success": True, "jobs": [{"id": "j1"}]}
+
+        client._provider.get_jobs = types.MethodType(
+            fake_get_jobs, client._provider
+        )
+        result = await client.get_jobs()
+        assert result == {"success": True, "jobs": [{"id": "j1"}]}
 
 
 # ------------------------------------------------------------------ #
