@@ -36,6 +36,13 @@ async def run_connection_diagnostics(provider: Any) -> dict[str, Any]:
     overall_success = False
 
     try:
+        edition = getattr(provider.server, "edition", "enterprise")
+        data_source = getattr(provider.server, "data_source", "both")
+
+        # Which stages this server actually requires.
+        need_agent = (edition == "community") or (data_source in ("ssh", "both"))
+        need_rest = (edition == "enterprise") and (data_source in ("api", "both"))
+
         # 1. Agent / SSH test via executor
         try:
             res = await provider.executor.run("veeam:test")
@@ -46,12 +53,14 @@ async def run_connection_diagnostics(provider: Any) -> dict[str, Any]:
                 err_msg = res.get("error") or res.get("stderr") or "Agent probe failed"
                 agent_link = {"success": False, "error": err_msg}
                 ssh_status = {"success": False, "error": err_msg}
-                recommendations.append("Check SSH connectivity, credentials, and agent installation on the Veeam server.")
+                if need_agent:
+                    recommendations.append("Check SSH connectivity, credentials, and agent installation on the Veeam server.")
         except Exception as exc:
             logger.warning("Agent link test failed: %s", exc)
             agent_link = {"success": False, "error": str(exc)}
             ssh_status = {"success": False, "error": str(exc)}
-            recommendations.append("Ensure SSH service is running and network firewall allows connections.")
+            if need_agent:
+                recommendations.append("Ensure SSH service is running and network firewall allows connections.")
 
         # 2. REST test
         try:
@@ -66,11 +75,13 @@ async def run_connection_diagnostics(provider: Any) -> dict[str, Any]:
             else:
                 err_msg = rest_res.get("error") if isinstance(rest_res, dict) else "REST test failed"
                 rest_status = {"connected": False, "error": err_msg or "REST connection failed"}
-                recommendations.append("Verify Veeam REST API URL, username, password, and SSL certificate settings.")
+                if need_rest:
+                    recommendations.append("Verify Veeam REST API URL, username, password, and SSL certificate settings.")
         except Exception as exc:
             logger.warning("REST connection test failed: %s", exc)
             rest_status = {"connected": False, "error": str(exc)}
-            recommendations.append("Verify Veeam REST API port (default 9419) and service status.")
+            if need_rest:
+                recommendations.append("Verify Veeam REST API port (default 9419) and service status.")
 
         # 3. Database detection probe
         try:
@@ -81,15 +92,17 @@ async def run_connection_diagnostics(provider: Any) -> dict[str, Any]:
                 # Handle auto db_type writeback
                 if getattr(provider.server, "db_type", None) == "auto":
                     provider.server.db_type = detected
-                    if getattr(provider, "_db", None) is not None:
+                    db_session = getattr(provider, "_db", None) or getattr(provider, "db", None)
+                    if db_session is not None:
                         try:
-                            provider._db.commit()
+                            db_session.commit()
                         except Exception:
                             logger.exception("Failed to commit auto-detected db_type")
             else:
                 if not db_res.get("error"):
                     db_status["error"] = "Database type could not be determined"
-                recommendations.append("Check database binaries (psql/sqlcmd) or permissions on the Veeam database.")
+                if need_agent:
+                    recommendations.append("Check database binaries (psql/sqlcmd) or permissions on the Veeam database.")
         except Exception as exc:
             logger.warning("DB probe failed: %s", exc)
             db_status = {
@@ -100,30 +113,33 @@ async def run_connection_diagnostics(provider: Any) -> dict[str, Any]:
                 "mssql_port": False,
                 "error": str(exc),
             }
-            recommendations.append("Database probe encountered an error.")
+            if need_agent:
+                recommendations.append("Database probe encountered an error.")
 
         # Determine overall success based on edition / data_source / stages
-        edition = getattr(provider.server, "edition", "enterprise")
         if edition == "community":
             overall_success = bool(agent_link.get("success") and db_status.get("db_type"))
         else:
-            data_source = getattr(provider.server, "data_source", "both")
             if data_source == "api":
-                overall_success = rest_status.get("connected", False)
+                overall_success = bool(rest_status.get("connected"))
             elif data_source == "ssh":
                 overall_success = bool(agent_link.get("success") and db_status.get("db_type"))
             else:  # both
-                overall_success = bool(rest_status.get("connected") or agent_link.get("success"))
+                overall_success = bool(
+                    rest_status.get("connected")
+                    or (agent_link.get("success") and db_status.get("db_type"))
+                )
 
         error_summary = None
         if not overall_success:
             errors = []
-            if not agent_link.get("success"):
-                errors.append(f"Agent: {agent_link.get('error')}")
-            if not rest_status.get("connected"):
+            if need_rest and not rest_status.get("connected"):
                 errors.append(f"REST: {rest_status.get('error')}")
-            if db_status.get("error"):
-                errors.append(f"DB: {db_status.get('error')}")
+            if need_agent:
+                if not agent_link.get("success"):
+                    errors.append(f"Agent: {agent_link.get('error')}")
+                if db_status.get("error"):
+                    errors.append(f"DB: {db_status.get('error')}")
             error_summary = "; ".join(errors) if errors else "Connection diagnostics failed"
 
         return {

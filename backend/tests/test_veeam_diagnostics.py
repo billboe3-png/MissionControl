@@ -153,3 +153,75 @@ async def test_diagnostics_never_raises():
     result = await run_connection_diagnostics(BadProvider())
     assert result["success"] is False
     assert "Boom" in result["error"]
+
+
+@pytest.mark.anyio
+async def test_diagnostics_both_fallback_requires_db():
+    executor_results = {
+        "veeam:test": {"success": True, "output": "{}"},
+        "veeam:db:detect": {"success": False, "error": "psql not found"},
+    }
+    provider, _, _ = make_test_provider(
+        edition="enterprise", data_source="both",
+        executor_results=executor_results, rest_connected=False,
+    )
+    result = await run_connection_diagnostics(provider)
+    assert result["success"] is False
+    assert result["error"] is not None
+
+
+@pytest.mark.anyio
+async def test_diagnostics_both_fallback_success_when_db_ok():
+    executor_results = {
+        "veeam:test": {"success": True, "output": "{}"},
+        "veeam:db:detect": {
+            "success": True,
+            "db_type": "postgresql",
+            "psql_found": True,
+            "sqlcmd_found": False,
+            "pg_port": True,
+            "mssql_port": False,
+        },
+    }
+    provider, _, _ = make_test_provider(
+        edition="enterprise", data_source="both",
+        executor_results=executor_results, rest_connected=False,
+    )
+    result = await run_connection_diagnostics(provider)
+    assert result["success"] is True
+
+
+@pytest.mark.anyio
+async def test_diagnostics_api_mode_ignores_agent_db_noise():
+    provider, _, _ = make_test_provider(
+        edition="enterprise", data_source="api",
+        executor_results={}, rest_connected=False, rest_error="Unauthorized",
+    )
+    result = await run_connection_diagnostics(provider)
+    assert result["success"] is False
+    assert "REST:" in result["error"]
+    assert "Agent:" not in result["error"]
+    assert "DB:" not in result["error"]
+    assert not any("SSH" in r or "psql" in r for r in result["recommendations"])
+
+
+@pytest.mark.anyio
+async def test_diagnostics_community_mode_ignores_rest_noise():
+    executor_results = {
+        "veeam:test": {"success": True, "output": "{}"},
+        "veeam:db:detect": {
+            "success": True,
+            "db_type": "postgresql",
+            "psql_found": True,
+            "sqlcmd_found": False,
+            "pg_port": True,
+            "mssql_port": False,
+        },
+    }
+    provider, _, _ = make_test_provider(
+        edition="community", data_source="ssh",
+        executor_results=executor_results, rest_connected=False,
+    )
+    result = await run_connection_diagnostics(provider)
+    assert result["success"] is True
+    assert not any("REST" in r for r in result["recommendations"])
