@@ -403,22 +403,38 @@ class TestVeeamPluginRoutes:
     def test_list_servers_empty(self, veeam_client: TestClient) -> None:
         response = veeam_client.get("/api/v1/plugins/veeam/servers")
         assert response.status_code == 200
-        assert isinstance(response.json(), list)
+        data = response.json()
+        assert isinstance(data, dict)
+        assert data["success"] is False
+        assert data["servers"] == []
+        assert data["error"] == "No Veeam server configured"
 
     def test_list_repositories_empty(self, veeam_client: TestClient) -> None:
         response = veeam_client.get("/api/v1/plugins/veeam/repositories")
         assert response.status_code == 200
-        assert isinstance(response.json(), list)
+        data = response.json()
+        assert isinstance(data, dict)
+        assert data["success"] is False
+        assert data["repositories"] == []
+        assert data["error"] == "No Veeam server configured"
 
     def test_list_jobs_empty(self, veeam_client: TestClient) -> None:
         response = veeam_client.get("/api/v1/plugins/veeam/jobs")
         assert response.status_code == 200
-        assert isinstance(response.json(), list)
+        data = response.json()
+        assert isinstance(data, dict)
+        assert data["success"] is False
+        assert data["jobs"] == []
+        assert data["error"] == "No Veeam server configured"
 
     def test_list_restore_points_empty(self, veeam_client: TestClient) -> None:
         response = veeam_client.get("/api/v1/plugins/veeam/restore-points")
         assert response.status_code == 200
-        assert isinstance(response.json(), list)
+        data = response.json()
+        assert isinstance(data, dict)
+        assert data["success"] is False
+        assert data["restore_points"] == []
+        assert data["error"] == "No Veeam server configured"
 
     def test_summary_empty(self, veeam_client: TestClient) -> None:
         response = veeam_client.get("/api/v1/plugins/veeam/summary")
@@ -431,8 +447,8 @@ class TestVeeamPluginRoutes:
         response = veeam_client.get("/api/v1/plugins/veeam/health")
         assert response.status_code == 200
         data = response.json()
-        assert data["status"] == "no_servers"
-        assert data["servers"] == 0
+        assert data["healthy"] is False
+        assert data["error"] == "No Veeam server configured"
 
     def test_jobs_by_status_empty(self, veeam_client: TestClient) -> None:
         response = veeam_client.get("/api/v1/plugins/veeam/jobs-by-status")
