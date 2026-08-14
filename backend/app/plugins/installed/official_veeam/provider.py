@@ -178,7 +178,7 @@ class VeeamServerProvider:
         if self._rest_selected("job_stats_daily"):
             return {"success": True, "jobs": [], "dates": [], "count": 0,
                     "server_names": [self.server.name], "ssh_available": False,
-                    "error": None}
+                    "message": None, "error": None}
         result = await self.executor.run("veeam:job_stats_daily", params={"days": days})
         payload = _json_payload(result)
         return {
@@ -188,13 +188,14 @@ class VeeamServerProvider:
             "server_names": [self.server.name],
             "ssh_available": result.get("success", False),
             "count": len(payload.get("jobs", [])),
+            "message": None,
             "error": result.get("error"),
         }
 
     async def _stats_via_agent(self, op: str, key: str) -> dict[str, Any]:
         if self._rest_selected(op):
             return {"success": True, key: [], "server_names": [self.server.name],
-                    "ssh_available": False, "count": 0, "error": None}
+                    "ssh_available": False, "count": 0, "message": None, "error": None}
         result = await self.executor.run(f"veeam:{op}")
         payload = _json_payload(result)
         return {
@@ -203,6 +204,7 @@ class VeeamServerProvider:
             "server_names": [self.server.name],
             "ssh_available": result.get("success", False),
             "count": len(payload.get(key, [])),
+            "message": None,
             "error": result.get("error"),
         }
 

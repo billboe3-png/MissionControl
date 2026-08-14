@@ -12,8 +12,8 @@ import pytest
 from app.plugins.installed.official_veeam.models import VeeamBackupServer
 from app.plugins.installed.official_veeam.provider import (
     VeeamServerProvider,
-    _rest_for,
     _agent_for,
+    _rest_for,
 )
 
 
@@ -115,7 +115,7 @@ async def test_enterprise_both_jobs_use_agent_metadata_rest():
         "jobs": [{"id": "j1", "name": "Daily"}],
     })
     provider = make_provider(edition="enterprise", data_source="both", executor=executor)
-    jobs = await provider.get_jobs()
+    await provider.get_jobs()
     assert executor.ops == ["veeam:jobs"]
     repos = await provider.get_repositories()
     assert repos["success"] is True
@@ -137,3 +137,28 @@ async def test_start_stop_job_routes():
     started = await provider.start_job("j1")
     assert started["success"] is True
     assert ("post", "/api/v1/jobs/j1/start") in rest.calls
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize(
+    ("method", "expected_keys"),
+    [
+        (
+            "get_job_stats",
+            {"success", "jobs", "server_names", "ssh_available", "count", "message", "error"},
+        ),
+        (
+            "get_session_stats",
+            {"success", "stats", "server_names", "ssh_available", "count", "message", "error"},
+        ),
+        (
+            "get_job_stats_daily",
+            {"success", "jobs", "dates", "server_names", "ssh_available", "count", "message", "error"},
+        ),
+    ],
+)
+async def test_stats_shapes_include_message(method, expected_keys):
+    provider = make_provider(edition="enterprise", data_source="both")
+    result = await getattr(provider, method)()
+    assert set(result) == expected_keys
+    assert result["message"] is None
