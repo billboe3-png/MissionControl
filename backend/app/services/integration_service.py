@@ -136,8 +136,6 @@ class IntegrationService:
             reset_hyperv_provider(profile.id)
         if data.integration_type == "proxmox":
             reset_proxmox_provider()
-        if data.integration_type == "veeam":
-            self._reset_veeam_singleton()
         if data.integration_type == "unifi":
             _unifi_sync_controllers(db, profile)
         return self._to_response(profile)
@@ -217,8 +215,6 @@ class IntegrationService:
             reset_hyperv_provider(profile.id)
         if profile.integration_type == "proxmox":
             reset_proxmox_provider()
-        if profile.integration_type == "veeam":
-            self._reset_veeam_singleton()
         if profile.integration_type == "unifi":
             _unifi_sync_controllers(db, profile)
         return self._to_response(profile)
@@ -240,8 +236,6 @@ class IntegrationService:
             reset_hyperv_provider(profile_id)
         if existing and existing.integration_type == "proxmox":
             reset_proxmox_provider()
-        if existing and existing.integration_type == "veeam":
-            self._reset_veeam_singleton()
         if existing and existing.integration_type == "unifi":
             _unifi_delete_controllers(db, profile_id)
 
@@ -267,8 +261,6 @@ class IntegrationService:
             reset_hyperv_provider(profile.id)
         if profile.integration_type == "proxmox":
             reset_proxmox_provider()
-        if profile.integration_type == "veeam":
-            self._reset_veeam_singleton()
         if profile.integration_type == "unifi":
             _unifi_sync_controllers(db, profile)
         return self._to_response(profile)
@@ -291,8 +283,6 @@ class IntegrationService:
             reset_hyperv_provider(profile.id)
         if profile.integration_type == "proxmox":
             reset_proxmox_provider()
-        if profile.integration_type == "veeam":
-            self._reset_veeam_singleton()
         if profile.integration_type == "unifi":
             _unifi_sync_controllers(db, profile)
         return self._to_response(profile)
@@ -430,8 +420,6 @@ class IntegrationService:
             return await self._test_hyperv(profile)
         elif profile.integration_type == "proxmox":
             return await self._test_proxmox(profile)
-        elif profile.integration_type == "veeam":
-            return await self._test_veeam(profile)
         elif profile.integration_type == "unifi":
             return await self._test_unifi(profile)
         else:
@@ -555,35 +543,6 @@ class IntegrationService:
         )
         return await provider.test_connection()
 
-    async def _test_veeam(
-        self, profile: IntegrationProfile
-    ) -> dict:
-        """Test Veeam B&R connection using profile config.
-
-        Supports both REST API (Enterprise) and PowerShell (Community Edition).
-        Delegates to provider_factory which handles db_type detection.
-        """
-        from app.core.config import get_settings
-        from app.core.security import CredentialCipher
-        from app.providers.veeam.provider_factory import _build_provider
-
-        settings = get_settings()
-        CredentialCipher(settings.missioncontrol_secret_key)
-        try:
-            provider = _build_provider(profile)
-        except ValueError as e:
-            msg = str(e)
-            if "Decryption failed" in msg:
-                return {
-                    "connected": False,
-                    "error": "Stored Veeam credentials could not be decrypted with the current key. "
-                    "Re-save the SSH password for this integration to re-encrypt it.",
-                }
-            return {"connected": False, "error": "Veeam server URL or SSH connection is required"}
-        if provider is None:
-            return {"connected": False, "error": "Veeam server URL or SSH connection is required"}
-        return await provider.test_connection()
-
     async def _test_unifi(
         self, profile: IntegrationProfile
     ) -> dict:
@@ -635,16 +594,6 @@ class IntegrationService:
 
         reset_zabbix_provider()
         logger.info("Zabbix provider singleton reset after profile change")
-
-    @staticmethod
-    def _reset_veeam_singleton() -> None:
-        """Reset the cached Veeam provider so profile changes take effect."""
-        from app.providers.veeam.provider_factory import (
-            reset_veeam_provider,
-        )
-
-        reset_veeam_provider()
-        logger.info("Veeam provider singleton reset after profile change")
 
     def _to_response(
         self, profile: IntegrationProfile

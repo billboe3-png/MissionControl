@@ -181,7 +181,6 @@ from app.routers import (  # noqa: E402
     setup,
     site,
     tasks,
-    veeam,
     version,
     zabbix,
 )
@@ -269,7 +268,6 @@ app.include_router(integration.router, prefix="/api/v1")
 app.include_router(zabbix.router, prefix="/api/v1")
 app.include_router(hyperv.router, prefix="/api/v1")
 app.include_router(proxmox.router, prefix="/api/v1")
-app.include_router(veeam.router, prefix="/api/v1")
 app.include_router(site.router, prefix="/api/v1")
 app.include_router(ai.router, prefix="/api/v1")
 app.include_router(agent.router, prefix="/api/v1")

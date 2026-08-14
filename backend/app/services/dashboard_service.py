@@ -210,22 +210,15 @@ class DashboardService:
         except Exception as exc:
             logger.debug("Dashboard: Veeam plugin data failed: %s", exc)
 
-        try:
-            from app.providers.veeam.provider_factory import get_veeam_provider
-
-            provider = get_veeam_provider(db)
-            return await provider.get_summary()
-        except Exception as e:
-            logger.warning("Dashboard: Veeam data failed: %s", e)
-            return {
-                "connected": False,
-                "server_count": 0,
-                "repository_count": 0,
-                "job_count": 0,
-                "restore_point_count": 0,
-                "total_space_bytes": 0,
-                "free_space_bytes": 0,
-            }
+        return {
+            "connected": False,
+            "server_count": 0,
+            "repository_count": 0,
+            "job_count": 0,
+            "restore_point_count": 0,
+            "total_space_bytes": 0,
+            "free_space_bytes": 0,
+        }
 
     async def _get_unifi_data(self, db: Session) -> dict:
         """Get UniFi data, preferring plugin cache over live provider."""
