@@ -22,6 +22,12 @@ from app.plugins.installed.official_unifi.bridge import (
 from app.plugins.installed.official_unifi.bridge import (
     sync_profile_to_controllers as _unifi_sync_controllers,
 )
+from app.plugins.installed.official_veeam.bridge import (
+    delete_profile_server as _veeam_delete_server,
+)
+from app.plugins.installed.official_veeam.bridge import (
+    sync_profile_to_server as _veeam_sync_server,
+)
 from app.providers.hyperv.provider_factory import reset_hyperv_provider
 from app.providers.proxmox.provider_factory import reset_proxmox_provider
 from app.repositories.agent_repository import AgentCommandRepository
@@ -138,6 +144,8 @@ class IntegrationService:
             reset_proxmox_provider()
         if data.integration_type == "unifi":
             _unifi_sync_controllers(db, profile)
+        if data.integration_type == "veeam":
+            _veeam_sync_server(db, profile)
         return self._to_response(profile)
 
     async def update_profile(
@@ -217,6 +225,8 @@ class IntegrationService:
             reset_proxmox_provider()
         if profile.integration_type == "unifi":
             _unifi_sync_controllers(db, profile)
+        if profile.integration_type == "veeam":
+            _veeam_sync_server(db, profile)
         return self._to_response(profile)
 
     async def delete_profile(
@@ -238,6 +248,8 @@ class IntegrationService:
             reset_proxmox_provider()
         if existing and existing.integration_type == "unifi":
             _unifi_delete_controllers(db, profile_id)
+        if existing and existing.integration_type == "veeam":
+            _veeam_delete_server(db, existing.name)
 
     # ------------------------------------------------------------------ #
     # Actions                                                             #
