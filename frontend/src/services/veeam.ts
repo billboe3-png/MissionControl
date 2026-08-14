@@ -1,6 +1,6 @@
 import { apiClient } from "../utils/apiClient";
 
-const API = "/api/v1/veeam";
+const API = "/api/v1/plugins/veeam";
 
 // ── Interfaces ──────────────────────────────────────────────
 
