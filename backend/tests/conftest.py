@@ -32,6 +32,7 @@ from app.models.db.remote_host import RemoteHost
 # need them registered before create_all() is called.
 from app.plugins.installed.git.models import GitRepository  # noqa: F401
 from app.plugins.installed.official_docker.models import DockerHost  # noqa: F401
+from app.plugins.installed.official_veeam.models import VeeamBackupServer  # noqa: F401
 
 
 class _FakeUser:

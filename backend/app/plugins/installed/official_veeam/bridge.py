@@ -88,6 +88,69 @@ def delete_profile_server(db: Session, profile_name: str) -> None:
         reset_veeam_clients()
 
 
+def sync_target_to_server(db: Session, target) -> None:
+    """Upsert a community veeam_backup_servers row from a remote target.
+
+    Enabled when the target is enabled and its target_plugins include "veeam".
+    """
+    from app.plugins.installed.official_veeam.models import VeeamBackupServer
+
+    raw = target.target_plugins or ""
+    plugins = {p.strip() for p in raw.split(",") if p.strip()}
+    row = db.execute(
+        select(VeeamBackupServer).where(VeeamBackupServer.target_id == target.id)
+    ).scalar_one_or_none()
+
+    if not (target.enabled and "veeam" in plugins):
+        if row is not None:
+            row.enabled = False
+        db.commit()
+        return
+
+    if row is None:
+        name = f"[{target.name}]"
+        clash = db.execute(
+            select(VeeamBackupServer).where(VeeamBackupServer.name == name)
+        ).scalar_one_or_none()
+        if clash is not None and clash.target_id != target.id:
+            name = f"[{target.name}] #{target.id}"
+        row = VeeamBackupServer(
+            name=name,
+            edition="community",
+            data_source="both",
+            agent_id=target.agent_id,
+            target_id=target.id,
+            legacy_ssh_host=target.hostname,
+            legacy_ssh_port=target.port,
+            legacy_ssh_username=target.username,
+            legacy_ssh_password_encrypted=target.password_encrypted,
+            enabled=True,
+            status="unknown",
+        )
+        db.add(row)
+    else:
+        row.agent_id = target.agent_id
+        row.target_id = target.id
+        row.legacy_ssh_host = target.hostname
+        row.legacy_ssh_port = target.port
+        row.legacy_ssh_username = target.username
+        row.legacy_ssh_password_encrypted = target.password_encrypted
+        row.enabled = True
+    db.commit()
+
+
+def remove_target_server(db: Session, target_id: int) -> None:
+    """Disable the veeam_backup_servers row linked to a deleted remote target."""
+    from app.plugins.installed.official_veeam.models import VeeamBackupServer
+
+    row = db.execute(
+        select(VeeamBackupServer).where(VeeamBackupServer.target_id == target_id)
+    ).scalar_one_or_none()
+    if row is not None:
+        row.enabled = False
+        db.commit()
+
+
 def reset_veeam_clients() -> None:
     """Reload the live plugin's API clients from the DB registry.
 
