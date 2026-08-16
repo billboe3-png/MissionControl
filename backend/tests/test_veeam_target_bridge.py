@@ -66,3 +66,21 @@ def test_sync_updates_creds_on_existing_row(db_session):
         VeeamBackupServer.target_id == target.id
     ).one()
     assert row.legacy_ssh_host == "10.0.0.9"
+
+
+def test_first_server_prefers_enterprise(db_session):
+    from app.plugins.installed.official_veeam.models import VeeamBackupServer
+    from app.plugins.installed.official_veeam.routes import _first_server
+
+    db_session.add(VeeamBackupServer(
+        name="[Community]", edition="community", data_source="both",
+        agent_id=1, target_id=1, enabled=True, status="unknown",
+    ))
+    db_session.add(VeeamBackupServer(
+        name="Enterprise", edition="enterprise", data_source="api",
+        rest_url="https://v:9419/api/v1", enabled=True, status="unknown",
+    ))
+    db_session.commit()
+    server = _first_server(db_session)
+    assert server is not None
+    assert server.name == "Enterprise"

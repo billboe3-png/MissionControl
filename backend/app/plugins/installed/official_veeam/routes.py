@@ -30,7 +30,7 @@ def _first_server(db: Session) -> VeeamBackupServer | None:
     return (
         db.query(VeeamBackupServer)
         .filter(VeeamBackupServer.enabled.is_(True))
-        .order_by(VeeamBackupServer.id)
+        .order_by(VeeamBackupServer.edition.desc(), VeeamBackupServer.id)
         .first()
     )
 
