@@ -84,3 +84,29 @@ def test_first_server_prefers_enterprise(db_session):
     server = _first_server(db_session)
     assert server is not None
     assert server.name == "Enterprise"
+
+
+def test_profile_linked_to_matching_target(db_session):
+    from app.models.db.integration_profile import IntegrationProfile
+    from app.plugins.installed.official_veeam.bridge import sync_profile_to_server
+    from app.plugins.installed.official_veeam.models import VeeamBackupServer
+
+    _, target = _make_target(db_session, name="Veeam Host", plugins="veeam")
+    profile = IntegrationProfile(
+        name="Veeam Profile",
+        integration_type="veeam",
+        enabled=True,
+        data_source="both",
+        ssh_host=target.hostname,
+        ssh_username="kg\\administrator",
+    )
+    db_session.add(profile)
+    db_session.commit()
+
+    sync_profile_to_server(db_session, profile)
+
+    row = db_session.query(VeeamBackupServer).filter(
+        VeeamBackupServer.name == "Veeam Profile"
+    ).one()
+    assert row.agent_id == target.agent_id
+    assert row.target_id == target.id
