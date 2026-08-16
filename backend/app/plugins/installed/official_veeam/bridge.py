@@ -71,6 +71,36 @@ def sync_profile_to_server(db: Session, profile: IntegrationProfile) -> None:
         existing.legacy_ssh_username = profile.ssh_username
         existing.legacy_ssh_password_encrypted = profile.ssh_password_encrypted
 
+    row = existing if existing is not None else server
+
+    if row.rest_url is None and (row.agent_id is None or row.target_id is None):
+        from app.models.db.agent_remote_target import AgentRemoteTarget
+
+        ssh_host = (profile.ssh_host or "").strip()
+        candidate = None
+        for t in db.query(AgentRemoteTarget).filter(
+            AgentRemoteTarget.enabled.is_(True)
+        ):
+            plugins = {
+                p.strip() for p in (t.target_plugins or "").split(",") if p.strip()
+            }
+            if "veeam" not in plugins:
+                continue
+            if ssh_host and t.hostname == ssh_host:
+                candidate = t
+                break
+            if candidate is None:
+                candidate = t
+        if candidate is not None:
+            row.agent_id = candidate.agent_id
+            row.target_id = candidate.id
+            row.legacy_ssh_host = candidate.hostname
+            row.legacy_ssh_port = candidate.port
+            row.legacy_ssh_username = candidate.username
+            row.legacy_ssh_password_encrypted = candidate.password_encrypted
+
+    db.commit()
+
     db.commit()
     logger.info("Synced veeam integration profile %s to veeam_backup_servers", profile.id)
     reset_veeam_clients()
