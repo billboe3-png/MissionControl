@@ -264,14 +264,35 @@ class MissionControlAgent:
             if command_type == "remote_execute":
                 target_id = cmd.get("target_id")
                 command_text = cmd.get("command", "")
-                if target_id is None and command_text.startswith("{"):
+                namespace = None
+                op = None
+                params: dict = {}
+                if command_text.startswith("{"):
                     try:
                         payload = json.loads(command_text)
-                        target_id = payload.get("target_id")
-                        command_text = payload.get("command", "")
+                        namespace = payload.get("namespace")
+                        op = payload.get("op")
+                        params = payload.get("params") or {}
+                        if target_id is None:
+                            target_id = payload.get("target_id")
+                        if namespace is None:
+                            command_text = payload.get("command", "")
                     except (json.JSONDecodeError, AttributeError):
                         pass
-                if target_id is None:
+                if namespace == "veeam":
+                    plugin_result = await self.plugin_manager.execute_plugin_command(
+                        "veeam", op or "", params
+                    )
+                    ok = bool(plugin_result.get("success", False))
+                    result = {
+                        "success": ok,
+                        "stdout": json.dumps(plugin_result),
+                        "stderr": plugin_result.get("error")
+                        or plugin_result.get("stderr")
+                        or "",
+                        "exit_code": 0 if ok else 1,
+                    }
+                elif target_id is None:
                     result = {
                         "success": False,
                         "stdout": "",
