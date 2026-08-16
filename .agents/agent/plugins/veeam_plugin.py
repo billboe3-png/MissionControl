@@ -714,6 +714,61 @@ class VeeamPlugin(AgentPlugin):
     async def _execute_relay(
         self, command: str, args: dict[str, Any]
     ) -> dict[str, Any]:
+        collector_ops = {
+            "veeam:jobs": "jobs",
+            "veeam:sessions": "sessions",
+            "veeam:repositories": "repositories",
+            "veeam:managed_servers": "managed_servers",
+            "veeam:restore_points": "restore_points",
+            "veeam:license": "license",
+        }
+        payload_key = {"managed_servers": "servers"}
+        if command in collector_ops:
+            collector = collector_ops[command]
+            items = await self._run_collector_via_relay(collector)
+            if collector == "license":
+                return {
+                    "success": bool(items),
+                    "license": items or {},
+                    "error": None if items else "Veeam relay license unavailable",
+                }
+            key = payload_key.get(collector, collector)
+            return {
+                "success": items is not None,
+                key: items or [],
+                "count": len(items or []),
+                "error": None if items is not None else "Veeam relay collection failed",
+            }
+        if command == "veeam:test":
+            license_result = await self._run_collector_via_relay("license")
+            return {
+                "success": license_result is not None,
+                "rest_available": False,
+                "powershell_available": license_result is not None,
+                "version": "",
+                "error": None if license_result is not None else "Veeam relay unavailable",
+            }
+        if command == "veeam:job_stats":
+            jobs = await self._run_collector_via_relay("jobs")
+            return {
+                "success": jobs is not None,
+                "jobs": jobs or [],
+                "count": len(jobs or []),
+                "ssh_available": jobs is not None,
+                "error": None if jobs is not None else "Veeam relay collection failed",
+            }
+        if command == "veeam:session_stats":
+            return {
+                "success": True, "stats": [], "count": 0,
+                "ssh_available": False, "message": None, "error": None,
+            }
+        if command == "veeam:job_stats_daily":
+            return {
+                "success": True, "jobs": [], "dates": [], "count": 0,
+                "ssh_available": False, "message": None, "error": None,
+            }
+        if command == "veeam:capacity_tier":
+            return {"success": True, "object_storages": [], "count": 0, "error": None}
         if command == "test_connection":
             result = await self._run_collector_via_relay("license")
             if result is None:
