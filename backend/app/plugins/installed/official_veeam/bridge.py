@@ -86,11 +86,12 @@ def sync_profile_to_server(db: Session, profile: IntegrationProfile) -> None:
             }
             if "veeam" not in plugins:
                 continue
-            if ssh_host and t.hostname == ssh_host:
+            if not ssh_host:
                 candidate = t
                 break
-            if candidate is None:
+            if t.hostname == ssh_host:
                 candidate = t
+                break
         if candidate is not None:
             row.agent_id = candidate.agent_id
             row.target_id = candidate.id
@@ -98,8 +99,6 @@ def sync_profile_to_server(db: Session, profile: IntegrationProfile) -> None:
             row.legacy_ssh_port = candidate.port
             row.legacy_ssh_username = candidate.username
             row.legacy_ssh_password_encrypted = candidate.password_encrypted
-
-    db.commit()
 
     db.commit()
     logger.info("Synced veeam integration profile %s to veeam_backup_servers", profile.id)
@@ -121,7 +120,11 @@ def delete_profile_server(db: Session, profile_name: str) -> None:
 def sync_target_to_server(db: Session, target) -> None:
     """Upsert a community veeam_backup_servers row from a remote target.
 
-    Enabled when the target is enabled and its target_plugins include "veeam".
+    Enabled when the target is enabled, its target_plugins include "veeam",
+    and its protocol is ssh. The agent relay/community path only works over
+    SSH, so a psremoting/winrm target never registers a row; if an existing
+    row is re-synced against a non-SSH target it is disabled (same path as
+    removing the veeam plugin).
     """
     from app.plugins.installed.official_veeam.models import VeeamBackupServer
 
@@ -131,7 +134,9 @@ def sync_target_to_server(db: Session, target) -> None:
         select(VeeamBackupServer).where(VeeamBackupServer.target_id == target.id)
     ).scalar_one_or_none()
 
-    if not (target.enabled and "veeam" in plugins):
+    protocol_is_ssh = (getattr(target, "protocol", "") or "").lower() == "ssh"
+
+    if not (target.enabled and "veeam" in plugins and protocol_is_ssh):
         if row is not None:
             row.enabled = False
         db.commit()
