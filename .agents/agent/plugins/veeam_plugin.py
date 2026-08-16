@@ -714,6 +714,7 @@ class VeeamPlugin(AgentPlugin):
     async def _execute_relay(
         self, command: str, args: dict[str, Any]
     ) -> dict[str, Any]:
+        target_id = args.get("target_id")
         collector_ops = {
             "veeam:jobs": "jobs",
             "veeam:sessions": "sessions",
@@ -725,7 +726,7 @@ class VeeamPlugin(AgentPlugin):
         payload_key = {"managed_servers": "servers"}
         if command in collector_ops:
             collector = collector_ops[command]
-            items = await self._run_collector_via_relay(collector)
+            items = await self._run_collector_via_relay(collector, target_id=target_id)
             if collector == "license":
                 return {
                     "success": bool(items),
@@ -740,7 +741,9 @@ class VeeamPlugin(AgentPlugin):
                 "error": None if items is not None else "Veeam relay collection failed",
             }
         if command == "veeam:test":
-            license_result = await self._run_collector_via_relay("license")
+            license_result = await self._run_collector_via_relay(
+                "license", target_id=target_id
+            )
             return {
                 "success": license_result is not None,
                 "rest_available": False,
@@ -749,7 +752,7 @@ class VeeamPlugin(AgentPlugin):
                 "error": None if license_result is not None else "Veeam relay unavailable",
             }
         if command == "veeam:job_stats":
-            jobs = await self._run_collector_via_relay("jobs")
+            jobs = await self._run_collector_via_relay("jobs", target_id=target_id)
             return {
                 "success": jobs is not None,
                 "jobs": jobs or [],
@@ -770,7 +773,7 @@ class VeeamPlugin(AgentPlugin):
         if command == "veeam:capacity_tier":
             return {"success": True, "object_storages": [], "count": 0, "error": None}
         if command == "test_connection":
-            result = await self._run_collector_via_relay("license")
+            result = await self._run_collector_via_relay("license", target_id=target_id)
             if result is None:
                 return {
                     "success": False,
@@ -787,7 +790,9 @@ class VeeamPlugin(AgentPlugin):
                 "Import-Module Veeam.Backup.PowerShell -ErrorAction SilentlyContinue; "
                 f"Start-VBRJob -JobId {args.get('job_id', '')} -ErrorAction Stop | ConvertTo-Json -Compress"
             )
-            result = await self._run_script_via_relay(script, timeout=60)
+            result = await self._run_script_via_relay(
+                script, timeout=60, target_id=target_id
+            )
             return {
                 "success": result.get("success", False),
                 "stdout": result.get("stdout", ""),
@@ -799,7 +804,9 @@ class VeeamPlugin(AgentPlugin):
                 "Import-Module Veeam.Backup.PowerShell -ErrorAction SilentlyContinue; "
                 f"Stop-VBRJob -JobId {args.get('job_id', '')} -ErrorAction Stop | ConvertTo-Json -Compress"
             )
-            result = await self._run_script_via_relay(script, timeout=60)
+            result = await self._run_script_via_relay(
+                script, timeout=60, target_id=target_id
+            )
             return {
                 "success": result.get("success", False),
                 "stdout": result.get("stdout", ""),
@@ -808,7 +815,9 @@ class VeeamPlugin(AgentPlugin):
             }
         return {"success": False, "error": f"Unknown relay command: {command}"}
 
-    async def _run_collector_via_relay(self, collector: str) -> Any:
+    async def _run_collector_via_relay(
+        self, collector: str, target_id: int | None = None
+    ) -> Any:
         script_map = {
             "jobs": (
                 "Import-Module Veeam.Backup.PowerShell -ErrorAction SilentlyContinue; "
@@ -861,7 +870,9 @@ class VeeamPlugin(AgentPlugin):
         script = script_map.get(collector)
         if not script:
             return None
-        result = await self._run_script_via_relay(script, timeout=120)
+        result = await self._run_script_via_relay(
+            script, timeout=120, target_id=target_id
+        )
         if not result.get("success"):
             return None
         return self._parse_json_array(result.get("stdout", "[]")) or []
@@ -871,9 +882,16 @@ class VeeamPlugin(AgentPlugin):
     # ------------------------------------------------------------------
 
     async def _run_script_via_relay(
-        self, script: str, timeout: int = 60
+        self, script: str, timeout: int = 60, target_id: int | None = None
     ) -> dict[str, Any]:
-        """Execute a PowerShell script on the Veeam server via SSH relay."""
+        """Execute a PowerShell script on the Veeam server via SSH relay.
+
+        Prefers the dispatched ``target_id`` (the agent remote target id from
+        the server's ``veeam_backup_servers`` row). When no ``target_id`` is
+        given or it does not match a known SSH target, falls back to resolving
+        the SSH target from ``self._api_base`` (the existing single-target
+        behavior).
+        """
         remote_manager = self._context.get("remote_manager") or None
         if remote_manager is None:
             logger.warning("Veeam relay skipped: remote_manager not in plugin context")
@@ -895,24 +913,37 @@ class VeeamPlugin(AgentPlugin):
                 "data": None,
             }
 
+        if target_id is not None:
+            try:
+                target_id = int(target_id)
+            except (TypeError, ValueError):
+                target_id = None
+
         hostname = ""
-        api_base = self._api_base.strip()
-        if api_base.startswith("https://"):
-            api_base = api_base[len("https://") :]
-        if api_base.startswith("http://"):
-            api_base = api_base[len("http://") :]
-        hostname = api_base.split("/", 1)[0].split(":", 1)[0]
+        resolved_id: int | None = None
+        if target_id is not None:
+            target = (getattr(remote_manager, "targets", {}) or {}).get(target_id)
+            if target and (target.get("protocol") or "").lower() == "ssh":
+                resolved_id = target_id
+                hostname = target.get("hostname") or ""
 
-        target_id = None
-        for tid, target in (getattr(remote_manager, "targets", {}) or {}).items():
-            if (
-                target.get("hostname") == hostname
-                and (target.get("protocol") or "").lower() == "ssh"
-            ):
-                target_id = tid
-                break
+        if resolved_id is None:
+            api_base = self._api_base.strip()
+            if api_base.startswith("https://"):
+                api_base = api_base[len("https://") :]
+            if api_base.startswith("http://"):
+                api_base = api_base[len("http://") :]
+            hostname = api_base.split("/", 1)[0].split(":", 1)[0]
 
-        if target_id is None:
+            for tid, target in (getattr(remote_manager, "targets", {}) or {}).items():
+                if (
+                    target.get("hostname") == hostname
+                    and (target.get("protocol") or "").lower() == "ssh"
+                ):
+                    resolved_id = tid
+                    break
+
+        if resolved_id is None:
             logger.warning("Veeam relay skipped: no SSH target for host %s", hostname)
             return {
                 "success": False,
@@ -924,9 +955,9 @@ class VeeamPlugin(AgentPlugin):
 
         encoded = self._encode_powershell(script)
         ps_command = f"powershell -NoProfile -NonInteractive -EncodedCommand {encoded}"
-        logger.info("Veeam relay script -> target=%s host=%s", target_id, hostname)
+        logger.info("Veeam relay script -> target=%s host=%s", resolved_id, hostname)
         result = await remote_manager.execute_on_target(
-            target_id=target_id,
+            target_id=resolved_id,
             command=ps_command,
             timeout=timeout,
         )
