@@ -36,6 +36,7 @@ class ZabbixPlugin(AgentPlugin):
     async def _jsonrpc(self, method: str, params: dict) -> dict | None:
         try:
             import httpx
+
             payload = {
                 "jsonrpc": "2.0",
                 "method": method,
@@ -56,33 +57,48 @@ class ZabbixPlugin(AgentPlugin):
         if not self._auth_token:
             return {"available": False, "error": "Not authenticated"}
 
-        hosts = await self._jsonrpc("host.get", {
-            "output": ["hostid", "host", "name", "status"],
-            "selectInterfaces": ["interfaceid", "ip", "dns", "port"],
-            "selectGroups": ["groupid", "name"],
-            "selectParentTemplates": ["templateid", "name"],
-        })
-        groups = await self._jsonrpc("hostgroup.get", {
-            "output": ["groupid", "name"],
-            "selectHosts": ["hostid"],
-        })
-        triggers = await self._jsonrpc("trigger.get", {
-            "output": ["triggerid", "description", "priority", "status", "value"],
-            "selectHosts": ["hostid", "host"],
-            "filter": {"value": 1},
-        })
-        problems = await self._jsonrpc("event.get", {
-            "output": ["eventid", "name", "severity", "clock"],
-            "selectHosts": ["hostid", "host"],
-            "filter": {"value": 1},
-            "sortfield": ["clock"],
-            "sortorder": "DESC",
-            "limit": 50,
-        })
-        templates = await self._jsonrpc("template.get", {
-            "output": ["templateid", "name"],
-            "selectHosts": ["hostid"],
-        })
+        hosts = await self._jsonrpc(
+            "host.get",
+            {
+                "output": ["hostid", "host", "name", "status"],
+                "selectInterfaces": ["interfaceid", "ip", "dns", "port"],
+                "selectGroups": ["groupid", "name"],
+                "selectParentTemplates": ["templateid", "name"],
+            },
+        )
+        groups = await self._jsonrpc(
+            "hostgroup.get",
+            {
+                "output": ["groupid", "name"],
+                "selectHosts": ["hostid"],
+            },
+        )
+        triggers = await self._jsonrpc(
+            "trigger.get",
+            {
+                "output": ["triggerid", "description", "priority", "status", "value"],
+                "selectHosts": ["hostid", "host"],
+                "filter": {"value": 1},
+            },
+        )
+        problems = await self._jsonrpc(
+            "event.get",
+            {
+                "output": ["eventid", "name", "severity", "clock"],
+                "selectHosts": ["hostid", "host"],
+                "filter": {"value": 1},
+                "sortfield": ["clock"],
+                "sortorder": "DESC",
+                "limit": 50,
+            },
+        )
+        templates = await self._jsonrpc(
+            "template.get",
+            {
+                "output": ["templateid", "name"],
+                "selectHosts": ["hostid"],
+            },
+        )
 
         return {
             "available": True,
@@ -93,7 +109,9 @@ class ZabbixPlugin(AgentPlugin):
             "templates": (templates or {}).get("result", []),
         }
 
-    async def execute_command(self, command: str, args: dict[str, Any]) -> dict[str, Any]:
+    async def execute_command(
+        self, command: str, args: dict[str, Any]
+    ) -> dict[str, Any]:
         if command == "test_connection":
             tested = await self._test_connection(args)
             return {
@@ -104,7 +122,9 @@ class ZabbixPlugin(AgentPlugin):
             }
         return {"success": False, "error": f"Unknown command: {command}"}
 
-    async def _test_connection(self, args: dict[str, Any] | None = None) -> dict[str, Any]:
+    async def _test_connection(
+        self, args: dict[str, Any] | None = None
+    ) -> dict[str, Any]:
         args = args or {}
         base_url = args.get("base_url") or self._base_url
         username = args.get("username") or self._username
@@ -117,7 +137,9 @@ class ZabbixPlugin(AgentPlugin):
         except Exception as exc:
             return {"available": False, "error": f"httpx_missing:{exc}"}
         try:
-            async with AsyncClient(verify=False, timeout=max(int(args.get("timeout") or 30), 5)) as client:
+            async with AsyncClient(
+                verify=False, timeout=max(int(args.get("timeout") or 30), 5)
+            ) as client:
                 login_payload = {
                     "jsonrpc": "2.0",
                     "method": "user.login",

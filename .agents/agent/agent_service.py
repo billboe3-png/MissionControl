@@ -1,18 +1,16 @@
 """Mission Control Edge Agent - Windows Service Wrapper."""
 from __future__ import annotations
 
-import logging
 import os
 import subprocess
 import sys
-import time
 
 sys.path.insert(0, r'C:\MissionControlAgent')
 
+import servicemanager
+import win32event
 import win32service
 import win32serviceutil
-import win32event
-import servicemanager
 
 
 class EdgeAgentService(win32serviceutil.ServiceFramework):
@@ -29,7 +27,7 @@ class EdgeAgentService(win32serviceutil.ServiceFramework):
         self.ReportServiceStatus(win32service.SERVICE_STOP_PENDING)
         win32event.SetEvent(self.stop_event)
         if self.process:
-            try:
+            try:  # noqa: SIM105
                 self.process.terminate()
             except Exception:
                 pass
@@ -60,7 +58,7 @@ class EdgeAgentService(win32serviceutil.ServiceFramework):
                 )
             rc = win32event.WaitForSingleObject(self.stop_event, 5000)
             if rc == win32event.WAIT_OBJECT_0:
-                try:
+                try:  # noqa: SIM105
                     self.process.terminate()
                 except Exception:
                     pass

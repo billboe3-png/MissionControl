@@ -59,7 +59,7 @@ class CommandExecutor:
             result["duration_ms"] = duration_ms
             return result
 
-        except asyncio.TimeoutError:
+        except TimeoutError:
             return {
                 "success": False,
                 "stderr": f"Command timed out after {effective_timeout}s",
@@ -98,7 +98,7 @@ class CommandExecutor:
             stdout, stderr = await asyncio.wait_for(
                 process.communicate(), timeout=timeout
             )
-        except asyncio.TimeoutError:
+        except TimeoutError:
             process.kill()
             await process.wait()
             raise
@@ -146,7 +146,7 @@ class CommandExecutor:
                 stdout, stderr = await asyncio.wait_for(
                     process.communicate(), timeout=timeout
                 )
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 process.kill()
                 await process.wait()
                 raise
@@ -158,7 +158,7 @@ class CommandExecutor:
                 "success": process.returncode == 0,
             }
         finally:
-            try:
+            try:  # noqa: SIM105
                 os.unlink(tmp_path)
             except OSError:
                 pass

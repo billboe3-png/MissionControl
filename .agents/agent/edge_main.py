@@ -8,7 +8,7 @@ import logging
 import sys
 from pathlib import Path
 
-from agent.config import AgentSettings, load_config
+from agent.config import load_config
 from agent.edge_core import EdgeCore
 from agent.logger import setup_logging
 
@@ -23,16 +23,26 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--agent-id", type=int, help="Agent ID")
     parser.add_argument("--name", type=str, help="Agent display name")
     parser.add_argument("--config", type=str, help="Path to config file")
-    parser.add_argument("--heartbeat-interval", type=int, help="Seconds between heartbeats")
-    parser.add_argument("--no-ssl-verify", action="store_true", help="Disable SSL verification")
-    parser.add_argument("--log-level", type=str, choices=["DEBUG", "INFO", "WARNING", "ERROR"], default=None)
+    parser.add_argument(
+        "--heartbeat-interval", type=int, help="Seconds between heartbeats"
+    )
+    parser.add_argument(
+        "--no-ssl-verify", action="store_true", help="Disable SSL verification"
+    )
+    parser.add_argument(
+        "--log-level",
+        type=str,
+        choices=["DEBUG", "INFO", "WARNING", "ERROR"],
+        default=None,
+    )
     parser.add_argument("--log-file", type=str, help="Log file path")
-    parser.add_argument("--version", action="version", version="%(prog)s 3.0.0-rc1-edge")
+    parser.add_argument(
+        "--version", action="version", version="%(prog)s 3.0.0-rc1-edge"
+    )
     return parser.parse_args()
 
 
 def _bootstrap_sys_path() -> None:
-    import sys
     candidates = [
         Path(__file__).resolve().parent,
         Path.cwd() / "agent",

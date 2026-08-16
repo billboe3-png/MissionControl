@@ -56,7 +56,12 @@ class ActiveDirectoryPlugin(AgentPlugin):
         if not ad_profile:
             return
         if not self._server:
-            self._server = ad_profile.get("base_url") or ad_profile.get("server") or ad_profile.get("host") or ""
+            self._server = (
+                ad_profile.get("base_url")
+                or ad_profile.get("server")
+                or ad_profile.get("host")
+                or ""
+            )
         if not self._username:
             self._username = ad_profile.get("username") or ""
         if not self._password:
@@ -64,7 +69,9 @@ class ActiveDirectoryPlugin(AgentPlugin):
         if not self._base_dn:
             self._base_dn = ad_profile.get("base_dn") or ad_profile.get("baseDn") or ""
         if self._server:
-            logger.info("AD plugin configured from integration profile for %s", self._server)
+            logger.info(
+                "AD plugin configured from integration profile for %s", self._server
+            )
 
     async def collect_inventory(self) -> dict[str, Any]:
         if not self._server:
@@ -72,24 +79,70 @@ class ActiveDirectoryPlugin(AgentPlugin):
 
         try:
             import ldap3
+
             server = ldap3.Server(self._server, get_info=ldap3.ALL)
-            conn = ldap3.Connection(server, self._username, self._password, auto_bind=True)
-            base_dn = self._base_dn or server.info.other.get("defaultNamingContext", [""])[0]
+            conn = ldap3.Connection(
+                server, self._username, self._password, auto_bind=True
+            )
+            base_dn = (
+                self._base_dn or server.info.other.get("defaultNamingContext", [""])[0]
+            )
 
-            conn.search(base_dn, "(objectClass=user)", attributes=["sAMAccountName", "displayName", "userAccountControl", "mail", "department"], size_limit=500)
-            users = [{"sam": str(e.entry_dn), **{a: str(v) for a, v in e.entry_attributes_as_dict.items()}} for e in conn.entries]
+            conn.search(
+                base_dn,
+                "(objectClass=user)",
+                attributes=[
+                    "sAMAccountName",
+                    "displayName",
+                    "userAccountControl",
+                    "mail",
+                    "department",
+                ],
+                size_limit=500,
+            )
+            users = [
+                {
+                    "sam": str(e.entry_dn),
+                    **{a: str(v) for a, v in e.entry_attributes_as_dict.items()},
+                }
+                for e in conn.entries
+            ]
 
-            conn.search(base_dn, "(objectClass=group)", attributes=["sAMAccountName", "description", "member"], size_limit=200)
-            groups = [{"sam": str(e.entry_dn), **{a: str(v) for a, v in e.entry_attributes_as_dict.items()}} for e in conn.entries]
+            conn.search(
+                base_dn,
+                "(objectClass=group)",
+                attributes=["sAMAccountName", "description", "member"],
+                size_limit=200,
+            )
+            groups = [
+                {
+                    "sam": str(e.entry_dn),
+                    **{a: str(v) for a, v in e.entry_attributes_as_dict.items()},
+                }
+                for e in conn.entries
+            ]
 
-            conn.search(base_dn, "(objectClass=computer)", attributes=["sAMAccountName", "operatingSystem"], size_limit=200)
-            devices = [{"sam": str(e.entry_dn), **{a: str(v) for a, v in e.entry_attributes_as_dict.items()}} for e in conn.entries]
+            conn.search(
+                base_dn,
+                "(objectClass=computer)",
+                attributes=["sAMAccountName", "operatingSystem"],
+                size_limit=200,
+            )
+            devices = [
+                {
+                    "sam": str(e.entry_dn),
+                    **{a: str(v) for a, v in e.entry_attributes_as_dict.items()},
+                }
+                for e in conn.entries
+            ]
 
             conn.unbind()
             return {
                 "available": True,
                 "domain": base_dn,
-                "forest": str(server.info.other.get("rootDomainNamingContext", [""])[0]),
+                "forest": str(
+                    server.info.other.get("rootDomainNamingContext", [""])[0]
+                ),
                 "users": users,
                 "groups": groups,
                 "devices": devices,
@@ -98,5 +151,7 @@ class ActiveDirectoryPlugin(AgentPlugin):
             logger.warning("AD inventory collection failed: %s", e)
             return {"available": False, "error": str(e)}
 
-    async def execute_command(self, command: str, args: dict[str, Any]) -> dict[str, Any]:
+    async def execute_command(
+        self, command: str, args: dict[str, Any]
+    ) -> dict[str, Any]:
         return {"success": False, "error": f"Unknown command: {command}"}

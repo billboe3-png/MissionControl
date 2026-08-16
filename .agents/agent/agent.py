@@ -3,7 +3,6 @@
 import asyncio
 import json
 import logging
-import os
 import platform
 import socket
 import time
@@ -35,16 +34,10 @@ class MissionControlAgent:
             api_key=config.api_key,
             verify_ssl=config.verify_ssl,
         )
-        self.heartbeat_manager = HeartbeatManager(
-            self.client, config
-        )
-        self.registration_manager = RegistrationManager(
-            self.client, config
-        )
+        self.heartbeat_manager = HeartbeatManager(self.client, config)
+        self.registration_manager = RegistrationManager(self.client, config)
         self.inventory_collector = InventoryCollector()
-        self.command_executor = CommandExecutor(
-            timeout=config.command_timeout
-        )
+        self.command_executor = CommandExecutor(timeout=config.command_timeout)
         self.command_queue = CommandQueue(
             data_dir=config.data_dir,
             max_size=config.offline_buffer_max,
@@ -60,9 +53,7 @@ class MissionControlAgent:
 
     async def start(self) -> None:
         """Start the agent."""
-        logger.info(
-            "Mission Control Agent v%s starting", __version__
-        )
+        logger.info("Mission Control Agent v%s starting", __version__)
         logger.info(
             "Server: %s | SSL: %s",
             self.config.server_url,
@@ -153,20 +144,14 @@ class MissionControlAgent:
         """Main heartbeat loop."""
         while self._running:
             try:
-                health_metrics = (
-                    self.inventory_collector.collect_health_metrics()
-                )
-                active_plugins = (
-                    self.plugin_manager.get_active_plugins()
-                )
+                health_metrics = self.inventory_collector.collect_health_metrics()
+                active_plugins = self.plugin_manager.get_active_plugins()
 
                 response = await self.heartbeat_manager.send_heartbeat(
                     agent_id=self._agent_id,
                     health=self._determine_health(health_metrics),
                     cpu_percent=health_metrics.get("cpu_percent"),
-                    memory_percent=health_metrics.get(
-                        "memory_percent"
-                    ),
+                    memory_percent=health_metrics.get("memory_percent"),
                     disk_percent=health_metrics.get("disk_percent"),
                     agent_version=__version__,
                     active_plugins=active_plugins,
@@ -203,17 +188,13 @@ class MissionControlAgent:
         """Periodic inventory collection loop."""
         while self._running:
             try:
-                await asyncio.sleep(
-                    self.config.inventory_interval
-                )
+                await asyncio.sleep(self.config.inventory_interval)
 
                 if not self._running:
                     break
 
                 inventory = self.inventory_collector.collect()
-                plugin_inventory = (
-                    await self.plugin_manager.collect_all_inventory()
-                )
+                plugin_inventory = await self.plugin_manager.collect_all_inventory()
                 if plugin_inventory:
                     inventory["plugins"] = plugin_inventory
 
@@ -245,9 +226,7 @@ class MissionControlAgent:
                             result.get("command_id"),
                         )
             except Exception as e:
-                logger.debug(
-                    "Result reporting failed (will retry): %s", e
-                )
+                logger.debug("Result reporting failed (will retry): %s", e)
 
             await asyncio.sleep(5)
 
@@ -348,9 +327,7 @@ class MissionControlAgent:
                 logger.info("Result buffered for command %d", command_id)
 
         except Exception as e:
-            logger.error(
-                "Command %d execution failed: %s", command_id, e
-            )
+            logger.error("Command %d execution failed: %s", command_id, e)
             error_report = {
                 "command_id": command_id,
                 "success": False,

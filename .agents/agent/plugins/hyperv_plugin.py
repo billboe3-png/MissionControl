@@ -85,7 +85,9 @@ class HyperVPlugin(AgentPlugin):
             "remote": relay_inventory,
         }
 
-    async def execute_command(self, command: str, args: dict[str, Any]) -> dict[str, Any]:
+    async def execute_command(
+        self, command: str, args: dict[str, Any]
+    ) -> dict[str, Any]:
         await self._ensure_configured()
         if self._use_relay and self._ssh_target:
             return await self._execute_relay(command, args)
@@ -151,7 +153,9 @@ class HyperVPlugin(AgentPlugin):
                     "protocol": "ssh",
                 }
                 self._use_relay = True
-                logger.info("Hyper-V plugin using integration profile SSH relay (%s)", ssh_host)
+                logger.info(
+                    "Hyper-V plugin using integration profile SSH relay (%s)", ssh_host
+                )
                 return
 
         remote_targets = self._context.get("remote_targets") or []
@@ -174,7 +178,9 @@ class HyperVPlugin(AgentPlugin):
     async def _collect_inventory_relay(self) -> dict[str, Any]:
         remote_manager = self._context.get("remote_manager")
         if not remote_manager or not self._ssh_target:
-            logger.warning("Hyper-V relay blocked: missing remote_manager or ssh_target")
+            logger.warning(
+                "Hyper-V relay blocked: missing remote_manager or ssh_target"
+            )
             return {"vm_count": 0, "vms": [], "switches": []}
         target_id = self._ssh_target.get("id")
         if target_id is None:
@@ -212,9 +218,14 @@ class HyperVPlugin(AgentPlugin):
             if parsed is not None:
                 vms = parsed
             else:
-                logger.warning("Hyper-V VM relay returned non-JSON stdout: %r", raw_vms[:500])
+                logger.warning(
+                    "Hyper-V VM relay returned non-JSON stdout: %r", raw_vms[:500]
+                )
         else:
-            logger.warning("Hyper-V VM relay failed: %s", vms_result.get("stderr") or vms_result.get("stdout"))
+            logger.warning(
+                "Hyper-V VM relay failed: %s",
+                vms_result.get("stderr") or vms_result.get("stdout"),
+            )
 
         switches_result = await remote_manager.execute_on_target(
             target_id=target_id,
@@ -227,9 +238,15 @@ class HyperVPlugin(AgentPlugin):
             if parsed is not None:
                 switches = parsed
             else:
-                logger.warning("Hyper-V switch relay returned non-JSON stdout: %r", raw_switches[:500])
+                logger.warning(
+                    "Hyper-V switch relay returned non-JSON stdout: %r",
+                    raw_switches[:500],
+                )
         else:
-            logger.warning("Hyper-V switch relay failed: %s", switches_result.get("stderr") or switches_result.get("stdout"))
+            logger.warning(
+                "Hyper-V switch relay failed: %s",
+                switches_result.get("stderr") or switches_result.get("stdout"),
+            )
 
         result = {
             "vm_count": len(vms),
@@ -239,7 +256,9 @@ class HyperVPlugin(AgentPlugin):
         logger.info("Hyper-V relay inventory result: %s", result)
         return result
 
-    async def _execute_relay(self, command: str, args: dict[str, Any]) -> dict[str, Any]:
+    async def _execute_relay(
+        self, command: str, args: dict[str, Any]
+    ) -> dict[str, Any]:
         remote_manager = self._context.get("remote_manager")
         if not remote_manager or not self._ssh_target:
             return {"success": False, "error": "No relay target configured"}
@@ -378,7 +397,8 @@ class HyperVPlugin(AgentPlugin):
     async def _check_hyper_v(self) -> bool:
         try:
             proc = await asyncio.create_subprocess_exec(
-                "powershell", "-Command",
+                "powershell",
+                "-Command",
                 "if (Get-Command Get-VM -ErrorAction SilentlyContinue)"
                 " { exit 0 } else { exit 1 }",
                 stdout=asyncio.subprocess.DEVNULL,
@@ -392,7 +412,8 @@ class HyperVPlugin(AgentPlugin):
     async def _get_vms(self) -> list[dict[str, Any]]:
         try:
             proc = await asyncio.create_subprocess_exec(
-                "powershell", "-Command",
+                "powershell",
+                "-Command",
                 "Get-VM | Select-Object Name, State, "
                 "CPUUsage, MemoryAssigned, MemoryStartup, "
                 "Uptime, Status, Generation, "
@@ -430,7 +451,8 @@ class HyperVPlugin(AgentPlugin):
     async def _get_switches(self) -> list[dict[str, Any]]:
         try:
             proc = await asyncio.create_subprocess_exec(
-                "powershell", "-Command",
+                "powershell",
+                "-Command",
                 "Get-VMSwitch | Select-Object Name, SwitchType, "
                 "NetAdapterInterfaceDescription | ConvertTo-Json",
                 stdout=asyncio.subprocess.PIPE,
@@ -454,7 +476,8 @@ class HyperVPlugin(AgentPlugin):
     async def _get_vm_detail(self, args: dict[str, Any]) -> dict[str, Any]:
         vm_name = args.get("name", "")
         proc = await asyncio.create_subprocess_exec(
-            "powershell", "-Command",
+            "powershell",
+            "-Command",
             f"Get-VM '{vm_name}' | ConvertTo-Json -Depth 5",
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
@@ -469,7 +492,8 @@ class HyperVPlugin(AgentPlugin):
     async def _start_vm(self, args: dict[str, Any]) -> dict[str, Any]:
         vm_name = args.get("name", "")
         proc = await asyncio.create_subprocess_exec(
-            "powershell", "-Command",
+            "powershell",
+            "-Command",
             f"Start-VM -Name '{vm_name}'",
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
@@ -488,7 +512,9 @@ class HyperVPlugin(AgentPlugin):
         if force:
             cmd += " -Force"
         proc = await asyncio.create_subprocess_exec(
-            "powershell", "-Command", cmd,
+            "powershell",
+            "-Command",
+            cmd,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
@@ -506,7 +532,9 @@ class HyperVPlugin(AgentPlugin):
         if force:
             cmd += " -Force"
         proc = await asyncio.create_subprocess_exec(
-            "powershell", "-Command", cmd,
+            "powershell",
+            "-Command",
+            cmd,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
@@ -520,7 +548,8 @@ class HyperVPlugin(AgentPlugin):
     async def _get_checkpoints(self, args: dict[str, Any]) -> dict[str, Any]:
         vm_name = args.get("name", "")
         proc = await asyncio.create_subprocess_exec(
-            "powershell", "-Command",
+            "powershell",
+            "-Command",
             f"Get-VMSnapshot -VMName '{vm_name}'"
             " | Select-Object Name, CreationTime, CheckpointType | ConvertTo-Json",
             stdout=asyncio.subprocess.PIPE,
@@ -540,7 +569,9 @@ class HyperVPlugin(AgentPlugin):
         if snap_name:
             cmd += f" -SnapshotName '{snap_name}'"
         proc = await asyncio.create_subprocess_exec(
-            "powershell", "-Command", cmd,
+            "powershell",
+            "-Command",
+            cmd,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
@@ -555,7 +586,8 @@ class HyperVPlugin(AgentPlugin):
         vm_name = args.get("name", "")
         snap_name = args.get("snapshot_name", "")
         proc = await asyncio.create_subprocess_exec(
-            "powershell", "-Command",
+            "powershell",
+            "-Command",
             f"Remove-VMSnapshot -VMName '{vm_name}' -Name '{snap_name}'",
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
@@ -570,7 +602,8 @@ class HyperVPlugin(AgentPlugin):
     async def _get_vm_nics(self, args: dict[str, Any]) -> dict[str, Any]:
         vm_name = args.get("name", "")
         proc = await asyncio.create_subprocess_exec(
-            "powershell", "-Command",
+            "powershell",
+            "-Command",
             f"Get-VMNetworkAdapter -VMName '{vm_name}'"
             " | Select-Object Name, SwitchName, MacAddress, IPAddresses, Status "
             "| ConvertTo-Json",
@@ -587,7 +620,8 @@ class HyperVPlugin(AgentPlugin):
     async def _get_vm_disks(self, args: dict[str, Any]) -> dict[str, Any]:
         vm_name = args.get("name", "")
         proc = await asyncio.create_subprocess_exec(
-            "powershell", "-Command",
+            "powershell",
+            "-Command",
             f"Get-VMHardDiskDrive -VMName '{vm_name}'"
             " | Select-Object ControllerType, ControllerNumber, "
             "ControllerLocation, Path, DiskNumber "

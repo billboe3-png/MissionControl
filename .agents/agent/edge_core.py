@@ -7,25 +7,32 @@ offline-first edge collector loop.
 from __future__ import annotations
 
 import asyncio
-import json
 import logging
-import os
-import platform
-import socket
 import time
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
 
 from agent.config import AgentSettings
-from agent.logger import setup_logging
 from agent.plugin import PluginManager
 from agent.remote import RemoteManager
 from agent.storage import EdgeStorage, HeartbeatRecord, InventoryRecord, StorageConfig
-from agent.sync import EdgeSync, SyncResult
+from agent.sync import EdgeSync
 
 logger = logging.getLogger("mc-agent")
 
+
+def _filter_targets_for_plugin(remote_targets: list[dict[str, Any]], plugin_name: str) -> list[dict[str, Any]]:
+    """Filter remote targets to only those allowed for the given plugin."""
+    allowed = []
+    for target in remote_targets:
+        target_plugins = (target.get("target_plugins") or "").strip()
+        if not target_plugins:
+            allowed.append(target)
+            continue
+        plugins = {p.strip() for p in target_plugins.split(",") if p.strip()}
+        if plugin_name in plugins:
+            allowed.append(target)
+    return allowed
 
 class EdgeCore:
     """Offline-first edge agent core."""
@@ -51,21 +58,32 @@ class EdgeCore:
     async def start(self) -> None:
         """Start the edge agent."""
         logger.info("Mission Control Edge Agent starting")
-        logger.info("DEBUG server=%s agent_id=%s api_key_prefix=%s", self.config.server_url, self._agent_id, (self.config.api_key or "")[:12])
+        logger.info(
+            "DEBUG server=%s agent_id=%s api_key_prefix=%s",
+            self.config.server_url,
+            self._agent_id,
+            (self.config.api_key or "")[:12],
+        )
         logger.info("Data dir: %s", self.config.data_dir)
-        logger.info("Server: %s | SSL verify: %s", self.config.server_url, self.config.verify_ssl)
+        logger.info(
+            "Server: %s | SSL verify: %s",
+            self.config.server_url,
+            self.config.verify_ssl,
+        )
 
         self._running = True
 
         # Initialize plugins with a real RemoteManager so relay can work
         # even before the first successful config pull.
         await self._plugin_manager.discover_plugins()
-        await self._plugin_manager.initialize_plugins(context={
-            "agent_id": self._agent_id,
-            "remote_manager": self._remote_manager,
-            "integration_profiles": [],
-            "remote_targets": [],
-        })
+        await self._plugin_manager.initialize_plugins(
+            context={
+                "agent_id": self._agent_id,
+                "remote_manager": self._remote_manager,
+                "integration_profiles": [],
+                "remote_targets": [],
+            }
+        )
 
         # Initialize sync
         self._sync = EdgeSync(
@@ -112,7 +130,11 @@ class EdgeCore:
                     for name, result in results.items():
                         if name == "config" and result.success:
                             self._apply_pulled_manifest()
-                        if name == "bundle" and result.success and getattr(result, "restart_requested", False):
+                        if (
+                            name == "bundle"
+                            and result.success
+                            and getattr(result, "restart_requested", False)
+                        ):
                             logger.info("New bundle applied; requesting agent restart")
                             self._request_restart()
                         if result.success:
@@ -176,6 +198,7 @@ class EdgeCore:
     async def _execute_pulled_command(self, executor, cmd: dict) -> None:
         """Execute one pulled command and push its result."""
         import time as _time
+
         command_id = cmd.get("id")
         command = cmd.get("command") or ""
         command_type = cmd.get("command_type") or "execute"
@@ -183,9 +206,7 @@ class EdgeCore:
         file_path = cmd.get("file_path")
         file_name = cmd.get("file_name")
         file_content_b64 = cmd.get("file_content_b64")
-        logger.info(
-            "Executing edge command %s (type=%s)", command_id, command_type
-        )
+        logger.info("Executing edge command %s (type=%s)", command_id, command_type)
         start = _time.monotonic()
         try:
             result = await executor.execute(
@@ -255,15 +276,19 @@ class EdgeCore:
             duration_ms = (time.monotonic() - start_mono) * 1000.0
             logger.error("Plugin %s failed: %s", plugin_name, e)
             self._storage.append_plugin_record(
-                type("PluginRecord", (), {
-                    "plugin_name": plugin_name,
-                    "status": "error",
-                    "error": str(e),
-                    "started_at": started,
-                    "finished_at": datetime.now(UTC).isoformat(),
-                    "duration_ms": duration_ms,
-                    "meta": {},
-                })()
+                type(
+                    "PluginRecord",
+                    (),
+                    {
+                        "plugin_name": plugin_name,
+                        "status": "error",
+                        "error": str(e),
+                        "started_at": started,
+                        "finished_at": datetime.now(UTC).isoformat(),
+                        "duration_ms": duration_ms,
+                        "meta": {},
+                    },
+                )()
             )
 
     # ------------------------------------------------------------------ #
@@ -282,7 +307,9 @@ class EdgeCore:
             return
 
         remote_targets = list(getattr(manifest, "remote_targets", None) or [])
-        integration_profiles = list(getattr(manifest, "integration_profiles", None) or [])
+        integration_profiles = list(
+            getattr(manifest, "integration_profiles", None) or []
+        )
 
         logger.info(
             "Applying pulled config manifest: %d targets, %d profiles",
@@ -295,7 +322,7 @@ class EdgeCore:
         for plugin in self._plugin_manager._plugins.values():
             if not hasattr(plugin, "_context"):
                 continue
-            plugin._context["remote_targets"] = remote_targets
+            plugin._context["remote_targets"] = _filter_targets_for_plugin(remote_targets, plugin.name)
             plugin._context["integration_profiles"] = integration_profiles
             plugin._context["remote_manager"] = self._remote_manager
             if hasattr(plugin, "reinitialize"):

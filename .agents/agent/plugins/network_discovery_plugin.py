@@ -11,13 +11,12 @@ All paths go through the agent (Server -> Agent -> Target).
 import asyncio
 import logging
 import re
-import socket
-from datetime import timezone
+from datetime import UTC
 from typing import Any
 
 from agent.plugin import AgentPlugin
 
-_UTC = timezone.utc
+_UTC = UTC
 
 logger = logging.getLogger("mc-agent")
 
@@ -201,7 +200,7 @@ class NetworkDiscoveryPlugin(AgentPlugin):
             )
 
         # Wait for all pings (don't fail the whole scan if some time out)
-        try:
+        try:  # noqa: SIM105
             await asyncio.gather(*ping_procs, return_exceptions=True)
         except Exception:
             pass
@@ -242,7 +241,7 @@ class NetworkDiscoveryPlugin(AgentPlugin):
         lldp_remotes = await self._snmp_walk(
             switch_ip, "1.0.8802.1.1.2.1.4.1.1"  # lldpRemTable
         )
-        for chassis_oid, value in lldp_remotes.items():
+        for chassis_oid, value in lldp_remotes.items():  # noqa: B007
             parts = chassis_oid.split(".")
             if len(parts) >= 8:
                 chassis_id = ".".join(parts[7:])
@@ -303,7 +302,7 @@ class NetworkDiscoveryPlugin(AgentPlugin):
                 for (
                     error_indication,
                     error_status,
-                    error_index,
+                    error_index,  # noqa: B007
                     var_binds,
                 ) in CommandGenerator().bulkCmd(
                     community,

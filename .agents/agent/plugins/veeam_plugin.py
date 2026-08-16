@@ -66,19 +66,36 @@ class VeeamPlugin(AgentPlugin):
 
     def _find_remote_target_for_api_base(self) -> dict[str, Any] | None:
         """Find an SSH remote target whose hostname matches the Veeam API base."""
-        remote_targets = (self._context.get("remote_targets") or [])
+        remote_targets = self._context.get("remote_targets") or []
         if not self._api_base or not remote_targets:
             return None
         api_base = self._api_base.strip()
         if api_base.startswith("https://"):
-            api_base = api_base[len("https://"):]
+            api_base = api_base[len("https://") :]
         if api_base.startswith("http://"):
-            api_base = api_base[len("http://"):]
+            api_base = api_base[len("http://") :]
         hostname = api_base.split("/", 1)[0].split(":", 1)[0]
         for target in remote_targets:
             if not isinstance(target, dict):
                 continue
-            if target.get("hostname") == hostname and (target.get("protocol") or "").lower() == "ssh":
+            if (
+                target.get("hostname") == hostname
+                and (target.get("protocol") or "").lower() == "ssh"
+            ):
+                return target
+        return None
+
+    def _find_remote_target_for_plugin(self) -> dict[str, Any] | None:
+        """Find the first remote target configured with the Veeam plugin enabled."""
+        remote_targets = self._context.get("remote_targets") or []
+        for target in remote_targets:
+            if not isinstance(target, dict):
+                continue
+            target_plugins = (target.get("target_plugins") or "").strip()
+            if not target_plugins:
+                continue
+            plugins = {p.strip() for p in target_plugins.split(",") if p.strip()}
+            if "veeam" in plugins:
                 return target
         return None
 
@@ -124,6 +141,30 @@ class VeeamPlugin(AgentPlugin):
                 if remote_target:
                     self._ssh_target = remote_target
 
+        # If still not configured, try to derive from a remote target tagged with veeam plugin
+        if not self._api_base or not self._username:
+            target = self._find_remote_target_for_plugin()
+            if target:
+                hostname = target.get("hostname") or target.get("name") or ""
+                port = target.get("port") or 9419
+                username = target.get("username") or ""
+                password = target.get("password") or ""
+                ssh_key = target.get("ssh_key") or ""
+                self._api_base = f"https://{hostname}:{port}"
+                self._username = username or self._username
+                self._password = password or self._password
+                self._ssh_target = {
+                    "hostname": hostname,
+                    "port": port,
+                    "username": username or self._username,
+                    "password": password or self._password,
+                    "ssh_key": ssh_key or None,
+                    "protocol": target.get("protocol") or "ssh",
+                }
+                logger.info(
+                    "Veeam plugin configured from remote target %s", hostname
+                )
+
         system = platform.system()
 
         if system == "Windows":
@@ -131,7 +172,10 @@ class VeeamPlugin(AgentPlugin):
                 # Check if this Veeam server is also an SSH remote target
                 if not self._ssh_target:
                     self._ssh_target = self._find_remote_target_for_api_base()
-                if self._ssh_target and (self._ssh_target.get("protocol") or "").lower() == "ssh":
+                if (
+                    self._ssh_target
+                    and (self._ssh_target.get("protocol") or "").lower() == "ssh"
+                ):
                     self._use_relay = True
                     self._use_rest = False
                     logger.info(
@@ -141,7 +185,9 @@ class VeeamPlugin(AgentPlugin):
                     return
                 self._use_rest = True
                 self._use_relay = False
-                logger.info("Veeam plugin initialized for Windows REST API (%s)", self._api_base)
+                logger.info(
+                    "Veeam plugin initialized for Windows REST API (%s)", self._api_base
+                )
                 return
             self._has_module = await self._check_veeam()
             if not self._has_module:
@@ -158,10 +204,15 @@ class VeeamPlugin(AgentPlugin):
                 return
             if self._ssh_target:
                 self._use_relay = True
-                logger.info("Veeam plugin initialized for Linux via SSH relay (%s)", self._ssh_target.get("hostname"))
+                logger.info(
+                    "Veeam plugin initialized for Linux via SSH relay (%s)",
+                    self._ssh_target.get("hostname"),
+                )
             else:
                 self._use_rest = True
-                logger.info("Veeam plugin initialized for Linux REST API (%s)", self._api_base)
+                logger.info(
+                    "Veeam plugin initialized for Linux REST API (%s)", self._api_base
+                )
             return
 
         logger.warning("Veeam plugin not supported on %s", system)
@@ -179,7 +230,9 @@ class VeeamPlugin(AgentPlugin):
             return await self._collect_inventory_linux()
         return {"error": f"Unsupported platform: {platform.system()}"}
 
-    async def execute_command(self, command: str, args: dict[str, Any]) -> dict[str, Any]:
+    async def execute_command(
+        self, command: str, args: dict[str, Any]
+    ) -> dict[str, Any]:
         """Execute Veeam commands."""
         await self._ensure_configured()
         if self._use_relay:
@@ -205,7 +258,9 @@ class VeeamPlugin(AgentPlugin):
         if self._token and time.time() < (self._token_expires_at - 30):
             return
         if not self._api_base or not self._username or not self._password:
-            logger.warning("Veeam token acquisition skipped: missing api_base/username/password")
+            logger.warning(
+                "Veeam token acquisition skipped: missing api_base/username/password"
+            )
             return
         token_url = f"{self._api_base.rstrip('/')}/api/oauth2/token"
         body = {
@@ -232,7 +287,11 @@ class VeeamPlugin(AgentPlugin):
                 self._token_expires_at = time.time() + max(expires_in, 60)
                 logger.info("Veeam bearer token acquired; expires in %ss", expires_in)
             else:
-                logger.warning("Veeam token acquisition failed: %s -> %s", token_url, resp.status_code)
+                logger.warning(
+                    "Veeam token acquisition failed: %s -> %s",
+                    token_url,
+                    resp.status_code,
+                )
         except Exception as exc:
             logger.warning("Veeam token acquisition error: %s", exc)
 
@@ -261,7 +320,14 @@ class VeeamPlugin(AgentPlugin):
                 try:
                     parsed = resp.json()
                     if isinstance(parsed, dict):
-                        logger.info("Veeam REST %s data keys=%s count=%s", url, sorted(parsed.keys()), len(parsed.get("data", parsed)) if isinstance(parsed.get("data"), list) else "n/a")
+                        logger.info(
+                            "Veeam REST %s data keys=%s count=%s",
+                            url,
+                            sorted(parsed.keys()),
+                            len(parsed.get("data", parsed))
+                            if isinstance(parsed.get("data"), list)
+                            else "n/a",
+                        )
                     elif isinstance(parsed, list):
                         logger.info("Veeam REST %s items=%s", url, len(parsed))
                     return parsed
@@ -299,24 +365,45 @@ class VeeamPlugin(AgentPlugin):
                 "exit_code": resp.status_code,
             }
         except Exception as exc:
-            return {"success": False, "error": str(exc), "stdout": "", "stderr": str(exc), "exit_code": -1}
+            return {
+                "success": False,
+                "error": str(exc),
+                "stdout": "",
+                "stderr": str(exc),
+                "exit_code": -1,
+            }
 
     async def _collect_inventory_rest(self) -> dict[str, Any]:
         jobs = await self._rest_get("/api/v1/jobs")
-        logger.info("Veeam REST /jobs returned type=%s value=%s", type(jobs).__name__, str(jobs)[:200])
+        logger.info(
+            "Veeam REST /jobs returned type=%s value=%s",
+            type(jobs).__name__,
+            str(jobs)[:200],
+        )
         if jobs is None:
-            logger.info("Veeam REST /jobs failed, trying local PowerShell fallback on agent host")
+            logger.info(
+                "Veeam REST /jobs failed, trying local PowerShell fallback on agent host"
+            )
             jobs = await self._run_collector("jobs") or []
-            logger.info("Veeam local PowerShell jobs fallback returned %d jobs", len(jobs) if isinstance(jobs, list) else 0)
+            logger.info(
+                "Veeam local PowerShell jobs fallback returned %d jobs",
+                len(jobs) if isinstance(jobs, list) else 0,
+            )
         elif isinstance(jobs, list) and len(jobs) == 0:
-            logger.info("Veeam REST /jobs returned empty list, trying local PowerShell fallback")
+            logger.info(
+                "Veeam REST /jobs returned empty list, trying local PowerShell fallback"
+            )
             local_jobs = await self._run_collector("jobs") or []
-            logger.info("Veeam local PowerShell jobs fallback returned %d jobs", len(local_jobs))
+            logger.info(
+                "Veeam local PowerShell jobs fallback returned %d jobs", len(local_jobs)
+            )
             if local_jobs:
                 jobs = local_jobs
         sessions = await self._rest_get("/api/v1/sessions") or []
         repos = await self._rest_get("/api/v1/backupInfrastructure/repositories") or []
-        managed_servers = await self._rest_get("/api/v1/backupInfrastructure/managedServers") or []
+        managed_servers = (
+            await self._rest_get("/api/v1/backupInfrastructure/managedServers") or []
+        )
         restore_points = await self._rest_get("/api/v1/restorePoints") or []
         license = await self._rest_get("/api/v1/license") or {}
         return {
@@ -343,14 +430,26 @@ class VeeamPlugin(AgentPlugin):
                 async with httpx.AsyncClient(verify=False, timeout=10) as client:
                     resp = await client.get(url, headers=headers)
                 if resp.status_code == 200:
-                    return {"success": True, "available": True, "message": "Veeam REST API reachable"}
-                return {"success": False, "error": f"HTTP {resp.status_code}: {resp.text}", "available": False}
+                    return {
+                        "success": True,
+                        "available": True,
+                        "message": "Veeam REST API reachable",
+                    }
+                return {
+                    "success": False,
+                    "error": f"HTTP {resp.status_code}: {resp.text}",
+                    "available": False,
+                }
             except Exception as exc:
                 return {"success": False, "error": str(exc), "available": False}
         if command == "start_job":
-            return await self._rest_post(f"/api/v1/jobs/{args.get('job_id','')}/start", {})
+            return await self._rest_post(
+                f"/api/v1/jobs/{args.get('job_id', '')}/start", {}
+            )
         if command == "stop_job":
-            return await self._rest_post(f"/api/v1/jobs/{args.get('job_id','')}/stop", {})
+            return await self._rest_post(
+                f"/api/v1/jobs/{args.get('job_id', '')}/stop", {}
+            )
         return {"success": False, "error": f"Unknown REST command: {command}"}
 
     # ------------------------------------------------------------------
@@ -373,7 +472,7 @@ class VeeamPlugin(AgentPlugin):
                 )
                 try:
                     await asyncio.wait_for(proc.communicate(), timeout=10)
-                except asyncio.TimeoutError:
+                except TimeoutError:
                     return False
                 if proc.returncode == 0:
                     return True
@@ -391,8 +490,12 @@ class VeeamPlugin(AgentPlugin):
                 stderr=asyncio.subprocess.PIPE,
             )
             stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout)
-            stdout_text = stdout.decode("utf-8", errors="replace").strip() if stdout else ""
-            stderr_text = stderr.decode("utf-8", errors="replace").strip() if stderr else ""
+            stdout_text = (
+                stdout.decode("utf-8", errors="replace").strip() if stdout else ""
+            )
+            stderr_text = (
+                stderr.decode("utf-8", errors="replace").strip() if stderr else ""
+            )
             data = None
             if stdout_text:
                 try:
@@ -406,10 +509,22 @@ class VeeamPlugin(AgentPlugin):
                 "exit_code": proc.returncode,
                 "data": data,
             }
-        except asyncio.TimeoutError:
-            return {"success": False, "stdout": "", "stderr": "timeout", "exit_code": -1, "data": None}
+        except TimeoutError:
+            return {
+                "success": False,
+                "stdout": "",
+                "stderr": "timeout",
+                "exit_code": -1,
+                "data": None,
+            }
         except Exception as exc:
-            return {"success": False, "stdout": "", "stderr": str(exc), "exit_code": -1, "data": None}
+            return {
+                "success": False,
+                "stdout": "",
+                "stderr": str(exc),
+                "exit_code": -1,
+                "data": None,
+            }
 
     async def _run_script_file(self, script: str, timeout: int = 60) -> dict[str, Any]:
         try:
@@ -419,14 +534,22 @@ class VeeamPlugin(AgentPlugin):
                     f.write(script)
                 proc = await asyncio.create_subprocess_exec(
                     "powershell",
-                    "-ExecutionPolicy", "Bypass",
-                    "-File", path,
+                    "-ExecutionPolicy",
+                    "Bypass",
+                    "-File",
+                    path,
                     stdout=asyncio.subprocess.PIPE,
                     stderr=asyncio.subprocess.PIPE,
                 )
-                stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout)
-                stdout_text = stdout.decode("utf-8", errors="replace").strip() if stdout else ""
-                stderr_text = stderr.decode("utf-8", errors="replace").strip() if stderr else ""
+                stdout, stderr = await asyncio.wait_for(
+                    proc.communicate(), timeout=timeout
+                )
+                stdout_text = (
+                    stdout.decode("utf-8", errors="replace").strip() if stdout else ""
+                )
+                stderr_text = (
+                    stderr.decode("utf-8", errors="replace").strip() if stderr else ""
+                )
                 data = None
                 if stdout_text:
                     try:
@@ -442,10 +565,22 @@ class VeeamPlugin(AgentPlugin):
                 }
             finally:
                 Path(path).unlink(missing_ok=True)
-        except asyncio.TimeoutError:
-            return {"success": False, "stdout": "", "stderr": "timeout", "exit_code": -1, "data": None}
+        except TimeoutError:
+            return {
+                "success": False,
+                "stdout": "",
+                "stderr": "timeout",
+                "exit_code": -1,
+                "data": None,
+            }
         except Exception as exc:
-            return {"success": False, "stdout": "", "stderr": str(exc), "exit_code": -1, "data": None}
+            return {
+                "success": False,
+                "stdout": "",
+                "stderr": str(exc),
+                "exit_code": -1,
+                "data": None,
+            }
 
     async def _collect_inventory_windows(self) -> dict[str, Any]:
         """Collect Veeam inventory from local PowerShell."""
@@ -468,7 +603,9 @@ class VeeamPlugin(AgentPlugin):
             "license": license,
         }
 
-    async def _execute_windows(self, command: str, args: dict[str, Any]) -> dict[str, Any]:
+    async def _execute_windows(
+        self, command: str, args: dict[str, Any]
+    ) -> dict[str, Any]:
         """Execute Veeam commands on Windows."""
         handlers = {
             "test_connection": self._test_connection_windows,
@@ -483,7 +620,10 @@ class VeeamPlugin(AgentPlugin):
     async def _test_connection_windows(self, args: dict[str, Any]) -> dict[str, Any]:
         """Test Veeam PowerShell module availability on Windows."""
         if not self._has_module:
-            return {"success": False, "error": "Veeam PowerShell module not available on this host"}
+            return {
+                "success": False,
+                "error": "Veeam PowerShell module not available on this host",
+            }
 
         script = (
             "Import-Module Veeam.Backup.PowerShell -ErrorAction SilentlyContinue; "
@@ -500,7 +640,12 @@ class VeeamPlugin(AgentPlugin):
         )
         result = await self._run_script(script, timeout=30)
         if not result["success"]:
-            return {"success": False, "error": result["stderr"], "stdout": result["stdout"], "exit_code": result["exit_code"]}
+            return {
+                "success": False,
+                "error": result["stderr"],
+                "stdout": result["stdout"],
+                "exit_code": result["exit_code"],
+            }
 
         payload = result["data"]
         if isinstance(payload, list):
@@ -534,7 +679,9 @@ class VeeamPlugin(AgentPlugin):
     async def _collect_inventory_linux(self) -> dict[str, Any]:
         return await self._collect_inventory_rest()
 
-    async def _execute_linux(self, command: str, args: dict[str, Any]) -> dict[str, Any]:
+    async def _execute_linux(
+        self, command: str, args: dict[str, Any]
+    ) -> dict[str, Any]:
         return await self._execute_rest(command, args)
 
     async def _collect_inventory_relay(self) -> dict[str, Any]:
@@ -546,9 +693,13 @@ class VeeamPlugin(AgentPlugin):
         repos = await self._run_collector_via_relay("repositories")
         logger.info("Veeam relay repos collected=%d", len(repos or []))
         managed_servers = await self._run_collector_via_relay("managed_servers")
-        logger.info("Veeam relay managed_servers collected=%d", len(managed_servers or []))
+        logger.info(
+            "Veeam relay managed_servers collected=%d", len(managed_servers or [])
+        )
         restore_points = await self._run_collector_via_relay("restore_points")
-        logger.info("Veeam relay restore_points collected=%d", len(restore_points or []))
+        logger.info(
+            "Veeam relay restore_points collected=%d", len(restore_points or [])
+        )
         license = await self._run_collector_via_relay("license")
         logger.info("Veeam relay license collected=%s", bool(license))
         return {
@@ -560,26 +711,46 @@ class VeeamPlugin(AgentPlugin):
             "license": license or {},
         }
 
-    async def _execute_relay(self, command: str, args: dict[str, Any]) -> dict[str, Any]:
+    async def _execute_relay(
+        self, command: str, args: dict[str, Any]
+    ) -> dict[str, Any]:
         if command == "test_connection":
             result = await self._run_collector_via_relay("license")
             if result is None:
-                return {"success": False, "error": "Veeam relay test failed", "available": False}
-            return {"success": True, "available": True, "message": "Veeam SSH relay reachable"}
+                return {
+                    "success": False,
+                    "error": "Veeam relay test failed",
+                    "available": False,
+                }
+            return {
+                "success": True,
+                "available": True,
+                "message": "Veeam SSH relay reachable",
+            }
         if command == "start_job":
             script = (
                 "Import-Module Veeam.Backup.PowerShell -ErrorAction SilentlyContinue; "
-                f"Start-VBRJob -JobId {args.get('job_id','')} -ErrorAction Stop | ConvertTo-Json -Compress"
+                f"Start-VBRJob -JobId {args.get('job_id', '')} -ErrorAction Stop | ConvertTo-Json -Compress"
             )
             result = await self._run_script_via_relay(script, timeout=60)
-            return {"success": result.get("success", False), "stdout": result.get("stdout", ""), "stderr": result.get("stderr", ""), "exit_code": result.get("exit_code", -1)}
+            return {
+                "success": result.get("success", False),
+                "stdout": result.get("stdout", ""),
+                "stderr": result.get("stderr", ""),
+                "exit_code": result.get("exit_code", -1),
+            }
         if command == "stop_job":
             script = (
                 "Import-Module Veeam.Backup.PowerShell -ErrorAction SilentlyContinue; "
-                f"Stop-VBRJob -JobId {args.get('job_id','')} -ErrorAction Stop | ConvertTo-Json -Compress"
+                f"Stop-VBRJob -JobId {args.get('job_id', '')} -ErrorAction Stop | ConvertTo-Json -Compress"
             )
             result = await self._run_script_via_relay(script, timeout=60)
-            return {"success": result.get("success", False), "stdout": result.get("stdout", ""), "stderr": result.get("stderr", ""), "exit_code": result.get("exit_code", -1)}
+            return {
+                "success": result.get("success", False),
+                "stdout": result.get("stdout", ""),
+                "stderr": result.get("stderr", ""),
+                "exit_code": result.get("exit_code", -1),
+            }
         return {"success": False, "error": f"Unknown relay command: {command}"}
 
     async def _run_collector_via_relay(self, collector: str) -> Any:
@@ -644,34 +815,57 @@ class VeeamPlugin(AgentPlugin):
     # Relay fallback for Windows backend inventory
     # ------------------------------------------------------------------
 
-    async def _run_script_via_relay(self, script: str, timeout: int = 60) -> dict[str, Any]:
+    async def _run_script_via_relay(
+        self, script: str, timeout: int = 60
+    ) -> dict[str, Any]:
         """Execute a PowerShell script on the Veeam server via SSH relay."""
-        remote_manager = (self._context.get("remote_manager") or None)
+        remote_manager = self._context.get("remote_manager") or None
         if remote_manager is None:
             logger.warning("Veeam relay skipped: remote_manager not in plugin context")
-            return {"success": False, "stdout": "", "stderr": "no remote_manager", "exit_code": -1, "data": None}
+            return {
+                "success": False,
+                "stdout": "",
+                "stderr": "no remote_manager",
+                "exit_code": -1,
+                "data": None,
+            }
 
         if not self._api_base:
             logger.warning("Veeam relay skipped: api_base not configured")
-            return {"success": False, "stdout": "", "stderr": "no api_base", "exit_code": -1, "data": None}
+            return {
+                "success": False,
+                "stdout": "",
+                "stderr": "no api_base",
+                "exit_code": -1,
+                "data": None,
+            }
 
         hostname = ""
         api_base = self._api_base.strip()
         if api_base.startswith("https://"):
-            api_base = api_base[len("https://"):]
+            api_base = api_base[len("https://") :]
         if api_base.startswith("http://"):
-            api_base = api_base[len("http://"):]
+            api_base = api_base[len("http://") :]
         hostname = api_base.split("/", 1)[0].split(":", 1)[0]
 
         target_id = None
         for tid, target in (getattr(remote_manager, "targets", {}) or {}).items():
-            if target.get("hostname") == hostname and (target.get("protocol") or "").lower() == "ssh":
+            if (
+                target.get("hostname") == hostname
+                and (target.get("protocol") or "").lower() == "ssh"
+            ):
                 target_id = tid
                 break
 
         if target_id is None:
             logger.warning("Veeam relay skipped: no SSH target for host %s", hostname)
-            return {"success": False, "stdout": "", "stderr": f"no ssh target for {hostname}", "exit_code": -1, "data": None}
+            return {
+                "success": False,
+                "stdout": "",
+                "stderr": f"no ssh target for {hostname}",
+                "exit_code": -1,
+                "data": None,
+            }
 
         encoded = self._encode_powershell(script)
         ps_command = f"powershell -NoProfile -NonInteractive -EncodedCommand {encoded}"
@@ -691,9 +885,11 @@ class VeeamPlugin(AgentPlugin):
 
     async def _collect_jobs_via_relay(self) -> list[dict[str, Any]]:
         """Collect Veeam jobs from the Windows backend via agent SSH relay."""
-        remote_manager = (self._context.get("remote_manager") or None)
+        remote_manager = self._context.get("remote_manager") or None
         if remote_manager is None:
-            logger.warning("Veeam jobs relay skipped: remote_manager not in plugin context")
+            logger.warning(
+                "Veeam jobs relay skipped: remote_manager not in plugin context"
+            )
             return []
 
         if not self._api_base:
@@ -703,20 +899,25 @@ class VeeamPlugin(AgentPlugin):
         hostname = ""
         api_base = self._api_base.strip()
         if api_base.startswith("https://"):
-            api_base = api_base[len("https://"):]
+            api_base = api_base[len("https://") :]
         if api_base.startswith("http://"):
-            api_base = api_base[len("http://"):]
+            api_base = api_base[len("http://") :]
         hostname = api_base.split("/", 1)[0].split(":", 1)[0]
         if not hostname:
             return []
 
         target_id = None
         for tid, target in (remote_manager.targets or {}).items():
-            if target.get("hostname") == hostname and (target.get("protocol") or "").lower() == "ssh":
+            if (
+                target.get("hostname") == hostname
+                and (target.get("protocol") or "").lower() == "ssh"
+            ):
                 target_id = tid
                 break
         if target_id is None:
-            logger.warning("Veeam jobs relay skipped: no SSH target for host %s", hostname)
+            logger.warning(
+                "Veeam jobs relay skipped: no SSH target for host %s", hostname
+            )
             return []
 
         sql = (
@@ -731,8 +932,8 @@ class VeeamPlugin(AgentPlugin):
             "SUM(CASE WHEN js.result = 0 THEN 1 ELSE 0 END) AS success_count, "
             "SUM(CASE WHEN js.result = 1 THEN 1 ELSE 0 END) AS warning_count, "
             "SUM(CASE WHEN js.result = 2 THEN 1 ELSE 0 END) AS failed_count "
-            "FROM \"backup.model.jobsessions\" js "
-            "LEFT JOIN \"backup.model.backupjobsessions\" bs ON bs.id = js.id "
+            'FROM "backup.model.jobsessions" js '
+            'LEFT JOIN "backup.model.backupjobsessions" bs ON bs.id = js.id '
             "WHERE js.job_name NOT LIKE '%Resynchronize%' "
             "AND js.job_name NOT LIKE '%Host Discovery%' "
             "AND js.job_name NOT LIKE '%Foreign transform%' "
@@ -770,6 +971,7 @@ class VeeamPlugin(AgentPlugin):
     def _encode_powershell(script: str) -> str:
         """Encode a PowerShell script as base64 UTF-16LE for -EncodedCommand."""
         import base64
+
         encoded = base64.b64encode(script.encode("utf-16-le")).decode("ascii")
         return encoded
 
@@ -781,18 +983,20 @@ class VeeamPlugin(AgentPlugin):
             cols = line.split("|")
             if len(cols) < 9:
                 continue
-            rows.append({
-                "job_name": cols[0].strip(),
-                "session_count": int(cols[1].strip() or 0),
-                "processed_bytes": int(cols[2].strip() or 0),
-                "read_bytes": int(cols[3].strip() or 0),
-                "stored_bytes": int(cols[4].strip() or 0),
-                "avg_speed": float(cols[5].strip() or 0),
-                "last_run": cols[6].strip() or None,
-                "success_count": int(cols[7].strip() or 0),
-                "warning_count": int(cols[8].strip() or 0),
-                "failed_count": int(cols[9].strip() or 0) if len(cols) > 9 else 0,
-            })
+            rows.append(
+                {
+                    "job_name": cols[0].strip(),
+                    "session_count": int(cols[1].strip() or 0),
+                    "processed_bytes": int(cols[2].strip() or 0),
+                    "read_bytes": int(cols[3].strip() or 0),
+                    "stored_bytes": int(cols[4].strip() or 0),
+                    "avg_speed": float(cols[5].strip() or 0),
+                    "last_run": cols[6].strip() or None,
+                    "success_count": int(cols[7].strip() or 0),
+                    "warning_count": int(cols[8].strip() or 0),
+                    "failed_count": int(cols[9].strip() or 0) if len(cols) > 9 else 0,
+                }
+            )
         return rows
 
     # ------------------------------------------------------------------
@@ -854,26 +1058,37 @@ class VeeamPlugin(AgentPlugin):
             script = "\r\n".join(ps1)
             result = await self._run_script_file(script, timeout=90)
             if not result["success"]:
-                logger.error("Veeam local PowerShell jobs collector failed: stderr=%s", result.get("stderr", ""))
+                logger.error(
+                    "Veeam local PowerShell jobs collector failed: stderr=%s",
+                    result.get("stderr", ""),
+                )
                 return []
             stdout = (result.get("stdout") or "").strip()
             if not stdout:
-                logger.error("Veeam local PowerShell jobs collector returned empty stdout")
+                logger.error(
+                    "Veeam local PowerShell jobs collector returned empty stdout"
+                )
                 return []
             jobs = self._parse_json_array(stdout)
-            logger.info("Veeam local PowerShell jobs collector returned %d jobs", len(jobs))
+            logger.info(
+                "Veeam local PowerShell jobs collector returned %d jobs", len(jobs)
+            )
             if len(jobs) == 0:
-                logger.warning("Local jobs collector returned 0 jobs, trying SSH relay fallback")
+                logger.warning(
+                    "Local jobs collector returned 0 jobs, trying SSH relay fallback"
+                )
                 relay_jobs = await self._collect_jobs_via_relay()
                 if relay_jobs:
-                    logger.info("Veeam SSH relay jobs collector returned %d jobs", len(relay_jobs))
+                    logger.info(
+                        "Veeam SSH relay jobs collector returned %d jobs",
+                        len(relay_jobs),
+                    )
                     return relay_jobs
             return jobs
 
         if collector == "sessions":
             script = (
-                prefix
-                + "Get-VBRSession -Last 200 | ForEach-Object { "
+                prefix + "Get-VBRSession -Last 200 | ForEach-Object { "
                 "  @{"
                 "    id=$_.Id.ToString(); "
                 "    jobId=$_.JobId.ToString(); "
@@ -894,8 +1109,7 @@ class VeeamPlugin(AgentPlugin):
 
         if collector == "repositories":
             script = (
-                prefix
-                + "Get-VBRBackupRepository | ForEach-Object { "
+                prefix + "Get-VBRBackupRepository | ForEach-Object { "
                 "  @{"
                 "    id=$_.Id.ToString(); "
                 "    name=$_.Name; "
@@ -913,8 +1127,7 @@ class VeeamPlugin(AgentPlugin):
 
         if collector == "managed_servers":
             script = (
-                prefix
-                + "Get-VBRServer | ForEach-Object { "
+                prefix + "Get-VBRServer | ForEach-Object { "
                 "  @{"
                 "    id=$_.Id.ToString(); "
                 "    name=$_.Name; "
@@ -948,8 +1161,7 @@ class VeeamPlugin(AgentPlugin):
 
         if collector == "license":
             script = (
-                prefix
-                + "$ver = (Get-Module Veeam.Backup.PowerShell).Version; "
+                prefix + "$ver = (Get-Module Veeam.Backup.PowerShell).Version; "
                 "$jobCount = (Get-VBRJob -ErrorAction SilentlyContinue | Measure-Object | Select-Object -ExpandProperty Count); "
                 "if ($ver) { "
                 "  @{"

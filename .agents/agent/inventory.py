@@ -327,11 +327,7 @@ class InventoryCollector:
                 timeout=30,
                 stderr=subprocess.DEVNULL,
             ).decode()
-            return [
-                p.strip()
-                for p in out.strip().split("\n")
-                if p.strip()
-            ][:200]
+            return [p.strip() for p in out.strip().split("\n") if p.strip()][:200]
         except Exception:
             return []
 
@@ -370,11 +366,22 @@ class InventoryCollector:
         elif system == "Windows":
             try:
                 out = subprocess.check_output(
-                    ["wmic", "bios", "get", "Manufacturer,SMBIOSBIOSVersion,ReleaseDate"],
+                    [
+                        "wmic",
+                        "bios",
+                        "get",
+                        "Manufacturer,SMBIOSBIOSVersion,ReleaseDate",
+                    ],
                     timeout=10,
                     stderr=subprocess.DEVNULL,
                 ).decode(errors="replace")
-                lines = [l.strip() for l in out.strip().split("\n") if l.strip() and l.strip().upper() not in ("MANUFACTURER", "SMBIOSBIOSVERSION", "RELEASEDATE")]
+                lines = [
+                    length.strip()
+                    for length in out.strip().split("\n")
+                    if length.strip()
+                    and length.strip().upper()
+                    not in ("MANUFACTURER", "SMBIOSBIOSVERSION", "RELEASEDATE")
+                ]
                 if len(lines) >= 3:
                     info["vendor"] = lines[0]
                     info["version"] = lines[1]
@@ -425,7 +432,11 @@ class InventoryCollector:
         elif system == "Windows":
             try:
                 out = subprocess.check_output(
-                    ["powershell", "-Command", "Get-Tpm | Select-Object -Property TpmPresent,TpmEnabled,TpmReady"],
+                    [
+                        "powershell",
+                        "-Command",
+                        "Get-Tpm | Select-Object -Property TpmPresent,TpmEnabled,TpmReady",
+                    ],
                     timeout=10,
                     stderr=subprocess.DEVNULL,
                 ).decode()
@@ -433,7 +444,11 @@ class InventoryCollector:
                 for line in out.strip().split("\n"):
                     line = line.strip()
                     if "True" in line or "False" in line:
-                        parts = [p.strip() for p in line.split() if p.strip() in ("True", "False")]
+                        parts = [
+                            p.strip()
+                            for p in line.split()
+                            if p.strip() in ("True", "False")
+                        ]
                         if len(parts) >= 3:
                             info["present"] = parts[0] == "True"
                             info["enabled"] = parts[1] == "True"
@@ -474,7 +489,13 @@ class InventoryCollector:
                     timeout=10,
                     stderr=subprocess.DEVNULL,
                 ).decode(errors="replace")
-                lines = [l.strip() for l in out.strip().split("\n") if l.strip() and l.strip().upper() not in ("MANUFACTURER", "PRODUCT", "SERIALNUMBER")]
+                lines = [
+                    length.strip()
+                    for length in out.strip().split("\n")
+                    if length.strip()
+                    and length.strip().upper()
+                    not in ("MANUFACTURER", "PRODUCT", "SERIALNUMBER")
+                ]
                 if len(lines) >= 3:
                     info["manufacturer"] = lines[0]
                     info["model"] = lines[1]
@@ -494,7 +515,12 @@ class InventoryCollector:
                         key, _, val = line.partition(":")
                         key = key.strip().lower().replace(" ", "_")
                         val = val.strip()
-                        if key in ("model_name", "model_identifier", "manufacturer", "serial_number"):
+                        if key in (
+                            "model_name",
+                            "model_identifier",
+                            "manufacturer",
+                            "serial_number",
+                        ):
                             info[key] = val
             except Exception:
                 pass
@@ -520,7 +546,11 @@ class InventoryCollector:
             chassis = ""
 
             if system == "Linux":
-                for attr, path in (("vendor", vendor_path), ("board", board_path), ("chassis", chassis_path)):
+                for attr, path in (
+                    ("vendor", vendor_path),
+                    ("board", board_path),
+                    ("chassis", chassis_path),
+                ):
                     try:
                         if os.path.exists(path):
                             with open(path) as f:
@@ -567,12 +597,13 @@ class InventoryCollector:
                 ("/run/cloud-init/instance-data.json", None, None),
                 ("/var/lib/cloud/data/instance-id", None, None),
             ]
-            for path, match_str, provider in cloud_checks:
+            for path, match_str, provider in cloud_checks:  # noqa: B007
                 try:
                     if not os.path.exists(path):
                         continue
                     if path.endswith(".json"):
                         import json
+
                         with open(path) as f:
                             data = json.load(f)
                         ds = data.get("ds", {}).get("meta_data", {})
@@ -619,7 +650,9 @@ class InventoryCollector:
                         timeout=10,
                         stderr=subprocess.DEVNULL,
                     ).decode()
-                    info["pending_count"] = len([l for l in out.strip().split("\n") if l.strip()])
+                    info["pending_count"] = len(
+                        [length for length in out.strip().split("\n") if length.strip()]
+                    )
                 except Exception:
                     pass
             except Exception:
@@ -629,11 +662,17 @@ class InventoryCollector:
                         timeout=30,
                         stderr=subprocess.DEVNULL,
                     ).decode()
-                    info["pending_count"] = len([l for l in out.strip().split("\n") if l.strip()])
+                    info["pending_count"] = len(
+                        [length for length in out.strip().split("\n") if length.strip()]
+                    )
                     info["available"] = info["pending_count"] > 0
                 except subprocess.CalledProcessError as e:
                     if e.output:
-                        lines = [l for l in e.output.decode().strip().split("\n") if l.strip()]
+                        lines = [
+                            length
+                            for length in e.output.decode().strip().split("\n")
+                            if length.strip()
+                        ]
                         info["pending_count"] = max(0, len(lines) - 1)
                         info["available"] = info["pending_count"] > 0
                 except Exception:
@@ -641,12 +680,19 @@ class InventoryCollector:
 
         elif system == "Windows":
             try:
-                out = subprocess.check_output(
-                    ["powershell", "-Command",
-                     "(New-Object -ComObject Microsoft.Update.Session).CreateUpdateSearcher().Search('IsInstalled=0').Updates.Count"],
-                    timeout=30,
-                    stderr=subprocess.DEVNULL,
-                ).decode().strip()
+                out = (
+                    subprocess.check_output(
+                        [
+                            "powershell",
+                            "-Command",
+                            "(New-Object -ComObject Microsoft.Update.Session).CreateUpdateSearcher().Search('IsInstalled=0').Updates.Count",
+                        ],
+                        timeout=30,
+                        stderr=subprocess.DEVNULL,
+                    )
+                    .decode()
+                    .strip()
+                )
                 info["pending_count"] = int(out) if out.isdigit() else 0
                 info["available"] = info["pending_count"] > 0
             except Exception:

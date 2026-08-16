@@ -47,9 +47,7 @@ class AgentDiagnostics:
 
             loop = asyncio.new_event_loop()
             try:
-                loop.run_until_complete(
-                    self.client.get("/api/v1/health/live")
-                )
+                loop.run_until_complete(self.client.get("/api/v1/health/live"))
                 latency = (time.monotonic() - start) * 1000
                 return {
                     "name": "api_connectivity",
@@ -108,9 +106,7 @@ class AgentDiagnostics:
 
             loop = asyncio.new_event_loop()
             try:
-                result = loop.run_until_complete(
-                    self.client.get("/api/v1/health/time")
-                )
+                result = loop.run_until_complete(self.client.get("/api/v1/health/time"))
                 latency = (time.monotonic() - start) * 1000
                 server_time = result.get("time", 0)
                 local_time = time.time()
@@ -245,8 +241,12 @@ class AgentDiagnostics:
     def check_queue_health(self, queue: Any) -> dict[str, Any]:
         """Check command queue for stuck items."""
         try:
-            pending = queue.get_pending_count() if hasattr(queue, "get_pending_count") else 0
-            results = queue.get_results_count() if hasattr(queue, "get_results_count") else 0
+            pending = (
+                queue.get_pending_count() if hasattr(queue, "get_pending_count") else 0
+            )
+            results = (
+                queue.get_results_count() if hasattr(queue, "get_results_count") else 0
+            )
 
             if pending > 100:
                 status = "warning"
@@ -275,7 +275,11 @@ class AgentDiagnostics:
     def check_plugin_health(self, plugin_manager: Any) -> dict[str, Any]:
         """Check all plugins are responding."""
         try:
-            active = plugin_manager.get_active_plugins() if hasattr(plugin_manager, "get_active_plugins") else None
+            active = (
+                plugin_manager.get_active_plugins()
+                if hasattr(plugin_manager, "get_active_plugins")
+                else None
+            )
             count = len(active) if active else 0
 
             return {
@@ -308,9 +312,7 @@ class AgentDiagnostics:
 
             loop = asyncio.new_event_loop()
             try:
-                loop.run_until_complete(
-                    self.client.get("/api/v1/health/live")
-                )
+                loop.run_until_complete(self.client.get("/api/v1/health/live"))
                 latency = (time.monotonic() - start) * 1000
 
                 if latency > 5000:
@@ -340,7 +342,11 @@ class AgentDiagnostics:
     def check_config_integrity(self) -> dict[str, Any]:
         """Verify config file is readable and valid."""
         try:
-            config_path = self.config.config_dir / "config.yaml" if hasattr(self.config, "config_dir") else None
+            config_path = (
+                self.config.config_dir / "config.yaml"
+                if hasattr(self.config, "config_dir")
+                else None
+            )
             if config_path and config_path.exists():
                 import yaml
 
@@ -367,7 +373,9 @@ class AgentDiagnostics:
                 "latency_ms": 0.0,
             }
 
-    def get_health_summary(self, checks: list[dict[str, Any]] | None = None) -> dict[str, Any]:
+    def get_health_summary(
+        self, checks: list[dict[str, Any]] | None = None
+    ) -> dict[str, Any]:
         """Return overall health status with all check results."""
         if checks is None:
             checks = self.run_all_checks()

@@ -66,7 +66,7 @@ class AgentUpdater:
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
             )
-            stdout, stderr = await asyncio.wait_for(
+            stdout, stderr = await asyncio.wait_for(  # noqa: RUF059
                 proc.communicate(), timeout=120,
             )
 
