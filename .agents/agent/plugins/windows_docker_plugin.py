@@ -43,9 +43,7 @@ class DockerWindowsPlugin(AgentPlugin):
             containers_json = await self._powershell(
                 "docker ps -a --format '{{json .}}'"
             )
-            images_json = await self._powershell(
-                "docker images --format '{{json .}}'"
-            )
+            images_json = await self._powershell("docker images --format '{{json .}}'")
             info_json = await self._powershell("docker info --format '{{json .}}'")
 
             containers = []
@@ -77,7 +75,9 @@ class DockerWindowsPlugin(AgentPlugin):
 
             return {
                 "available": True,
-                "version": info.get("ServerVersion") or info.get("Version") or "unknown",
+                "version": info.get("ServerVersion")
+                or info.get("Version")
+                or "unknown",
                 "container_count": len(containers),
                 "image_count": len(images),
                 "containers": [
@@ -103,7 +103,9 @@ class DockerWindowsPlugin(AgentPlugin):
             logger.warning("Docker Windows inventory failed: %s", exc)
             return {"available": False, "error": str(exc)}
 
-    async def execute_command(self, command: str, args: dict[str, Any]) -> dict[str, Any]:
+    async def execute_command(
+        self, command: str, args: dict[str, Any]
+    ) -> dict[str, Any]:
         return {"success": False, "error": f"Unknown command: {command}"}
 
     async def _powershell(self, script: str) -> str:

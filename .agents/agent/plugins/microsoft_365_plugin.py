@@ -37,13 +37,18 @@ class Microsoft365Plugin(AgentPlugin):
                 return True
             logger.warning("M365 plugin auth failed")
             return False
-        logger.info("M365 plugin not configured (set MC_M365_TENANT_ID/CLIENT_ID/CLIENT_SECRET)")
+        logger.info(
+            "M365 plugin not configured (set MC_M365_TENANT_ID/CLIENT_ID/CLIENT_SECRET)"
+        )
         return False
 
     async def _get_token(self) -> str | None:
         try:
             import httpx
-            url = f"https://login.microsoftonline.com/{self._tenant_id}/oauth2/v2.0/token"
+
+            url = (
+                f"https://login.microsoftonline.com/{self._tenant_id}/oauth2/v2.0/token"
+            )
             data = {
                 "grant_type": "client_credentials",
                 "client_id": self._client_id,
@@ -63,9 +68,12 @@ class Microsoft365Plugin(AgentPlugin):
             return None
         try:
             import httpx
+
             headers = {"Authorization": f"Bearer {self._token}"}
             async with httpx.AsyncClient(timeout=30) as client:
-                resp = await client.get(f"https://graph.microsoft.com/v1.0/{endpoint}", headers=headers)
+                resp = await client.get(
+                    f"https://graph.microsoft.com/v1.0/{endpoint}", headers=headers
+                )
                 return resp.json()
         except Exception as e:
             logger.warning("Graph API call failed: %s", e)
@@ -76,10 +84,18 @@ class Microsoft365Plugin(AgentPlugin):
             return {"available": False, "error": "Not authenticated"}
 
         org = await self._graph_get("organization")
-        users_data = await self._graph_get("users?$select=id,displayName,userPrincipalName,accountEnabled,assignedLicenses&$top=100")
-        groups_data = await self._graph_get("groups?$select=id,displayName,description,groupTypes,visibility&$top=100")
-        devices_data = await self._graph_get("deviceManagement/managedDevices?$select=id,deviceName,operatingSystem,complianceState,lastSyncDateTime&$top=100")
-        health_data = await self._graph_get("admin/serviceAnnouncement/healthOverviews?$top=5")
+        users_data = await self._graph_get(
+            "users?$select=id,displayName,userPrincipalName,accountEnabled,assignedLicenses&$top=100"
+        )
+        groups_data = await self._graph_get(
+            "groups?$select=id,displayName,description,groupTypes,visibility&$top=100"
+        )
+        devices_data = await self._graph_get(
+            "deviceManagement/managedDevices?$select=id,deviceName,operatingSystem,complianceState,lastSyncDateTime&$top=100"
+        )
+        health_data = await self._graph_get(
+            "admin/serviceAnnouncement/healthOverviews?$top=5"
+        )
 
         users = (users_data or {}).get("value", [])
         groups = (groups_data or {}).get("value", [])
@@ -95,5 +111,7 @@ class Microsoft365Plugin(AgentPlugin):
             "service_health": health,
         }
 
-    async def execute_command(self, command: str, args: dict[str, Any]) -> dict[str, Any]:
+    async def execute_command(
+        self, command: str, args: dict[str, Any]
+    ) -> dict[str, Any]:
         return {"success": False, "error": f"Unknown command: {command}"}

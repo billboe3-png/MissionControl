@@ -29,7 +29,9 @@ class NetworkAIPlugin:
     platform_required = None
 
     def __init__(self, data_dir: Path | None = None):
-        self._data_dir = data_dir or Path.home() / ".local" / "share" / "mission-control-agent"
+        self._data_dir = (
+            data_dir or Path.home() / ".local" / "share" / "mission-control-agent"
+        )
         self._interactions_path = self._data_dir / "network_ai_interactions.jsonl"
         self._config: dict[str, Any] = {
             "enabled": True,
@@ -54,7 +56,9 @@ class NetworkAIPlugin:
             "interactions_total": self._count_interactions(),
         }
 
-    async def execute_command(self, command: str, args: dict[str, Any]) -> dict[str, Any]:
+    async def execute_command(
+        self, command: str, args: dict[str, Any]
+    ) -> dict[str, Any]:
         if command == "ask":
             return await self._handle_ask(args)
         if command == "status":
@@ -81,9 +85,6 @@ class NetworkAIPlugin:
 
         # Try server-side AI endpoint via existing client
         try:
-            from agent.config import AgentSettings
-            from agent.client import AgentClient
-
             # We don't have config here; best-effort using env
             server_url = os.environ.get("MC_SERVER_URL", "").rstrip("/")
             api_key = os.environ.get("MC_API_KEY", "")
@@ -93,6 +94,7 @@ class NetworkAIPlugin:
                 return self._local_fallback(question, context)
 
             import httpx
+
             async with httpx.AsyncClient(timeout=20) as client:
                 response = await client.post(
                     f"{server_url}/api/v1/edge/{agent_id}/ai/ask",
@@ -159,6 +161,7 @@ class NetworkAIPlugin:
         }
         try:
             import psutil
+
             context["cpu_percent"] = psutil.cpu_percent(interval=0.1)
             context["memory_percent"] = psutil.virtual_memory().percent
         except Exception:
@@ -167,13 +170,15 @@ class NetworkAIPlugin:
 
     def _log_interaction(self, question: str, response: dict[str, Any]) -> None:
         try:
-            line = json.dumps({
-                "question": question,
-                "answer": response.get("answer"),
-                "confidence": response.get("confidence"),
-                "sources": response.get("sources"),
-                "timestamp": response.get("timestamp"),
-            })
+            line = json.dumps(
+                {
+                    "question": question,
+                    "answer": response.get("answer"),
+                    "confidence": response.get("confidence"),
+                    "sources": response.get("sources"),
+                    "timestamp": response.get("timestamp"),
+                }
+            )
             with open(self._interactions_path, "a", encoding="utf-8") as f:
                 f.write(line + "\n")
         except Exception as e:
@@ -183,6 +188,6 @@ class NetworkAIPlugin:
         if not self._interactions_path.exists():
             return 0
         try:
-            return sum(1 for _ in open(self._interactions_path, "r", encoding="utf-8"))
+            return sum(1 for _ in open(self._interactions_path, encoding="utf-8"))
         except Exception:
             return 0

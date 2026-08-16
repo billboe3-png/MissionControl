@@ -138,14 +138,9 @@ def load_config(config_path: str | Path | None = None) -> AgentSettings:
     if config_path and Path(config_path).exists():
         with open(config_path) as f:
             file_config = yaml.safe_load(f) or {}
-        settings_kwargs = {
-            k: v
-            for k, v in file_config.items()
-            if v is not None
-        }
+        settings_kwargs = {k: v for k, v in file_config.items() if v is not None}
 
-    if "log_file" not in settings_kwargs:
-        if sys.platform.startswith("win"):
+    if "log_file" not in settings_kwargs and sys.platform.startswith("win"):
             settings_kwargs["log_file"] = str(_FALLBACK_ROOT / "logs" / "agent.log")
 
     # SYSTEM scheduled task fix: force data_dir into a writable, known location

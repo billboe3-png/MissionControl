@@ -9,14 +9,17 @@ from __future__ import annotations
 import gzip
 import json
 import logging
-import time
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
 import httpx
 
-from .storage import EdgeStorage, HeartbeatRecord, InventoryRecord, StorageConfig
+from .storage import (
+    EdgeStorage,
+    HeartbeatRecord,
+    InventoryRecord,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -55,7 +58,7 @@ class EdgeSync:
 
     def close(self) -> None:
         """Close the HTTP client."""
-        try:
+        try:  # noqa: SIM105
             self._client.close()
         except Exception:
             pass
@@ -131,7 +134,7 @@ class EdgeSync:
                     restart_requested=extracted,
                 )
             logger.warning("Bundle pull unexpected status=%s", status)
-            return SyncResult("pull-bundle", False, status)
+            return SyncResult("pull-bundle", False, status, 0, 0, f"HTTP {status}")
         except Exception as e:
             error_msg = str(e)
             logger.debug("Bundle pull failed: %s", error_msg)

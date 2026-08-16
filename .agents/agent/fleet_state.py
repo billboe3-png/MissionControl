@@ -21,14 +21,38 @@ AGENT_STATES = {
 }
 
 ALLOWED_TRANSITIONS: dict[str, list[str]] = {
-    "online": ["offline", "busy", "idle", "updating", "maintenance", "warning", "error"],
+    "online": [
+        "offline",
+        "busy",
+        "idle",
+        "updating",
+        "maintenance",
+        "warning",
+        "error",
+    ],
     "offline": ["online", "starting", "warning", "error", "unknown"],
     "starting": ["online", "offline", "error"],
     "busy": ["online", "idle", "warning", "error", "offline"],
-    "idle": ["online", "busy", "updating", "maintenance", "warning", "error", "offline"],
+    "idle": [
+        "online",
+        "busy",
+        "updating",
+        "maintenance",
+        "warning",
+        "error",
+        "offline",
+    ],
     "updating": ["online", "offline", "error", "warning"],
     "maintenance": ["online", "offline", "warning", "error"],
-    "warning": ["online", "offline", "error", "idle", "busy", "maintenance", "updating"],
+    "warning": [
+        "online",
+        "offline",
+        "error",
+        "idle",
+        "busy",
+        "maintenance",
+        "updating",
+    ],
     "error": ["online", "offline", "starting", "warning", "idle"],
     "unknown": ["online", "offline", "starting", "warning", "error"],
 }
@@ -106,9 +130,7 @@ class FleetState:
         """Get all agent states."""
         return dict(self._states)
 
-    def detect_offline_agents(
-        self, timeout_seconds: int = 120
-    ) -> list[int]:
+    def detect_offline_agents(self, timeout_seconds: int = 120) -> list[int]:
         """Return IDs of agents that haven't sent heartbeat within timeout."""
         now = time.time()
         offline = []

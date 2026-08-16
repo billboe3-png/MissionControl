@@ -8,7 +8,7 @@ if install_dir not in sys.path:
 
 os.chdir(install_dir)
 
-from agent.__main__ import main
+from agent.__main__ import main  # noqa: E402
 
 if __name__ == "__main__":
     main()

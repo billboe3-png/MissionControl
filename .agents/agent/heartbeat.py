@@ -37,7 +37,9 @@ class HeartbeatConfig:
     def set_mode(self, mode: str) -> None:
         """Switch heartbeat mode."""
         if mode not in self.modes:
-            logger.warning("Unknown heartbeat mode '%s', keeping '%s'", mode, self.current_mode)
+            logger.warning(
+                "Unknown heartbeat mode '%s', keeping '%s'", mode, self.current_mode
+            )
             return
         self.current_mode = mode
         logger.info("Heartbeat mode set to '%s' (interval=%ds)", mode, self.modes[mode])
@@ -77,7 +79,7 @@ class HeartbeatManager:
         try:
             temps = psutil.sensors_temperatures()
             if temps:
-                for name, entries in temps.items():
+                for name, entries in temps.items():  # noqa: B007
                     if entries:
                         metrics["cpu_temperature"] = entries[0].current
                         break
@@ -146,11 +148,14 @@ class HeartbeatManager:
         try:
             if platform.system() == "Linux":
                 import os
+
                 if os.path.exists("/etc/os-release"):
                     with open("/etc/os-release") as f:
                         for line in f:
                             if line.startswith("PRETTY_NAME="):
-                                info["os_version"] = line.split("=", 1)[1].strip().strip('"')
+                                info["os_version"] = (
+                                    line.split("=", 1)[1].strip().strip('"')
+                                )
                                 break
         except Exception:
             pass
@@ -213,11 +218,17 @@ class HeartbeatManager:
         payload = {
             "agent_id": agent_id,
             "health": health,
-            "cpu_percent": cpu_percent if cpu_percent is not None else system_metrics.get("cpu_percent"),
+            "cpu_percent": cpu_percent
+            if cpu_percent is not None
+            else system_metrics.get("cpu_percent"),
             "cpu_temperature": system_metrics.get("cpu_temperature"),
-            "memory_percent": memory_percent if memory_percent is not None else system_metrics.get("memory_percent"),
+            "memory_percent": memory_percent
+            if memory_percent is not None
+            else system_metrics.get("memory_percent"),
             "swap_percent": system_metrics.get("swap_percent"),
-            "disk_percent": disk_percent if disk_percent is not None else system_metrics.get("disk_percent"),
+            "disk_percent": disk_percent
+            if disk_percent is not None
+            else system_metrics.get("disk_percent"),
             "ip_address": system_metrics.get("ip_address"),
             "network_throughput": system_metrics.get("network_throughput"),
             "uptime_seconds": system_metrics.get("uptime_seconds"),
@@ -225,16 +236,30 @@ class HeartbeatManager:
             "os_version": os_info.get("os_version"),
             "kernel_version": os_info.get("kernel_version"),
             "architecture": os_info.get("architecture"),
-            "pending_commands": pending_commands if pending_commands is not None else runtime["pending_commands"],
-            "running_commands": running_commands if running_commands is not None else runtime["running_commands"],
+            "pending_commands": pending_commands
+            if pending_commands is not None
+            else runtime["pending_commands"],
+            "running_commands": running_commands
+            if running_commands is not None
+            else runtime["running_commands"],
             "automation_status": automation_status or runtime["automation_status"],
             "health_status": health,
-            "inventory_version": inventory_version if inventory_version is not None else inventory["inventory_version"],
-            "installed_plugins": installed_plugins if installed_plugins is not None else inventory["installed_plugins"],
+            "inventory_version": inventory_version
+            if inventory_version is not None
+            else inventory["inventory_version"],
+            "installed_plugins": installed_plugins
+            if installed_plugins is not None
+            else inventory["installed_plugins"],
             "agent_version": agent_version or inventory.get("agent_version"),
-            "pending_updates": pending_updates if pending_updates is not None else inventory["pending_updates"],
-            "heartbeat_interval": heartbeat_interval if heartbeat_interval is not None else self._hb_config.interval,
-            "maintenance_mode": maintenance_mode if maintenance_mode is not None else config_status["maintenance_mode"],
+            "pending_updates": pending_updates
+            if pending_updates is not None
+            else inventory["pending_updates"],
+            "heartbeat_interval": heartbeat_interval
+            if heartbeat_interval is not None
+            else self._hb_config.interval,
+            "maintenance_mode": maintenance_mode
+            if maintenance_mode is not None
+            else config_status["maintenance_mode"],
         }
 
         if active_plugins is not None:
@@ -242,9 +267,7 @@ class HeartbeatManager:
 
         try:
             logger.debug("Heartbeat payload: %s", payload)
-            result = await self.client.post(
-                "/api/v1/agents/heartbeat", payload
-            )
+            result = await self.client.post("/api/v1/agents/heartbeat", payload)
             logger.debug(
                 "Heartbeat sent for agent %d, %d pending commands",
                 agent_id,

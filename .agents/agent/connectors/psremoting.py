@@ -23,11 +23,11 @@ class PSRemotingConnector(RemoteConnector):
 
         full_cmd = (
             f"powershell -NoProfile -Command "
-            f"\"{cred_ps}; "
+            f'"{cred_ps}; '
             f"Invoke-Command -ComputerName '{self.hostname}' "
             f"-Port {self.port} -Credential $cred "
             f"-ScriptBlock {{ {script} }} "
-            f"-ErrorAction Stop\""
+            f'-ErrorAction Stop"'
         )
 
         try:
@@ -36,24 +36,31 @@ class PSRemotingConnector(RemoteConnector):
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
             )
-            stdout, stderr = await asyncio.wait_for(
-                proc.communicate(), timeout=timeout
-            )
+            stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout)
             return {
                 "success": proc.returncode == 0,
                 "stdout": stdout.decode(errors="replace"),
                 "stderr": stderr.decode(errors="replace"),
                 "exit_code": proc.returncode,
             }
-        except asyncio.TimeoutError:
-            return {"success": False, "stdout": "", "stderr": "Command timed out", "exit_code": -1}
+        except TimeoutError:
+            return {
+                "success": False,
+                "stdout": "",
+                "stderr": "Command timed out",
+                "exit_code": -1,
+            }
         except Exception as e:
             return {"success": False, "stdout": "", "stderr": str(e), "exit_code": -1}
 
     async def test_connection(self) -> dict:
         result = await self._run_ps("hostname", timeout=10)
         if result["success"]:
-            return {"connected": True, "hostname": result["stdout"].strip(), "latency_ms": 0}
+            return {
+                "connected": True,
+                "hostname": result["stdout"].strip(),
+                "latency_ms": 0,
+            }
         return {"connected": False, "error": result["stderr"], "latency_ms": 0}
 
     async def execute(self, command: str, timeout: int = 60) -> dict:
@@ -116,7 +123,11 @@ class PSRemotingConnector(RemoteConnector):
                     vms_raw = data.get("vms", "[]")
                     switches_raw = data.get("switches", "[]")
                     vms = json.loads(vms_raw) if isinstance(vms_raw, str) else vms_raw
-                    switches = json.loads(switches_raw) if isinstance(switches_raw, str) else switches_raw
+                    switches = (
+                        json.loads(switches_raw)
+                        if isinstance(switches_raw, str)
+                        else switches_raw
+                    )
                     if isinstance(vms, dict):
                         vms = [vms]
                     if isinstance(switches, dict):
@@ -128,8 +139,12 @@ class PSRemotingConnector(RemoteConnector):
                                 "name": v.get("Name", ""),
                                 "state": v.get("State", "Unknown"),
                                 "cpu_usage": v.get("CPUUsage", 0),
-                                "memory_mb": round((v.get("MemoryAssigned") or 0) / (1024 * 1024), 0),
-                                "memory_startup_mb": round((v.get("MemoryStartup") or 0) / (1024 * 1024), 0),
+                                "memory_mb": round(
+                                    (v.get("MemoryAssigned") or 0) / (1024 * 1024), 0
+                                ),
+                                "memory_startup_mb": round(
+                                    (v.get("MemoryStartup") or 0) / (1024 * 1024), 0
+                                ),
                                 "uptime": str(v.get("Uptime", "")),
                                 "status": v.get("Status", ""),
                                 "generation": v.get("Generation", 0),
@@ -210,7 +225,11 @@ class PSRemotingConnector(RemoteConnector):
                 if isinstance(data, dict):
                     data = [data]
                 return [
-                    {"name": s.get("Name", ""), "display_name": s.get("DisplayName", ""), "status": s.get("Status", "")}
+                    {
+                        "name": s.get("Name", ""),
+                        "display_name": s.get("DisplayName", ""),
+                        "status": s.get("Status", ""),
+                    }
                     for s in data
                 ]
             except json.JSONDecodeError:

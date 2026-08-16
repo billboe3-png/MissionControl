@@ -18,7 +18,9 @@ class SSHConnector(RemoteConnector):
         self._client = None
 
     def _get_client(self):
-        import paramiko, traceback
+        import traceback
+
+        import paramiko
 
         client = paramiko.SSHClient()
         client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
@@ -74,9 +76,10 @@ class SSHConnector(RemoteConnector):
     async def _run_cmd(self, command: str, timeout: int = 30) -> dict:
         """Run a command on the remote host via SSH."""
         try:
+
             def _exec():
                 client = self._get_client()
-                stdin, stdout, stderr = client.exec_command(command, timeout=timeout)
+                stdin, stdout, stderr = client.exec_command(command, timeout=timeout)  # noqa: RUF059
                 exit_code = stdout.channel.recv_exit_status()
                 out = stdout.read().decode(errors="replace")
                 err = stderr.read().decode(errors="replace")
@@ -93,15 +96,24 @@ class SSHConnector(RemoteConnector):
                 "stderr": stderr,
                 "exit_code": exit_code,
             }
-        except asyncio.TimeoutError:
-            return {"success": False, "stdout": "", "stderr": "Command timed out", "exit_code": -1}
+        except TimeoutError:
+            return {
+                "success": False,
+                "stdout": "",
+                "stderr": "Command timed out",
+                "exit_code": -1,
+            }
         except Exception as e:
             return {"success": False, "stdout": "", "stderr": str(e), "exit_code": -1}
 
     async def test_connection(self) -> dict:
         result = await self._run_cmd("hostname", timeout=10)
         if result["success"]:
-            return {"connected": True, "hostname": result["stdout"].strip(), "latency_ms": 0}
+            return {
+                "connected": True,
+                "hostname": result["stdout"].strip(),
+                "latency_ms": 0,
+            }
         return {"connected": False, "error": result["stderr"], "latency_ms": 0}
 
     async def execute(self, command: str, timeout: int = 60) -> dict:
@@ -118,7 +130,7 @@ class SSHConnector(RemoteConnector):
             "echo '},'; "
             "echo '\"cpu\": {'; "
             "echo '  \"cores\": \"'$(nproc)'\", '; "
-            "echo '  \"percent\": \"'$(cat /proc/loadavg | awk \"{print \\$1}\")'\"'; "
+            'echo \'  "percent": "\'$(cat /proc/loadavg | awk "{print \\$1}")\'"\'; '
             "echo '},'; "
             "echo '\"memory\": {'; "
             "echo '  \"total_mb\": \"'$(free -m | awk '/Mem:/{print $2}')'\", '; "
@@ -127,11 +139,11 @@ class SSHConnector(RemoteConnector):
             "echo '},'; "
             "echo '\"disks\": ['; "
             "df -h --output=source,size,used,avail,pcent,target 2>/dev/null | tail -n+2 | "
-            "awk '{printf \"{\\\"id\\\":\\\"%s\\\",\\\"size\\\":\\\"%s\\\",\\\"used\\\":\\\"%s\\\",\\\"free\\\":\\\"%s\\\",\\\"percent\\\":\\\"%s\\\",\\\"mount\\\":\\\"%s\\\"},\", $1,$2,$3,$4,$5,$6}'; "
+            'awk \'{printf "{\\"id\\":\\"%s\\",\\"size\\":\\"%s\\",\\"used\\":\\"%s\\",\\"free\\":\\"%s\\",\\"percent\\":\\"%s\\",\\"mount\\":\\"%s\\"},", $1,$2,$3,$4,$5,$6}\'; '
             "echo '],'; "
             "echo '\"network\": {'; "
             "echo '  \"interfaces\": ['; "
-            "ip -4 addr show 2>/dev/null | awk '/inet /{printf \"{\\\"iface\\\":\\\"%s\\\",\\\"ip\\\":\\\"%s\\\"},\", $NF, $2}' | sed 's/,$//' ; "
+            'ip -4 addr show 2>/dev/null | awk \'/inet /{printf "{\\"iface\\":\\"%s\\",\\"ip\\":\\"%s\\"},", $NF, $2}\' | sed \'s/,$//\' ; '
             "echo '  ]'; "
             "echo '}'; "
             "echo '}'"
@@ -149,7 +161,9 @@ class SSHConnector(RemoteConnector):
 
     async def collect_proxmox_inventory(self) -> dict | None:
         """Collect Proxmox VE cluster data via pvesh CLI."""
-        check = await self._run_cmd("which pvesh 2>/dev/null && pvesh version 2>/dev/null", timeout=10)
+        check = await self._run_cmd(
+            "which pvesh 2>/dev/null && pvesh version 2>/dev/null", timeout=10
+        )
         if not check["success"] or not check["stdout"].strip():
             return None
 
@@ -159,7 +173,7 @@ class SSHConnector(RemoteConnector):
         )
         nodes = []
         if nodes_result["success"]:
-            try:
+            try:  # noqa: SIM105
                 nodes = json.loads(nodes_result["stdout"])
             except (json.JSONDecodeError, TypeError):
                 pass
@@ -170,7 +184,7 @@ class SSHConnector(RemoteConnector):
         )
         vms = []
         if vms_result["success"]:
-            try:
+            try:  # noqa: SIM105
                 vms = json.loads(vms_result["stdout"])
             except (json.JSONDecodeError, TypeError):
                 pass
@@ -181,7 +195,7 @@ class SSHConnector(RemoteConnector):
         )
         lxc = []
         if lxc_result["success"]:
-            try:
+            try:  # noqa: SIM105
                 lxc = json.loads(lxc_result["stdout"])
             except (json.JSONDecodeError, TypeError):
                 pass
@@ -192,7 +206,7 @@ class SSHConnector(RemoteConnector):
         )
         storage = []
         if storage_result["success"]:
-            try:
+            try:  # noqa: SIM105
                 storage = json.loads(storage_result["stdout"])
             except (json.JSONDecodeError, TypeError):
                 pass
@@ -209,14 +223,14 @@ class SSHConnector(RemoteConnector):
     async def collect_services(self) -> list[dict]:
         script = (
             "systemctl list-units --type=service --state=running --no-pager --no-legend 2>/dev/null | "
-            "awk '{printf \"{\\\"name\\\":\\\"%s\\\",\\\"status\\\":\\\"running\\\"}\\n\", $1}'"
+            'awk \'{printf "{\\"name\\":\\"%s\\",\\"status\\":\\"running\\"}\\n", $1}\''
         )
         result = await self._run_cmd(script, timeout=10)
         if result["success"]:
             services = []
             for line in result["stdout"].strip().split("\n"):
                 if line.strip():
-                    try:
+                    try:  # noqa: SIM105
                         services.append(json.loads(line))
                     except json.JSONDecodeError:
                         pass

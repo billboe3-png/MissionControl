@@ -11,7 +11,7 @@ import logging
 import sqlite3
 import threading
 from dataclasses import dataclass, field
-from datetime import datetime, UTC
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -106,7 +106,7 @@ class EdgeStorage:
     def close(self) -> None:
         """Close the current thread's connection."""
         if hasattr(self._local, "conn") and self._local.conn is not None:
-            try:
+            try:  # noqa: SIM105
                 self._local.conn.close()
             except Exception:
                 pass
