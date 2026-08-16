@@ -8,16 +8,23 @@ from app.repositories.agent_remote_target_repository import AgentRemoteTargetRep
 from app.repositories.agent_repository import AgentRepository
 
 
-def _make_target(db, name="Veeam Host", plugins="veeam,hyperv", enabled=True):
+def _make_target(db, name="Veeam Host", plugins="veeam,hyperv", enabled=True, **overrides):
     agent = AgentRepository.create(
         db, name=f"{name} agent", hostname=f"{name.lower().replace(' ', '.')}.local",
         api_key="mc_agent_vbridge1234567890", status="online",
     )
-    target = AgentRemoteTargetRepository.create(
-        db, agent_id=agent.id, name=name, hostname="192.168.10.49",
-        protocol="ssh", port=22, username="kg\\administrator",
-        password_encrypted="enc", enabled=enabled, target_plugins=plugins,
-    )
+    kwargs = {
+        "name": name,
+        "hostname": "192.168.10.49",
+        "protocol": "ssh",
+        "port": 22,
+        "username": "kg\\administrator",
+        "password_encrypted": "enc",
+        "enabled": enabled,
+        "target_plugins": plugins,
+    }
+    kwargs.update(overrides)
+    target = AgentRemoteTargetRepository.create(db, agent_id=agent.id, **kwargs)
     return agent, target
 
 
@@ -34,7 +41,7 @@ def test_sync_creates_server_row(db_session):
     assert row.name == "[Veeam Host]"
 
 
-def test_sync_removes_row_when_veeam_unchecked(db_session):
+def test_sync_disables_row_when_veeam_unchecked(db_session):
     _, target = _make_target(db_session)
     sync_target_to_server(db_session, target)
     target.target_plugins = "hyperv"
@@ -66,6 +73,31 @@ def test_sync_updates_creds_on_existing_row(db_session):
         VeeamBackupServer.target_id == target.id
     ).one()
     assert row.legacy_ssh_host == "10.0.0.9"
+
+
+def test_sync_skips_non_ssh_veeam_target(db_session):
+    _, target = _make_target(db_session, plugins="veeam", protocol="psremoting")
+    sync_target_to_server(db_session, target)
+    row = db_session.query(VeeamBackupServer).filter(
+        VeeamBackupServer.target_id == target.id
+    ).first()
+    assert row is None
+
+
+def test_sync_disables_row_when_protocol_changed_to_non_ssh(db_session):
+    _, target = _make_target(db_session, plugins="veeam", protocol="ssh")
+    sync_target_to_server(db_session, target)
+    row = db_session.query(VeeamBackupServer).filter(
+        VeeamBackupServer.target_id == target.id
+    ).one()
+    assert row.enabled is True
+    target.protocol = "winrm"
+    db_session.commit()
+    sync_target_to_server(db_session, target)
+    row = db_session.query(VeeamBackupServer).filter(
+        VeeamBackupServer.target_id == target.id
+    ).one()
+    assert row.enabled is False
 
 
 def test_first_server_prefers_enterprise(db_session):
@@ -110,3 +142,31 @@ def test_profile_linked_to_matching_target(db_session):
     ).one()
     assert row.agent_id == target.agent_id
     assert row.target_id == target.id
+
+
+def test_profile_with_non_matching_ssh_host_does_not_link(db_session):
+    from app.models.db.integration_profile import IntegrationProfile
+    from app.plugins.installed.official_veeam.bridge import sync_profile_to_server
+    from app.plugins.installed.official_veeam.models import VeeamBackupServer
+
+    _make_target(db_session, name="Veeam Host", plugins="veeam")
+    profile = IntegrationProfile(
+        name="Veeam Profile",
+        integration_type="veeam",
+        enabled=True,
+        data_source="both",
+        ssh_host="10.99.99.99",
+        ssh_username="kg\\administrator",
+    )
+    db_session.add(profile)
+    db_session.commit()
+
+    sync_profile_to_server(db_session, profile)
+
+    row = db_session.query(VeeamBackupServer).filter(
+        VeeamBackupServer.name == "Veeam Profile"
+    ).one()
+    assert row.agent_id is None
+    assert row.target_id is None
+    assert row.legacy_ssh_host == "10.99.99.99"
+    assert row.rest_url is None
