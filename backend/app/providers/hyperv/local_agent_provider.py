@@ -76,17 +76,7 @@ class LocalAgentHyperVProvider(HyperVProvider):
         vms = self._get_vm_list()
         items = []
         for v in vms:
-            uptime_raw = v.get("uptime", 0)
-            uptime_seconds = 0
-            if isinstance(uptime_raw, (int, float)):
-                uptime_seconds = int(uptime_raw)
-            elif isinstance(uptime_raw, str):
-                try:
-                    uptime_seconds = int(float(uptime_raw))
-                except (ValueError, TypeError):
-                    uptime_seconds = 0
-            elif isinstance(uptime_raw, dict):
-                uptime_seconds = int(uptime_raw.get("TotalSeconds", 0))
+            uptime_seconds = _uptime_seconds(v.get("uptime", 0))
             items.append({
                 "id": v.get("vm_id", v.get("name", "")),
                 "name": v.get("name", ""),

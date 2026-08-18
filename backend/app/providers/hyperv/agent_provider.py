@@ -102,7 +102,7 @@ def _vm_memory_bytes(vm: dict) -> tuple[float, float]:
     treated as MB (< 1e6) and converted; byte values pass through.
     """
     startup = vm.get("MemoryStartup") or vm.get("memory_startup_mb") or 0
-    assigned = vm.get("MemoryAssigned") or vm.get("memory_assigned_mb") or 0
+    assigned = vm.get("MemoryAssigned") or vm.get("memory_assigned_mb") or vm.get("memory_mb") or 0
     if startup and startup < 1e6:
         startup *= 1024 * 1024
     if assigned and assigned < 1e6:
@@ -239,29 +239,12 @@ class AgentHyperVProvider(HyperVProvider):
         vms = self._get_vm_list()
         items = []
         for v in vms:
-            uptime_seconds = 0
-            uptime_raw = v.get("uptime", v.get("Uptime", 0))
-            if isinstance(uptime_raw, (int, float)):
-                uptime_seconds = int(uptime_raw)
-            elif isinstance(uptime_raw, str):
-                try:
-                    uptime_seconds = int(float(uptime_raw))
-                except (ValueError, TypeError):
-                    uptime_seconds = 0
-            elif isinstance(uptime_raw, dict):
-                uptime_seconds = int(uptime_raw.get("TotalSeconds", 0))
+            uptime_seconds = _uptime_seconds(v.get("uptime", v.get("Uptime", 0)))
 
             cpu_usage = float(v.get("cpu_usage", v.get("CPUUsage", 0)) or 0)
-            memory_assigned = v.get("memory_assigned_mb") or v.get("MemoryAssigned")
-            memory_startup = v.get("memory_startup_mb") or v.get("MemoryStartup")
-            if memory_assigned is not None:
-                memory_assigned = int(memory_assigned / (1024 * 1024))
-            else:
-                memory_assigned = 0
-            if memory_startup is not None:
-                memory_startup = int(memory_startup / (1024 * 1024))
-            else:
-                memory_startup = 0
+            memory_startup_bytes, memory_assigned_bytes = _vm_memory_bytes(v)
+            memory_assigned = int(memory_assigned_bytes / (1024 * 1024))
+            memory_startup = int(memory_startup_bytes / (1024 * 1024))
 
             name = v.get("name", v.get("Name", ""))
             host_server = v.get("computer_name", v.get("ComputerName", self._hostname))
