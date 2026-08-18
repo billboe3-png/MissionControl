@@ -15,6 +15,7 @@ from .agent_provider import (
     _most_common_hostname,
     _switch_type_name,
     _uptime_seconds,
+    _vm_action_command,
     _vm_command,
 )
 from .base_provider import HyperVProvider
@@ -30,10 +31,11 @@ class LocalAgentHyperVProvider(HyperVProvider):
     Write operations are intentionally disabled for this local path.
     """
 
-    def __init__(self, inventory: dict, hostname: str = "", dispatch_cmd = None) -> None:
+    def __init__(self, inventory: dict, hostname: str = "", dispatch_cmd = None, wait_cmd = None) -> None:
         self._inventory = inventory
         self._hostname = hostname
         self._dispatch_cmd = dispatch_cmd
+        self._wait_cmd = wait_cmd
 
     # ------------------------------------------------------------------ #
     # Read-only data accessors                                             #
@@ -181,21 +183,42 @@ class LocalAgentHyperVProvider(HyperVProvider):
             logger.exception("Local agent dispatch failed")
             return {"success": False, "error": str(exc)}
 
+    async def _dispatch_and_wait(self, command_str: str) -> dict:
+        """Dispatch a VM action and wait for the confirmed result."""
+        dispatch = await self._dispatch(command_str)
+        command_id = dispatch.get("command_id")
+        if not dispatch.get("success") or command_id is None or self._wait_cmd is None:
+            return dispatch
+        result = await self._wait_cmd(command_id)
+        state = result.get("state")
+        if result.get("success"):
+            return {
+                "success": True,
+                "command_id": command_id,
+                "state": state,
+                "message": result.get("error_message") or (f"VM is {state}" if state else "Action completed"),
+            }
+        return {
+            "success": False,
+            "command_id": command_id,
+            "state": state,
+            "error": result.get("error_message") or "VM action failed",
+        }
+
     async def start_vm(self, vm_id: str) -> dict:
-        return await self._dispatch(_vm_command(vm_id, "Start-VM"))
+        return await self._dispatch_and_wait(_vm_action_command(vm_id, "Start-VM", "Running", 120))
 
     async def stop_vm(self, vm_id: str, force: bool = False) -> dict:
-        force_flag = " -Force" if force else ""
-        return await self._dispatch(_vm_command(vm_id, "Stop-VM") + force_flag)
+        return await self._dispatch_and_wait(_vm_action_command(vm_id, "Stop-VM", "Off", 90, force=force))
 
     async def restart_vm(self, vm_id: str) -> dict:
-        return await self._dispatch(_vm_command(vm_id, "Restart-VM"))
+        return await self._dispatch_and_wait(_vm_action_command(vm_id, "Restart-VM", "Running", 120))
 
     async def pause_vm(self, vm_id: str) -> dict:
-        return await self._dispatch(_vm_command(vm_id, "Suspend-VM"))
+        return await self._dispatch_and_wait(_vm_action_command(vm_id, "Suspend-VM", "Paused", 30))
 
     async def resume_vm(self, vm_id: str) -> dict:
-        return await self._dispatch(_vm_command(vm_id, "Resume-VM"))
+        return await self._dispatch_and_wait(_vm_action_command(vm_id, "Resume-VM", "Running", 60))
 
     async def create_checkpoint(self, vm_id: str, name: str | None = None) -> dict:
         name_flag = f" -SnapshotName '{name}'" if name else ""
