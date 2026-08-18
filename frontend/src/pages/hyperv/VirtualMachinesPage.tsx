@@ -46,6 +46,8 @@ export default function VirtualMachinesPage() {
         setLoading(true);
         setHostFilter("all");
         load();
+        const id = setInterval(load, 20000);
+        return () => clearInterval(id);
     }, [selectedHostId, hostsLoading]);
 
     const hostServers = Array.from(new Set(vms.map((vm) => vm.host_server).filter(Boolean)));
