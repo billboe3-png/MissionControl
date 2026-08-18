@@ -117,6 +117,40 @@ def _vm_command(vm_id: str, cmdlet: str) -> str:
     return f"{cmdlet} -Name '{vm_id}'"
 
 
+def _vm_ref(vm_id: str) -> str:
+    if _GUID_RE.match(vm_id):
+        return f"(Get-VM -Id '{vm_id}')"
+    return f"(Get-VM -Name '{vm_id}')"
+
+
+def _vm_action_command(
+    vm_id: str,
+    cmdlet: str,
+    expected_state: str,
+    timeout_seconds: int,
+    force: bool = False,
+) -> str:
+    if _GUID_RE.match(vm_id):
+        action = f"Get-VM -Id '{vm_id}' | {cmdlet}"
+    else:
+        action = f"{cmdlet} -Name '{vm_id}'"
+    if force:
+        action += " -Force"
+    if cmdlet == "Suspend-VM":
+        action += " -Confirm:$false"
+    ref = _vm_ref(vm_id)
+    return (
+        f"{action};"
+        f"$deadline=(Get-Date).AddSeconds({timeout_seconds});"
+        "$state='Unknown';"
+        f"try {{ $state = {ref}.State }} catch {{ }};"
+        f"while(($state -ne '{expected_state}') -and ((Get-Date) -lt $deadline))"
+        "{ Start-Sleep -Seconds 1;"
+        f"try {{ $state = {ref}.State }} catch {{ }}; }};"
+        'Write-Output "MC_STATE=$($state)"'
+    )
+
+
 def _checkpoint_identity(checkpoint_id: str) -> str:
     """Return the appropriate PowerShell parameter for a checkpoint identifier."""
     if _GUID_RE.match(checkpoint_id):
@@ -147,12 +181,14 @@ class AgentHyperVProvider(HyperVProvider):
         agent_id: int | None = None,
         target_id: int | None = None,
         dispatch_cmd: callable | None = None,
+        wait_cmd: callable | None = None,
     ) -> None:
         self._inventory = inventory
         self._hostname = target_hostname
         self._agent_id = agent_id
         self._target_id = target_id
         self._dispatch_cmd = dispatch_cmd
+        self._wait_cmd = wait_cmd
 
     def _get_vm_list(self) -> list[dict]:
         raw = self._inventory.get("vms", [])
@@ -175,6 +211,28 @@ class AgentHyperVProvider(HyperVProvider):
         except Exception as e:
             logger.exception("Agent dispatch failed for target %s", self._target_id)
             return {"success": False, "error": str(e)}
+
+    async def _dispatch_and_wait(self, command_str: str) -> dict:
+        """Dispatch a VM action and wait for the confirmed result."""
+        dispatch = await self._dispatch(command_str)
+        command_id = dispatch.get("command_id")
+        if not dispatch.get("success") or command_id is None or self._wait_cmd is None:
+            return dispatch
+        result = await self._wait_cmd(command_id)
+        state = result.get("state")
+        if result.get("success"):
+            return {
+                "success": True,
+                "command_id": command_id,
+                "state": state,
+                "message": result.get("error_message") or (f"VM is {state}" if state else "Action completed"),
+            }
+        return {
+            "success": False,
+            "command_id": command_id,
+            "state": state,
+            "error": result.get("error_message") or "VM action failed",
+        }
 
     def _get_switch_list(self) -> list[dict]:
         raw = self._inventory.get("switches", [])
@@ -285,25 +343,19 @@ class AgentHyperVProvider(HyperVProvider):
     # ------------------------------------------------------------------ #
 
     async def start_vm(self, vm_id: str) -> dict:
-        cmd = _vm_command(vm_id, 'Start-VM')
-        return await self._dispatch(cmd)
+        return await self._dispatch_and_wait(_vm_action_command(vm_id, "Start-VM", "Running", 120))
 
     async def stop_vm(self, vm_id: str, force: bool = False) -> dict:
-        force_flag = " -Force" if force else ""
-        cmd = _vm_command(vm_id, 'Stop-VM') + force_flag
-        return await self._dispatch(cmd)
+        return await self._dispatch_and_wait(_vm_action_command(vm_id, "Stop-VM", "Off", 90, force=force))
 
     async def restart_vm(self, vm_id: str) -> dict:
-        cmd = _vm_command(vm_id, 'Restart-VM')
-        return await self._dispatch(cmd)
+        return await self._dispatch_and_wait(_vm_action_command(vm_id, "Restart-VM", "Running", 120))
 
     async def pause_vm(self, vm_id: str) -> dict:
-        cmd = _vm_command(vm_id, 'Suspend-VM')
-        return await self._dispatch(cmd)
+        return await self._dispatch_and_wait(_vm_action_command(vm_id, "Suspend-VM", "Paused", 30))
 
     async def resume_vm(self, vm_id: str) -> dict:
-        cmd = _vm_command(vm_id, 'Resume-VM')
-        return await self._dispatch(cmd)
+        return await self._dispatch_and_wait(_vm_action_command(vm_id, "Resume-VM", "Running", 60))
 
     # ------------------------------------------------------------------ #
     # Networks                                                            #

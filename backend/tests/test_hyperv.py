@@ -741,3 +741,63 @@ class TestAgentProviderParsing:
         assert vm["memory_assigned_mb"] == 1024
         assert vm["memory_startup_mb"] == 1024
         assert vm["uptime_seconds"] == 435048
+
+
+# ------------------------------------------------------------------ #
+# Wait-and-confirm VM action commands                                 #
+# ------------------------------------------------------------------ #
+
+
+class TestVmActionCommandBuilder:
+    def test_stop_command_has_cmdlet_wait_loop_and_mc_state(self) -> None:
+        from app.providers.hyperv.agent_provider import _vm_action_command
+
+        cmd = _vm_action_command("Ubuntu server", "Stop-VM", "Off", 90, force=True)
+        assert "Stop-VM -Name 'Ubuntu server' -Force" in cmd
+        assert "-ne 'Off'" in cmd
+        assert "AddSeconds(90)" in cmd
+        assert 'MC_STATE=$($state)' in cmd
+
+    def test_start_command_uses_guid_ref_and_running(self) -> None:
+        from app.providers.hyperv.agent_provider import _vm_action_command
+
+        cmd = _vm_action_command("f6d158f3-b277-45e3-b38d-c21b16ad4374", "Start-VM", "Running", 120)
+        assert "Get-VM -Id 'f6d158f3-b277-45e3-b38d-c21b16ad4374' | Start-VM" in cmd
+        assert "-ne 'Running'" in cmd
+        assert "AddSeconds(120)" in cmd
+
+
+class TestVmActionDispatchWait:
+    @pytest.mark.asyncio
+    async def test_stop_vm_returns_confirmed_state(self) -> None:
+        from app.providers.hyperv.local_agent_provider import LocalAgentHyperVProvider
+
+        async def fake_dispatch(cmd: str) -> dict:
+            return {"success": True, "command_id": 42, "message": "dispatched"}
+
+        async def fake_wait(cmd_id: int) -> dict:
+            return {"success": True, "state": "Off", "error_message": None, "stdout": "MC_STATE=Off\n", "stderr": ""}
+
+        inventory = {"vms": [{"name": "Jenkins", "state": 2, "computer_name": "H"}]}
+        provider = LocalAgentHyperVProvider(
+            inventory, hostname="H", dispatch_cmd=fake_dispatch, wait_cmd=fake_wait
+        )
+        result = await provider.stop_vm("Jenkins")
+        assert result["success"] is True
+        assert result["state"] == "Off"
+
+    @pytest.mark.asyncio
+    async def test_stop_vm_returns_timeout_error(self) -> None:
+        from app.providers.hyperv.agent_provider import AgentHyperVProvider
+
+        async def fake_dispatch(cmd: str) -> dict:
+            return {"success": True, "command_id": 43, "message": "dispatched"}
+
+        async def fake_wait(cmd_id: int) -> dict:
+            return {"success": False, "state": "Running", "error_message": "timed out waiting for Off", "stdout": "MC_STATE=Running\n", "stderr": ""}
+
+        inventory = {"vms": [{"name": "X", "state": 2}]}
+        provider = AgentHyperVProvider(inventory, target_hostname="H", dispatch_cmd=fake_dispatch, wait_cmd=fake_wait)
+        result = await provider.stop_vm("X", force=True)
+        assert result["success"] is False
+        assert "timed out" in result["error"]

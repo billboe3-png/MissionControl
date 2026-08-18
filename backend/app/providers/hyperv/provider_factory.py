@@ -5,14 +5,47 @@ Manages multiple Hyper-V providers keyed by IntegrationProfile ID.
 Falls back to mock when no profile is configured.
 """
 
+import asyncio
 import json
 import logging
+import time
 
 from sqlalchemy.orm import Session
 
 from .base_provider import HyperVProvider
 
 logger = logging.getLogger(__name__)
+
+
+async def _poll_command_result(db: Session, command_id: int, wait_s: int = 100) -> dict:
+    """Poll an agent command until it completes or the deadline passes."""
+    from app.models.db.agent_command import AgentCommand
+
+    deadline = time.monotonic() + wait_s
+    while time.monotonic() < deadline:
+        cmd = db.query(AgentCommand).filter(AgentCommand.id == command_id).first()
+        if cmd is not None and cmd.status in ("completed", "failed"):
+            stdout = cmd.stdout or ""
+            state = None
+            for line in stdout.splitlines():
+                stripped = line.strip()
+                if stripped.startswith("MC_STATE="):
+                    state = stripped[len("MC_STATE="):]
+            return {
+                "success": bool(cmd.success),
+                "state": state,
+                "error_message": cmd.error_message,
+                "stdout": stdout,
+                "stderr": cmd.stderr or "",
+            }
+        await asyncio.sleep(2)
+    return {
+        "success": False,
+        "state": None,
+        "error_message": "Timed out waiting for VM action result",
+        "stdout": "",
+        "stderr": "",
+    }
 
 _providers: dict[int, HyperVProvider] = {}
 _default_provider: HyperVProvider | None = None
@@ -376,12 +409,13 @@ def _get_agent_provider(db: Session | None, target_id: int) -> HyperVProvider:
         cmd_payload = json.dumps({
             "command": command_str,
             "target_id": target.id,
+            "refresh_inventory": True,
         })
         req = AgentCommandDispatchRequest(
             agent_id=agent.id,
             command_type="remote_execute",
             command=cmd_payload,
-            timeout=120,
+            timeout=130,
         )
         try:
             result = await agent_service.dispatch_command(db, req)
@@ -403,6 +437,7 @@ def _get_agent_provider(db: Session | None, target_id: int) -> HyperVProvider:
         agent_id=agent.id,
         target_id=target.id,
         dispatch_cmd=_dispatch_on_agent,
+        wait_cmd=lambda cid: _poll_command_result(db, cid, 100),
     )
 
 
@@ -445,9 +480,9 @@ def _get_local_agent_provider(db: Session | None, agent_id: int) -> HyperVProvid
             }
         req = AgentCommandDispatchRequest(
             agent_id=agent.id,
-            command_type="execute",
+            command_type="vm_action",
             command=command_str,
-            timeout=120,
+            timeout=130,
         )
         try:
             result = await agent_service.dispatch_command(db, req)
@@ -467,6 +502,7 @@ def _get_local_agent_provider(db: Session | None, agent_id: int) -> HyperVProvid
         hyperv,
         hostname=agent.name or full_inv.get("system", {}).get("hostname", ""),
         dispatch_cmd=_dispatch_on_agent,
+        wait_cmd=lambda cid: _poll_command_result(db, cid, 100),
     )
 
 
