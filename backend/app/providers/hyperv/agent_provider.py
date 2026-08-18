@@ -140,14 +140,18 @@ def _vm_action_command(
         action += " -Confirm:$false"
     ref = _vm_ref(vm_id)
     return (
-        f"{action};"
-        f"$deadline=(Get-Date).AddSeconds({timeout_seconds});"
+        "$ErrorActionPreference='Stop';"
         "$state='Unknown';"
+        f"try {{ {action}; }} catch {{ "
+        f"try {{ $state = {ref}.State }} catch {{ }}; "
+        f'Write-Output "MC_STATE=$($state)"; exit 1 }};'
         f"try {{ $state = {ref}.State }} catch {{ }};"
+        f"$deadline=(Get-Date).AddSeconds({timeout_seconds});"
         f"while(($state -ne '{expected_state}') -and ((Get-Date) -lt $deadline))"
         "{ Start-Sleep -Seconds 1;"
         f"try {{ $state = {ref}.State }} catch {{ }}; }};"
-        'Write-Output "MC_STATE=$($state)"'
+        'Write-Output "MC_STATE=$($state)";'
+        f"if ($state -ne '{expected_state}') {{ exit 1 }}"
     )
 
 
