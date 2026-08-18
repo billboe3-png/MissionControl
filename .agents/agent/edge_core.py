@@ -226,6 +226,13 @@ class EdgeCore:
         result["duration_ms"] = int((_time.monotonic() - start) * 1000)
         if self._sync:
             self._sync.push_command_result(command_id, result)
+        if command_type == "vm_action":
+            try:
+                await self._run_single_plugin("hyperv")
+                if self._sync:
+                    self._sync.push_inventory()
+            except Exception as e:
+                logger.error("Post-action inventory refresh failed: %s", e)
         logger.info(
             "Edge command %s finished: success=%s", command_id, result.get("success")
         )

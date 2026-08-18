@@ -23,6 +23,7 @@ async def _poll_command_result(db: Session, command_id: int, wait_s: int = 100) 
 
     deadline = time.monotonic() + wait_s
     while time.monotonic() < deadline:
+        db.expire_all()
         cmd = db.query(AgentCommand).filter(AgentCommand.id == command_id).first()
         if cmd is not None and cmd.status in ("completed", "failed"):
             stdout = cmd.stdout or ""
@@ -437,7 +438,7 @@ def _get_agent_provider(db: Session | None, target_id: int) -> HyperVProvider:
         agent_id=agent.id,
         target_id=target.id,
         dispatch_cmd=_dispatch_on_agent,
-        wait_cmd=lambda cid: _poll_command_result(db, cid, 100),
+        wait_cmd=lambda cid: _poll_command_result(db, cid, 200),
     )
 
 
@@ -502,7 +503,7 @@ def _get_local_agent_provider(db: Session | None, agent_id: int) -> HyperVProvid
         hyperv,
         hostname=agent.name or full_inv.get("system", {}).get("hostname", ""),
         dispatch_cmd=_dispatch_on_agent,
-        wait_cmd=lambda cid: _poll_command_result(db, cid, 100),
+        wait_cmd=lambda cid: _poll_command_result(db, cid, 200),
     )
 
 

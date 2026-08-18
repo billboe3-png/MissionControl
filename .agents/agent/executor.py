@@ -48,6 +48,10 @@ class CommandExecutor:
                 result = await self._handle_download(file_path)
             elif command_type == "inventory":
                 result = await self._collect_inventory()
+            elif command_type == "vm_action":
+                result = await self._execute_shell(
+                    command, effective_timeout
+                )
             else:
                 result = {
                     "success": False,

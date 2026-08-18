@@ -33,6 +33,7 @@ export default function VirtualMachinesPage() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [actionId, setActionId] = useState<string | null>(null);
+    const [pendingLabel, setPendingLabel] = useState<string | null>(null);
     const [hostFilter, setHostFilter] = useState<string>("all");
 
     const load = async () => {
@@ -54,11 +55,12 @@ export default function VirtualMachinesPage() {
 
     const visibleVms = hostFilter === "all" ? vms : vms.filter((vm) => vm.host_server === hostFilter);
 
-    const doAction = async (vmId: string, action: () => Promise<unknown>) => {
+    const doAction = async (vmId: string, action: () => Promise<unknown>, label: string) => {
         setActionId(vmId);
+        setPendingLabel(label);
         try { await action(); await load(); }
         catch (e) { setError(e instanceof Error ? e.message : "Action failed"); }
-        finally { setActionId(null); }
+        finally { setActionId(null); setPendingLabel(null); }
     };
 
     if (hostsLoading) return <div className="loading-bar" />;
@@ -119,9 +121,9 @@ export default function VirtualMachinesPage() {
                                     <LoadingButton
                                         loading={actionId === vm.id}
                                         className="btn btn-primary btn-sm"
-                                        onClick={() => doAction(vm.id, () => hypervApi.startVm(vm.id, selectedHostId))}
+                                        onClick={() => doAction(vm.id, () => hypervApi.startVm(vm.id, selectedHostId), "Starting…")}
                                     >
-                                        Start
+                                        {actionId === vm.id && pendingLabel ? pendingLabel : "Start"}
                                     </LoadingButton>
                                 )}
                                 {vm.state === "running" && (
@@ -129,23 +131,23 @@ export default function VirtualMachinesPage() {
                                         <LoadingButton
                                             loading={actionId === vm.id}
                                             className="btn btn-danger btn-sm"
-                                            onClick={() => doAction(vm.id, () => hypervApi.stopVm(vm.id, false, selectedHostId))}
+                                            onClick={() => doAction(vm.id, () => hypervApi.stopVm(vm.id, false, selectedHostId), "Stopping…")}
                                         >
-                                            Stop
+                                            {actionId === vm.id && pendingLabel ? pendingLabel : "Stop"}
                                         </LoadingButton>
                                         <LoadingButton
                                             loading={actionId === vm.id}
                                             className="btn btn-secondary btn-sm"
-                                            onClick={() => doAction(vm.id, () => hypervApi.restartVm(vm.id, selectedHostId))}
+                                            onClick={() => doAction(vm.id, () => hypervApi.restartVm(vm.id, selectedHostId), "Restarting…")}
                                         >
-                                            Restart
+                                            {actionId === vm.id && pendingLabel ? pendingLabel : "Restart"}
                                         </LoadingButton>
                                         <LoadingButton
                                             loading={actionId === vm.id}
                                             className="btn btn-secondary btn-sm"
-                                            onClick={() => doAction(vm.id, () => hypervApi.pauseVm(vm.id, selectedHostId))}
+                                            onClick={() => doAction(vm.id, () => hypervApi.pauseVm(vm.id, selectedHostId), "Pausing…")}
                                         >
-                                            Pause
+                                            {actionId === vm.id && pendingLabel ? pendingLabel : "Pause"}
                                         </LoadingButton>
                                     </>
                                 )}
@@ -153,9 +155,9 @@ export default function VirtualMachinesPage() {
                                     <LoadingButton
                                         loading={actionId === vm.id}
                                         className="btn btn-primary btn-sm"
-                                        onClick={() => doAction(vm.id, () => hypervApi.resumeVm(vm.id, selectedHostId))}
+                                        onClick={() => doAction(vm.id, () => hypervApi.resumeVm(vm.id, selectedHostId), "Resuming…")}
                                     >
-                                        Resume
+                                        {actionId === vm.id && pendingLabel ? pendingLabel : "Resume"}
                                     </LoadingButton>
                                 )}
                             </div>
