@@ -197,6 +197,7 @@ class EdgeCore:
 
     async def _execute_pulled_command(self, executor, cmd: dict) -> None:
         """Execute one pulled command and push its result."""
+        import json as _json
         import time as _time
 
         command_id = cmd.get("id")
@@ -209,14 +210,19 @@ class EdgeCore:
         logger.info("Executing edge command %s (type=%s)", command_id, command_type)
         start = _time.monotonic()
         try:
-            result = await executor.execute(
-                command=command,
-                command_type=command_type,
-                timeout=timeout,
-                file_path=file_path,
-                file_name=file_name,
-                file_content_b64=file_content_b64,
-            )
+            if command_type == "remote_execute":
+                result = await self._execute_remote_execute(
+                    command, timeout
+                )
+            else:
+                result = await executor.execute(
+                    command=command,
+                    command_type=command_type,
+                    timeout=timeout,
+                    file_path=file_path,
+                    file_name=file_name,
+                    file_content_b64=file_content_b64,
+                )
         except Exception as e:
             result = {
                 "success": False,
@@ -235,6 +241,62 @@ class EdgeCore:
                 logger.error("Post-action inventory refresh failed: %s", e)
         logger.info(
             "Edge command %s finished: success=%s", command_id, result.get("success")
+        )
+
+    async def _execute_remote_execute(
+        self, command: str, timeout: int
+    ) -> dict[str, Any]:
+        """Handle a remote_execute command (veeam relay or generic SSH target).
+
+        Mirrors the legacy agent's remote_execute handler: JSON payloads with a
+        ``namespace`` are dispatched to the matching plugin; otherwise the
+        command runs on the SSH target via the remote manager.
+        """
+        import json as _json
+
+        target_id = None
+        command_text = command
+        namespace = None
+        op = None
+        params: dict = {}
+        if command.startswith("{"):
+            try:
+                payload = _json.loads(command)
+                namespace = payload.get("namespace")
+                op = payload.get("op")
+                params = payload.get("params") or {}
+                target_id = payload.get("target_id")
+                if namespace is None:
+                    command_text = payload.get("command", "")
+            except (_json.JSONDecodeError, AttributeError):
+                pass
+
+        if namespace == "veeam":
+            plugin_result = await self._plugin_manager.execute_plugin_command(
+                "veeam", op or "", params
+            )
+            ok = bool(plugin_result.get("success", False))
+            return {
+                "success": ok,
+                "stdout": _json.dumps(plugin_result),
+                "stderr": plugin_result.get("error")
+                or plugin_result.get("stderr")
+                or "",
+                "exit_code": 0 if ok else 1,
+            }
+
+        if target_id is None:
+            return {
+                "success": False,
+                "stdout": "",
+                "stderr": "No target_id specified for remote_execute",
+                "exit_code": -1,
+            }
+
+        return await self._remote_manager.execute_on_target(
+            target_id=target_id,
+            command=command_text,
+            timeout=timeout,
         )
 
     # ------------------------------------------------------------------ #
@@ -329,9 +391,14 @@ class EdgeCore:
         for plugin in self._plugin_manager._plugins.values():
             if not hasattr(plugin, "_context"):
                 continue
-            plugin._context["remote_targets"] = _filter_targets_for_plugin(remote_targets, plugin.name)
-            plugin._context["integration_profiles"] = integration_profiles
-            plugin._context["remote_manager"] = self._remote_manager
+            plugin._context = {
+                **plugin._context,
+                "remote_targets": _filter_targets_for_plugin(
+                    remote_targets, plugin.name
+                ),
+                "integration_profiles": integration_profiles,
+                "remote_manager": self._remote_manager,
+            }
             if hasattr(plugin, "reinitialize"):
                 try:
                     plugin.reinitialize()
