@@ -89,7 +89,7 @@ class AgentSshExecutor:
 
         while True:
             current = await asyncio.to_thread(
-                self._command_repo.get_by_id, self._db, command_id
+                self._get_command, command_id
             )
             if current is None:
                 return self._err("Command row vanished", start)
@@ -115,6 +115,14 @@ class AgentSshExecutor:
             if time.monotonic() >= deadline:
                 return self._err("Timed out waiting for agent", start)
             await asyncio.sleep(self.poll_interval)
+
+    def _get_command(self, command_id: int) -> Any:
+        """Re-read the command, expiring the session so cross-process
+        updates (agent completing the row) are visible on every poll."""
+        expire = getattr(self._db, "expire_all", None)
+        if callable(expire):
+            expire()
+        return self._command_repo.get_by_id(self._db, command_id)
 
     @staticmethod
     def _err(message: str, start: float) -> SshResult:
