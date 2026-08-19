@@ -181,7 +181,7 @@ class EdgeCore:
         from agent.executor import CommandExecutor
 
         executor = CommandExecutor(timeout=120)
-        interval = max(10, self.config.heartbeat_interval or 60)
+        interval = max(5, min(self.config.heartbeat_interval or 10, 15))
         while self._running:
             try:
                 if self._sync:

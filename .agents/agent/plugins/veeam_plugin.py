@@ -727,6 +727,8 @@ class VeeamPlugin(AgentPlugin):
         if command in collector_ops:
             collector = collector_ops[command]
             items = await self._run_collector_via_relay(collector, target_id=target_id)
+            if collector in ("jobs", "sessions", "repositories") and items is None:
+                items = await self._db_collect(collector, target_id)
             if collector == "license":
                 return {
                     "success": bool(items),
@@ -741,49 +743,73 @@ class VeeamPlugin(AgentPlugin):
                 "error": None if items is not None else "Veeam relay collection failed",
             }
         if command == "veeam:test":
-            license_result = await self._run_collector_via_relay(
-                "license", target_id=target_id
-            )
+            db_ok = await self._db_ping(target_id)
             return {
-                "success": license_result is not None,
+                "success": db_ok,
                 "rest_available": False,
-                "powershell_available": license_result is not None,
+                "powershell_available": False,
+                "db_available": db_ok,
                 "version": "",
-                "error": None if license_result is not None else "Veeam relay unavailable",
+                "error": None if db_ok else "Veeam DB bridge unavailable",
             }
         if command == "veeam:job_stats":
-            jobs = await self._run_collector_via_relay("jobs", target_id=target_id)
+            jobs = await self._db_job_stats(target_id)
             return {
                 "success": jobs is not None,
                 "jobs": jobs or [],
                 "count": len(jobs or []),
                 "ssh_available": jobs is not None,
-                "error": None if jobs is not None else "Veeam relay collection failed",
+                "message": None,
+                "error": None if jobs is not None else "Veeam DB bridge unavailable",
             }
         if command == "veeam:session_stats":
+            stats = await self._db_session_stats(target_id)
             return {
-                "success": True, "stats": [], "count": 0,
-                "ssh_available": False, "message": None, "error": None,
+                "success": stats is not None,
+                "stats": stats or [],
+                "count": len(stats or []),
+                "ssh_available": stats is not None,
+                "message": None,
+                "error": None if stats is not None else "Veeam DB bridge unavailable",
             }
         if command == "veeam:job_stats_daily":
+            days = int(args.get("days", 7) or 7)
+            jobs, dates = await self._db_job_stats_daily(days, target_id)
             return {
-                "success": True, "jobs": [], "dates": [], "count": 0,
-                "ssh_available": False, "message": None, "error": None,
+                "success": jobs is not None,
+                "jobs": jobs or [],
+                "dates": dates or [],
+                "count": len(jobs or []),
+                "ssh_available": jobs is not None,
+                "message": None,
+                "error": None if jobs is not None else "Veeam DB bridge unavailable",
             }
+        if command == "veeam:db:detect":
+            return await self._db_detect(target_id)
+        if command == "veeam:db:query":
+            out = await self._run_db_query_via_relay(
+                str(args.get("sql", "")), target_id=target_id
+            )
+            if out is None:
+                return {
+                    "success": False, "output": "", "stderr": "DB query failed",
+                    "exit_code": 1, "error": "Veeam DB query failed",
+                }
+            return {"success": True, "output": out, "stderr": "", "exit_code": 0}
         if command == "veeam:capacity_tier":
             return {"success": True, "object_storages": [], "count": 0, "error": None}
         if command == "test_connection":
-            result = await self._run_collector_via_relay("license", target_id=target_id)
-            if result is None:
+            db_ok = await self._db_ping(target_id)
+            if not db_ok:
                 return {
                     "success": False,
-                    "error": "Veeam relay test failed",
+                    "error": "Veeam DB bridge test failed",
                     "available": False,
                 }
             return {
                 "success": True,
                 "available": True,
-                "message": "Veeam SSH relay reachable",
+                "message": "Veeam DB bridge reachable",
             }
         if command == "start_job":
             script = (
@@ -814,6 +840,366 @@ class VeeamPlugin(AgentPlugin):
                 "exit_code": result.get("exit_code", -1),
             }
         return {"success": False, "error": f"Unknown relay command: {command}"}
+
+    # ------------------------------------------------------------------
+    # PostgreSQL DB bridge (agent relay ops: jobs/stats/sessions/detect)
+    # ------------------------------------------------------------------
+
+    _PSQL = r"C:\Program Files\PostgreSQL\15\bin\psql.exe"
+    _DB_NAME = "VeeamBackup"
+    _DB_USER = "postgres"
+    _WHERE_FILTER = """\
+AND js.job_name NOT LIKE '%Resynchronize%'
+AND js.job_name NOT LIKE '%Host Discovery%'
+AND js.job_name NOT LIKE '%Foreign transform%'
+AND js.job_name NOT LIKE '%Infrastructure update%'
+AND js.job_name NOT LIKE '%Audit Logs%'
+AND js.job_name NOT LIKE '%Catalog Cleanup%'
+AND js.job_name NOT LIKE '%Shell run%'
+AND js.job_name NOT LIKE '%Backup Configuration%'
+AND js.job_name NOT LIKE '%Hyper-V CBT%'
+AND js.job_name NOT LIKE '%Rescan%'
+AND js.job_name NOT LIKE '%Checkpoint Removal%'
+AND js.job_name NOT LIKE '%Retention job%'
+AND js.job_name NOT LIKE '%Malware Detection%'"""
+
+    @staticmethod
+    def _norm_name() -> str:
+        return "regexp_replace(js.job_name, ' - [A-Za-z0-9._]+$', '')"
+
+    async def _run_db_query_via_relay(
+        self, sql: str, target_id: int | None = None, timeout: int = 120,
+    ) -> str | None:
+        """Run a SQL query against the Veeam PostgreSQL DB via SSH relay."""
+        if not sql:
+            return None
+        ps_script = (
+            "$sql = @'\n" + sql + "\n'@\n"
+            "$sqlPath = 'C:\\temp\\mc_query.sql'\n"
+            "New-Item -ItemType Directory -Force -Path 'C:\\temp' | Out-Null\n"
+            "[System.IO.File]::WriteAllText($sqlPath, $sql, [System.Text.Encoding]::UTF8)\n"
+            "& '" + self._PSQL + "' -h 127.0.0.1 -U " + self._DB_USER + " -d " + self._DB_NAME + " -t -A -f $sqlPath 2>&1 | Out-String\n"
+        )
+        result = await self._run_script_via_relay(
+            ps_script, timeout=timeout, target_id=target_id
+        )
+        if not result.get("success"):
+            logger.error(
+                "Veeam DB relay failed: stderr=%s",
+                str(result.get("stderr", ""))[:1000],
+            )
+            return None
+        return str(result.get("stdout", "") or "")
+
+    async def _db_ping(self, target_id: int | None = None) -> bool:
+        out = await self._run_db_query_via_relay(
+            "SELECT 1", target_id=target_id, timeout=60,
+        )
+        return out is not None and "1" in out
+
+    async def _db_detect(self, target_id: int | None = None) -> dict[str, Any]:
+        """Probe psql binary + PG port on the Veeam host."""
+        result = await self._run_script_via_relay(
+            "if (Test-Path '" + self._PSQL + "') { Write-Output 'PSQL_FOUND' }",
+            timeout=60, target_id=target_id,
+        )
+        psql_found = "PSQL_FOUND" in (result.get("stdout") or "")
+        return {
+            "success": True,
+            "db_type": "postgresql" if psql_found else "mssql",
+            "psql_found": psql_found,
+            "sqlcmd_found": False,
+            "pg_port": psql_found,
+            "mssql_port": False,
+        }
+
+    async def _db_job_stats(
+        self, target_id: int | None = None,
+    ) -> list[dict[str, Any]] | None:
+        sql = (
+            "SELECT " + self._norm_name() + " AS job_name, "
+            "COUNT(*) as session_count, "
+            "COALESCE(SUM(bs.total_size), 0), "
+            "COALESCE(SUM(bs.processed_size), 0), "
+            "COALESCE(SUM(bs.read_size), 0), "
+            "COALESCE(SUM(bs.stored_size), 0), "
+            "COALESCE(AVG(bs.avg_speed), 0), "
+            "MAX(js.creation_time), "
+            "SUM(CASE WHEN js.result = 0 THEN 1 ELSE 0 END), "
+            "SUM(CASE WHEN js.result = 1 THEN 1 ELSE 0 END), "
+            "SUM(CASE WHEN js.result = 2 THEN 1 ELSE 0 END) "
+            'FROM "backup.model.jobsessions" js '
+            'LEFT JOIN "backup.model.backupjobsessions" bs ON bs.id = js.id '
+            "WHERE 1=1 " + self._WHERE_FILTER + " "
+            "GROUP BY 1 "
+            "ORDER BY MAX(js.creation_time) DESC"
+        )
+        raw = await self._run_db_query_via_relay(sql, target_id=target_id)
+        rows = self._parse_psql_rows(raw)
+        jobs = []
+        for r in rows:
+            if len(r) < 11:
+                continue
+            jobs.append({
+                "job_name": r[0],
+                "session_count": int(r[1] or 0),
+                "total_bytes": int(float(r[2] or 0)),
+                "processed_bytes": int(float(r[3] or 0)),
+                "read_bytes": int(float(r[4] or 0)),
+                "stored_bytes": int(float(r[5] or 0)),
+                "avg_speed": float(r[6] or 0),
+                "last_run": r[7] or None,
+                "success_count": int(r[8] or 0),
+                "warning_count": int(r[9] or 0),
+                "failed_count": int(r[10] or 0),
+            })
+        return jobs
+
+    async def _db_session_stats(
+        self, target_id: int | None = None,
+    ) -> list[dict[str, Any]] | None:
+        sql = (
+            "SELECT js.id, js.job_id, "
+            + self._norm_name() + " AS job_name, "
+            "js.state, js.creation_time, js.end_time, js.result, "
+            "COALESCE(bs.processed_size, 0), "
+            "COALESCE(bs.read_size, 0), "
+            "COALESCE(bs.stored_size, 0) "
+            'FROM "backup.model.jobsessions" js '
+            'LEFT JOIN "backup.model.backupjobsessions" bs ON bs.id = js.id '
+            "WHERE 1=1 " + self._WHERE_FILTER + " "
+            "ORDER BY js.creation_time DESC "
+            "LIMIT 200"
+        )
+        raw = await self._run_db_query_via_relay(sql, target_id=target_id)
+        rows = self._parse_psql_rows(raw)
+        stats = []
+        for r in rows:
+            if len(r) < 10:
+                continue
+            stats.append({
+                "session_id": r[0],
+                "job_id": r[1],
+                "job_name": r[2],
+                "creation_time": r[4] or None,
+                "end_time": r[5] or None,
+                "state": r[3],
+                "processed_bytes": int(float(r[7] or 0)),
+                "read_bytes": int(float(r[8] or 0)),
+                "transferred_bytes": int(float(r[9] or 0)),
+            })
+        return stats
+
+    async def _db_job_stats_daily(
+        self, days: int, target_id: int | None = None,
+    ) -> tuple[list[dict[str, Any]] | None, list[str]]:
+        days = max(1, int(days))
+        sql = (
+            "SELECT " + self._norm_name() + " AS job_name, "
+            "DATE(js.creation_time) AS run_date, "
+            "COALESCE(SUM(bs.processed_size), 0), "
+            "COALESCE(SUM(bs.read_size), 0), "
+            "COALESCE(SUM(bs.stored_size), 0), "
+            "COUNT(*) AS session_count, "
+            "SUM(CASE WHEN js.result = 0 THEN 1 ELSE 0 END) AS success_count, "
+            "SUM(CASE WHEN js.result = 1 THEN 1 ELSE 0 END) AS warning_count, "
+            "SUM(CASE WHEN js.result = 2 THEN 1 ELSE 0 END) AS failed_count "
+            'FROM "backup.model.jobsessions" js '
+            'LEFT JOIN "backup.model.backupjobsessions" bs ON bs.id = js.id '
+            "WHERE js.creation_time >= NOW() - INTERVAL '" + str(days) + " days' "
+            + self._WHERE_FILTER + " "
+            "GROUP BY 1, DATE(js.creation_time) "
+            "ORDER BY 1, DATE(js.creation_time) DESC"
+        )
+        raw = await self._run_db_query_via_relay(sql, target_id=target_id)
+        if raw is None:
+            return None, []
+        rows = self._parse_psql_rows(raw)
+        by_job: dict[str, dict[str, Any]] = {}
+        date_set: set[str] = set()
+        for r in rows:
+            if len(r) < 9:
+                continue
+            job_name, run_date = r[0], r[1]
+            if not run_date:
+                continue
+            date_set.add(run_date)
+            cell = {
+                "processed_bytes": int(float(r[2] or 0)),
+                "read_bytes": int(float(r[3] or 0)),
+                "stored_bytes": int(float(r[4] or 0)),
+                "session_count": int(r[5] or 0),
+                "success_count": int(r[6] or 0),
+                "warning_count": int(r[7] or 0),
+                "failed_count": int(r[8] or 0),
+            }
+            if cell["failed_count"] > 0:
+                cell["result"] = "Failed"
+            elif cell["warning_count"] > 0:
+                cell["result"] = "Warning"
+            else:
+                cell["result"] = "Success"
+            by_job.setdefault(job_name, {"job_name": job_name, "daily": {}})
+            by_job[job_name]["daily"][run_date] = cell
+        dates = sorted(date_set)
+        jobs = sorted(by_job.values(), key=lambda j: j["job_name"])
+        return jobs, dates
+
+    async def _db_collect(
+        self, collector: str, target_id: int | None = None,
+    ) -> list[dict[str, Any]] | None:
+        """Collect jobs/sessions from the Veeam DB (fallback for PS relay)."""
+        if collector == "jobs":
+            sql = (
+                "SELECT b.id, b.name, b.type, b.schedule_enabled, "
+                "COALESCE(js.state, -1) AS state, "
+                "COALESCE(js.result, -1) AS result, "
+                "js.creation_time, js.end_time, js.progress "
+                "FROM bjobs b "
+                "LEFT JOIN LATERAL ("
+                "  SELECT state, result, creation_time, end_time, progress "
+                '  FROM "backup.model.jobsessions" js '
+                "  WHERE js.job_id = b.id "
+                "  ORDER BY js.creation_time DESC LIMIT 1"
+                ") js ON true "
+                "WHERE b.is_deleted = false "
+                "ORDER BY b.name"
+            )
+            raw = await self._run_db_query_via_relay(sql, target_id=target_id)
+            if raw is None:
+                return None
+            rows = self._parse_psql_rows(raw)
+            jobs = []
+            for r in rows:
+                if len(r) < 9:
+                    continue
+                last_state = self._map_job_state(int(r[4] or -1))
+                last_result = self._map_result(int(r[5] or -1))
+                last_run = None
+                if r[6]:
+                    last_run = {
+                        "id": r[0],
+                        "state": last_state,
+                        "result": {"result": last_result} if last_result else None,
+                        "creationTime": r[6],
+                        "endTime": r[7],
+                        "progressPercent": int(r[8] or 0),
+                    }
+                jobs.append({
+                    "id": r[0],
+                    "name": r[1],
+                    "type": self._map_job_type(int(r[2] or 0)),
+                    "state": last_state,
+                    "enabled": bool(r[3]),
+                    "schedule": {"kind": "periodic"} if bool(r[3]) else None,
+                    "lastRun": last_run,
+                    "includedObjects": {"objectsInJob": 0},
+                })
+            return jobs
+        if collector == "sessions":
+            sql = (
+                "SELECT js.id, js.job_id, js.job_name, js.state, js.result, "
+                "js.creation_time, js.end_time, js.progress "
+                'FROM "backup.model.jobsessions" js '
+                "WHERE 1=1 " + self._WHERE_FILTER + " "
+                "ORDER BY js.creation_time DESC LIMIT 200"
+            )
+            raw = await self._run_db_query_via_relay(sql, target_id=target_id)
+            if raw is None:
+                return None
+            rows = self._parse_psql_rows(raw)
+            sessions = []
+            for r in rows:
+                if len(r) < 8:
+                    continue
+                result_name = self._map_result(int(r[4] or -1))
+                sessions.append({
+                    "id": r[0],
+                    "jobId": r[1],
+                    "name": r[2],
+                    "sessionType": "Backup",
+                    "state": self._map_job_state(int(r[3] or -1)),
+                    "result": {"result": result_name} if result_name else None,
+                    "creationTime": r[5] or None,
+                    "endTime": r[6] or None,
+                    "progressPercent": int(r[7] or 0),
+                })
+            return sessions
+        if collector == "repositories":
+            sql = (
+                "SELECT id, name, description, type, host_id, path, "
+                "is_unavailable, status "
+                'FROM "backuprepositories" '
+                "ORDER BY name"
+            )
+            raw = await self._run_db_query_via_relay(sql, target_id=target_id)
+            if raw is None:
+                return None
+            rows = self._parse_psql_rows(raw)
+            repos = []
+            for r in rows:
+                if len(r) < 8:
+                    continue
+                status = "Unavailable" if r[6] == "t" else "Available"
+                repos.append({
+                    "id": r[0],
+                    "name": r[1],
+                    "description": r[2] or "",
+                    "type": self._map_repo_type(int(r[3] or 0)),
+                    "hostId": r[4] or "",
+                    "repository": {"path": r[5] or ""},
+                    "status": status,
+                })
+            return repos
+        return None
+
+    @staticmethod
+    def _parse_psql_rows(raw: str | None) -> list[list[str]]:
+        rows = []
+        if not raw:
+            return rows
+        for line in raw.splitlines():
+            line = line.rstrip("\r").strip()
+            if not line:
+                continue
+            rows.append([c.strip() for c in line.split("|")])
+        return rows
+
+    @staticmethod
+    def _map_result(code: int) -> str | None:
+        return {0: "Success", 1: "Warning", 2: "Failed"}.get(code)
+
+    @staticmethod
+    def _map_repo_type(code: int) -> str:
+        return {
+            0: "Windows",
+            1: "Linux",
+            2: "Scale-Out",
+            3: "Object Storage",
+            4: "Shared Folder",
+            5: "Dedup Store",
+            6: "ReFS",
+            7: "XFS",
+            11: "Object Storage",
+        }.get(code, "Backup Repository")
+
+    @staticmethod
+    def _map_job_state(code: int) -> str:
+        return {0: "Success", 1: "Warning", 2: "Failed"}.get(code, "Stopped")
+
+    @staticmethod
+    def _map_job_type(code: int) -> str:
+        return {
+            0: "Backup",
+            1: "Replica",
+            2: "Backup Copy",
+            3: "NAS",
+            4: "SureBackup",
+            100: "Backup",
+            12000: "Agent",
+            13000: "NAS",
+            14000: "Backup Copy",
+        }.get(code, "Backup")
 
     async def _run_collector_via_relay(
         self, collector: str, target_id: int | None = None
