@@ -38,6 +38,12 @@ class AgentActiveDirectoryProvider(ActiveDirectoryProvider):
         self._agent_id = agent_id
         self._target_id = target_id
 
+    def _is_available(self) -> bool:
+        return bool(self._inventory.get("available", True))
+
+    def _relay_error(self) -> str:
+        return self._inventory.get("error") or "AD relay unavailable"
+
     def _get_items(self, key: str) -> list[dict]:
         raw = self._inventory.get(key, [])
         if isinstance(raw, str):
@@ -50,6 +56,11 @@ class AgentActiveDirectoryProvider(ActiveDirectoryProvider):
         return raw
 
     async def test_connection(self) -> dict:
+        if not self._is_available():
+            return {
+                "connected": False,
+                "error": self._relay_error(),
+            }
         return {
             "connected": True,
             "message": "Agent-relayed Active Directory data",
@@ -57,6 +68,15 @@ class AgentActiveDirectoryProvider(ActiveDirectoryProvider):
         }
 
     async def get_summary(self) -> dict:
+        if not self._is_available():
+            return {
+                "connected": False,
+                "domain": {"name": "", "base_dn": ""},
+                "user_count": 0,
+                "group_count": 0,
+                "computer_count": 0,
+                "error": self._relay_error(),
+            }
         users = self._get_items("users")
         groups = self._get_items("groups")
         devices = self._get_items("devices")
@@ -75,6 +95,13 @@ class AgentActiveDirectoryProvider(ActiveDirectoryProvider):
         }
 
     async def get_users(self) -> dict:
+        if not self._is_available():
+            return {
+                "connected": False,
+                "users": [],
+                "total_count": 0,
+                "error": self._relay_error(),
+            }
         users = self._get_items("users")
         formatted = []
         for u in users:
@@ -96,6 +123,13 @@ class AgentActiveDirectoryProvider(ActiveDirectoryProvider):
         return {"connected": True, "users": formatted, "total_count": len(formatted)}
 
     async def get_groups(self) -> dict:
+        if not self._is_available():
+            return {
+                "connected": False,
+                "groups": [],
+                "total_count": 0,
+                "error": self._relay_error(),
+            }
         groups = self._get_items("groups")
         formatted = [
             {"name": g.get("name") or g.get("sam") or "", "description": g.get("description")}
@@ -104,6 +138,13 @@ class AgentActiveDirectoryProvider(ActiveDirectoryProvider):
         return {"connected": True, "groups": formatted, "total_count": len(formatted)}
 
     async def get_devices(self) -> dict:
+        if not self._is_available():
+            return {
+                "connected": False,
+                "devices": [],
+                "total_count": 0,
+                "error": self._relay_error(),
+            }
         devices = self._get_items("devices")
         formatted = [
             {
@@ -116,6 +157,17 @@ class AgentActiveDirectoryProvider(ActiveDirectoryProvider):
         return {"connected": True, "devices": formatted, "total_count": len(formatted)}
 
     async def get_health(self) -> dict:
+        if not self._is_available():
+            return {
+                "connected": False,
+                "status": "unknown",
+                "replication": {
+                    "status": "unknown",
+                    "pending_replications": 0,
+                    "failed_replications": 0,
+                },
+                "error": self._relay_error(),
+            }
         health_inv = self._inventory.get("health") or {}
         repl = health_inv.get("replication") or {
             "status": "healthy",
@@ -127,6 +179,18 @@ class AgentActiveDirectoryProvider(ActiveDirectoryProvider):
             "status": health_inv.get("status", "healthy"),
             "replication": repl,
         }
+
+    def _purge_command(self, cand: Any) -> None:
+        # Purge the command row — it contains plaintext secrets (e.g. new_password). Known limitation: the row is briefly at rest during the poll window.
+        try:
+            self._db.delete(cand)
+            self._db.commit()
+        except Exception:
+            logger.warning(
+                "Failed to purge agent command row %s",
+                getattr(cand, "id", None),
+                exc_info=True,
+            )
 
     async def _dispatch_cmd(self, op: str, params: dict) -> dict:
         if not self._db or not self._agent_id:
@@ -155,6 +219,7 @@ class AgentActiveDirectoryProvider(ActiveDirectoryProvider):
             cand = AgentCommandRepository.get_by_id(self._db, cmd.id)
             if cand and cand.status in ("completed", "failed"):
                 if cand.status == "failed" or cand.exit_code != 0:
+                    self._purge_command(cand)
                     return {
                         "success": False,
                         "error": cand.stderr
@@ -162,8 +227,11 @@ class AgentActiveDirectoryProvider(ActiveDirectoryProvider):
                         or "Command failed",
                     }
                 try:
-                    return json.loads(cand.stdout or "{}")
+                    result = json.loads(cand.stdout or "{}")
+                    self._purge_command(cand)
+                    return result
                 except Exception:
+                    self._purge_command(cand)
                     return {"success": True, "output": cand.stdout}
             await asyncio.sleep(1.0)
         return {"success": False, "error": "Command timed out waiting for agent"}
