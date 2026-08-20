@@ -72,6 +72,9 @@ def _get_ad_provider_from_db(db: Session, profile_id: int | None = None):
                         return AgentActiveDirectoryProvider(
                             inventory=ad_inv,
                             hostname=hostname or f"agent-{agent.id}",
+                            db=db,
+                            agent_id=agent.id,
+                            target_id=getattr(profile, "target_id", None) or 1,
                         )
                 except (json.JSONDecodeError, TypeError):
                     pass
