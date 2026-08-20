@@ -3,6 +3,7 @@
 import base64
 import json
 import logging
+import re
 from typing import Any
 
 from agent.plugin import AgentPlugin
@@ -17,6 +18,8 @@ class ActiveDirectoryPlugin(AgentPlugin):
     version = "3.0.0-rc1"
     description = "Active Directory SSH-relay collector and management plugin"
     platform_required = None
+
+    _IDENTITY_NAME_RE = re.compile(r"^[A-Za-z0-9_\-\.\$ ]+$")
 
     def __init__(self):
         self._context: dict[str, Any] = {}
@@ -52,8 +55,21 @@ class ActiveDirectoryPlugin(AgentPlugin):
                 return t
         return None
 
-    def _encode_ps(self, script: str) -> str:
+    @staticmethod
+    def _encode_ps(script: str) -> str:
         return base64.b64encode(script.encode("utf-16le")).decode("ascii")
+
+    @staticmethod
+    def _ps_escape(value: Any) -> str:
+        return str(value).replace("'", "''")
+
+    @staticmethod
+    def _b64_utf8(value: str) -> str:
+        return base64.b64encode(value.encode("utf-8")).decode("ascii")
+
+    @classmethod
+    def _valid_identity_name(cls, value: str) -> bool:
+        return bool(cls._IDENTITY_NAME_RE.fullmatch(value or ""))
 
     async def collect_inventory(self) -> dict[str, Any]:
         self._find_remote_target()
@@ -104,6 +120,20 @@ class ActiveDirectoryPlugin(AgentPlugin):
             }
         })
 
+        $replStatus = 'unknown'
+        $pending = 0
+        $failed = 0
+        $repadmin = Get-Command repadmin.exe -ErrorAction SilentlyContinue
+        if ($repadmin) {
+          $summary = & repadmin /replsummary 2>$null | Out-String
+          if ($summary) {
+            $failed = @($summary -split "`n" | Where-Object { $_ -match 'FAIL' }).Count
+            if ($failed -gt 0) { $replStatus = 'degraded' } else { $replStatus = 'healthy' }
+          }
+        } else {
+          $replStatus = 'healthy'
+        }
+
         @{
             available = $true
             domain = @{ name = $dom.Name; base_dn = $dom.DistinguishedName }
@@ -113,8 +143,8 @@ class ActiveDirectoryPlugin(AgentPlugin):
             groups = $groups
             devices = $devices
             health = @{
-                status = 'healthy'
-                replication = @{ status = 'healthy'; pending_replications = 0; failed_replications = 0 }
+                status = $replStatus
+                replication = @{ status = $replStatus; pending_replications = $pending; failed_replications = $failed }
             }
         } | ConvertTo-Json -Depth 5
         """
@@ -160,20 +190,83 @@ class ActiveDirectoryPlugin(AgentPlugin):
 
         target_id = self._ssh_target.get("id")
         sam = args.get("sam_account_name") or args.get("username") or ""
-
-        scripts = {
-            "test_connection": "if (Get-Module ActiveDirectory -ListAvailable) { @{success=$true; message='AD module available'} | ConvertTo-Json } else { @{success=$false; error='No AD module'} | ConvertTo-Json }",
-            "reset-password": f"Set-ADAccountPassword -Identity '{sam}' -NewPassword (ConvertTo-SecureString '{args.get('new_password','')}' -AsPlainText -Force) -Reset; @{{success=$true}} | ConvertTo-Json",
-            "unlock": f"Unlock-ADAccount -Identity '{sam}'; @{{success=$true}} | ConvertTo-Json",
-            "enable": f"Enable-ADAccount -Identity '{sam}'; @{{success=$true}} | ConvertTo-Json",
-            "disable": f"Disable-ADAccount -Identity '{sam}'; @{{success=$true}} | ConvertTo-Json",
-            "rename": f"Set-ADUser -Identity '{sam}' -DisplayName '{args.get('display_name','')}'; @{{success=$true}} | ConvertTo-Json",
-            "get-user-groups": f"Get-ADPrincipalGroupMembership -Identity '{sam}' | Select-Object -ExpandProperty Name | ForEach-Object {{@{{name=$_}}}} | ConvertTo-Json",
-            "add-to-group": f"Add-ADGroupMember -Identity '{args.get('group_name','')}' -Members '{sam}'; @{{success=$true}} | ConvertTo-Json",
-            "remove-from-group": f"Remove-ADGroupMember -Identity '{args.get('group_name','')}' -Members '{sam}' -Confirm:$false; @{{success=$true}} | ConvertTo-Json",
-        }
+        group_name = args.get("group_name") or ""
+        display_name = args.get("display_name") or ""
 
         cmd_clean = command.removeprefix("ad:").removeprefix("active_directory:")
+
+        if not self._valid_identity_name(sam):
+            return {"success": False, "error": "Invalid characters in identity name"}
+        if cmd_clean in ("rename",) and not self._valid_identity_name(display_name):
+            return {"success": False, "error": "Invalid characters in identity name"}
+        if cmd_clean in (
+            "add-to-group",
+            "remove-from-group",
+        ) and not self._valid_identity_name(group_name):
+            return {"success": False, "error": "Invalid characters in identity name"}
+
+        safe_sam = self._ps_escape(sam)
+        safe_group = self._ps_escape(group_name)
+        safe_display = self._ps_escape(display_name)
+        pw_b64 = self._b64_utf8(args.get("new_password", "") or "")
+
+        scripts = {
+            "test_connection": (
+                "if (Get-Module ActiveDirectory -ListAvailable) "
+                "{ @{success=$true; message='AD module available'} | ConvertTo-Json } "
+                "else { @{success=$false; error='No AD module'} | ConvertTo-Json }"
+            ),
+            "reset-password": (
+                f"$pw = [System.Text.Encoding]::UTF8.GetString("
+                f"[System.Convert]::FromBase64String('{pw_b64}')); "
+                f"try {{ "
+                f"Set-ADAccountPassword -Identity '{safe_sam}' -NewPassword "
+                f"(ConvertTo-SecureString $pw -AsPlainText -Force) -Reset -ErrorAction Stop; "
+                f"@{{success=$true}} | ConvertTo-Json "
+                f"}} catch {{ "
+                f"@{{success=$false; error=$_.Exception.Message}} | ConvertTo-Json "
+                f"}}"
+            ),
+            "unlock": (
+                f"try {{ Unlock-ADAccount -Identity '{safe_sam}' -ErrorAction Stop; "
+                f"@{{success=$true}} | ConvertTo-Json }} catch {{ "
+                f"@{{success=$false; error=$_.Exception.Message}} | ConvertTo-Json }}"
+            ),
+            "enable": (
+                f"try {{ Enable-ADAccount -Identity '{safe_sam}' -ErrorAction Stop; "
+                f"@{{success=$true}} | ConvertTo-Json }} catch {{ "
+                f"@{{success=$false; error=$_.Exception.Message}} | ConvertTo-Json }}"
+            ),
+            "disable": (
+                f"try {{ Disable-ADAccount -Identity '{safe_sam}' -ErrorAction Stop; "
+                f"@{{success=$true}} | ConvertTo-Json }} catch {{ "
+                f"@{{success=$false; error=$_.Exception.Message}} | ConvertTo-Json }}"
+            ),
+            "rename": (
+                f"try {{ Set-ADUser -Identity '{safe_sam}' -DisplayName '{safe_display}' "
+                f"-ErrorAction Stop; "
+                f"@{{success=$true}} | ConvertTo-Json }} catch {{ "
+                f"@{{success=$false; error=$_.Exception.Message}} | ConvertTo-Json }}"
+            ),
+            "get-user-groups": (
+                f"$groups = @(Get-ADPrincipalGroupMembership -Identity '{safe_sam}' | "
+                f"Select-Object -ExpandProperty Name | ForEach-Object {{@{{name=$_}}}}); "
+                f"@{{success=$true; groups=$groups}} | ConvertTo-Json -Depth 3"
+            ),
+            "add-to-group": (
+                f"try {{ Add-ADGroupMember -Identity '{safe_group}' -Members '{safe_sam}' "
+                f"-ErrorAction Stop; "
+                f"@{{success=$true}} | ConvertTo-Json }} catch {{ "
+                f"@{{success=$false; error=$_.Exception.Message}} | ConvertTo-Json }}"
+            ),
+            "remove-from-group": (
+                f"try {{ Remove-ADGroupMember -Identity '{safe_group}' -Members '{safe_sam}' "
+                f"-Confirm:$false -ErrorAction Stop; "
+                f"@{{success=$true}} | ConvertTo-Json }} catch {{ "
+                f"@{{success=$false; error=$_.Exception.Message}} | ConvertTo-Json }}"
+            ),
+        }
+
         script = scripts.get(cmd_clean)
         if not script:
             return {"success": False, "error": f"Unknown AD command: {command}"}
