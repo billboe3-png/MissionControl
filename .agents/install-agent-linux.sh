@@ -31,7 +31,6 @@ set -euo pipefail
 SCRIPT_VERSION="3.0.0-rc1"
 BUNDLE_URL_PATH_EDGE="/api/v1/edge/%s/bundle/download"
 BUNDLE_URL_PATH_LEGACY="/api/v1/agents/%s/bundles/download"
-MIN_PYTHON=(3 11)
 
 SERVER_URL="${MC_SERVER_URL:-https://missioncontrol.optichosting.co.za}"
 AGENT_ID="${MC_AGENT_ID:-}"
@@ -98,11 +97,7 @@ fi
 python_version_ok() {
     local py="$1"
     [[ -x "$py" ]] || return 1
-    local -a ver
-    IFS='.' read -r -a ver <<< "$("$py" -c 'import sys; print(sys.version_info.major, sys.version_info.minor, sys.version_info.micro)')"
-    (( ver[0] > MIN_PYTHON[0] )) && return 0
-    (( ver[0] == MIN_PYTHON[0] && ver[1] >= MIN_PYTHON[1] )) && return 0
-    return 1
+    "$py" -c 'import sys; sys.exit(0 if sys.version_info >= (3, 11) else 1)'
 }
 
 ensure_python() {
