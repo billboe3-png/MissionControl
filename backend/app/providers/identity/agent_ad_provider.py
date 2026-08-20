@@ -199,9 +199,24 @@ class AgentActiveDirectoryProvider(ActiveDirectoryProvider):
         )
 
     async def get_user_groups(self, sam_account_name: str) -> dict:
-        return await self._dispatch_cmd(
+        result = await self._dispatch_cmd(
             "get-user-groups", {"sam_account_name": sam_account_name}
         )
+        groups = result.get("groups") or []
+        if not groups and isinstance(result.get("output"), str):
+            try:
+                parsed = json.loads(result["output"])
+                if isinstance(parsed, list):
+                    groups = parsed
+                elif isinstance(parsed, dict) and parsed.get("groups"):
+                    groups = parsed["groups"]
+            except (json.JSONDecodeError, TypeError):
+                pass
+        return {
+            "connected": bool(result.get("success", False)),
+            "groups": groups,
+            "error": result.get("error"),
+        }
 
     async def add_to_group(self, sam_account_name: str, group_name: str) -> dict:
         return await self._dispatch_cmd(
