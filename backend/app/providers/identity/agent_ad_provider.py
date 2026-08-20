@@ -4,10 +4,17 @@ Mission Control Agent Active Directory Provider
 Reads Active Directory data from agent-collected inventory
 stored in Agent.inventory_json.  Implements ActiveDirectoryProvider
 so the existing AD pages work transparently for agent-relayed hosts.
+
+Write operations (password reset, unlock, enable/disable, rename, group
+membership) are dispatched to the agent via the AgentCommand queue using
+the ``active_directory`` namespace, mirroring the Veeam SSH-relay pattern.
 """
 
+import asyncio
 import json
 import logging
+import time
+from typing import Any
 
 from .base_provider import ActiveDirectoryProvider
 
@@ -17,9 +24,19 @@ logger = logging.getLogger(__name__)
 class AgentActiveDirectoryProvider(ActiveDirectoryProvider):
     """Active Directory provider backed by agent inventory data."""
 
-    def __init__(self, inventory: dict, hostname: str = "agent") -> None:
+    def __init__(
+        self,
+        inventory: dict,
+        hostname: str = "agent",
+        db: Any = None,
+        agent_id: int | None = None,
+        target_id: int | None = None,
+    ) -> None:
         self._inventory = inventory or {}
         self._hostname = hostname
+        self._db = db
+        self._agent_id = agent_id
+        self._target_id = target_id
 
     def _get_items(self, key: str) -> list[dict]:
         raw = self._inventory.get(key, [])
@@ -43,58 +60,157 @@ class AgentActiveDirectoryProvider(ActiveDirectoryProvider):
         users = self._get_items("users")
         groups = self._get_items("groups")
         devices = self._get_items("devices")
+        dom_raw = self._inventory.get("domain")
+        domain_info = (
+            dom_raw
+            if isinstance(dom_raw, dict)
+            else {"name": str(dom_raw or self._hostname), "base_dn": ""}
+        )
         return {
             "connected": True,
-            "domain": self._inventory.get("domain", self._hostname),
-            "forest": self._inventory.get("forest", ""),
-            "users": len(users),
-            "groups": len(groups),
-            "devices": len(devices),
-            "enabled_users": sum(1 for u in users if not u.get("disabled", False)),
-            "disabled_users": sum(1 for u in users if u.get("disabled", False)),
-            "domain_controllers": len(self._get_items("domain_controllers")),
+            "domain": domain_info,
+            "user_count": len(users),
+            "group_count": len(groups),
+            "computer_count": len(devices),
         }
 
     async def get_users(self) -> dict:
         users = self._get_items("users")
-        return {"connected": True, "count": len(users), "items": users}
+        formatted = []
+        for u in users:
+            formatted.append(
+                {
+                    "sam_account_name": u.get("sam_account_name")
+                    or u.get("sam")
+                    or "",
+                    "display_name": u.get("display_name")
+                    or u.get("sam_account_name")
+                    or "",
+                    "email": u.get("email"),
+                    "department": u.get("department"),
+                    "title": u.get("title"),
+                    "enabled": u.get("enabled", True),
+                    "distinguished_name": u.get("distinguished_name"),
+                }
+            )
+        return {"connected": True, "users": formatted, "total_count": len(formatted)}
 
     async def get_groups(self) -> dict:
         groups = self._get_items("groups")
-        return {"connected": True, "count": len(groups), "items": groups}
+        formatted = [
+            {"name": g.get("name") or g.get("sam") or "", "description": g.get("description")}
+            for g in groups
+        ]
+        return {"connected": True, "groups": formatted, "total_count": len(formatted)}
 
     async def get_devices(self) -> dict:
         devices = self._get_items("devices")
-        return {"connected": True, "count": len(devices), "items": devices}
+        formatted = [
+            {
+                "name": d.get("name") or d.get("sam") or "",
+                "dns_name": d.get("dns_name"),
+                "os_version": d.get("os_version"),
+            }
+            for d in devices
+        ]
+        return {"connected": True, "devices": formatted, "total_count": len(formatted)}
 
     async def get_health(self) -> dict:
+        health_inv = self._inventory.get("health") or {}
+        repl = health_inv.get("replication") or {
+            "status": "healthy",
+            "pending_replications": 0,
+            "failed_replications": 0,
+        }
         return {
             "connected": True,
-            "status": "healthy",
-            "server": self._hostname,
-            "domain": self._inventory.get("domain", self._hostname),
+            "status": health_inv.get("status", "healthy"),
+            "replication": repl,
         }
 
+    async def _dispatch_cmd(self, op: str, params: dict) -> dict:
+        if not self._db or not self._agent_id:
+            return {"success": False, "error": "No DB or agent_id for write operation"}
+
+        from app.repositories.agent_repository import AgentCommandRepository
+
+        payload = {
+            "namespace": "active_directory",
+            "op": op,
+            "params": {"target_id": self._target_id or 1, **params},
+        }
+        cmd = await asyncio.to_thread(
+            AgentCommandRepository.create,
+            self._db,
+            agent_id=self._agent_id,
+            command_type="remote_execute",
+            command=json.dumps(payload),
+            timeout=60,
+        )
+
+        start = time.monotonic()
+        while time.monotonic() - start < 60:
+            if callable(getattr(self._db, "expire_all", None)):
+                self._db.expire_all()
+            cand = AgentCommandRepository.get_by_id(self._db, cmd.id)
+            if cand and cand.status in ("completed", "failed"):
+                if cand.status == "failed" or cand.exit_code != 0:
+                    return {
+                        "success": False,
+                        "error": cand.stderr
+                        or cand.error_message
+                        or "Command failed",
+                    }
+                try:
+                    return json.loads(cand.stdout or "{}")
+                except Exception:
+                    return {"success": True, "output": cand.stdout}
+            await asyncio.sleep(1.0)
+        return {"success": False, "error": "Command timed out waiting for agent"}
+
     async def reset_password(self, sam_account_name: str, new_password: str) -> dict:
-        return {"success": False, "error": "Agent-relayed AD provider is read-only"}
+        return await self._dispatch_cmd(
+            "reset-password",
+            {"sam_account_name": sam_account_name, "new_password": new_password},
+        )
 
     async def unlock_account(self, sam_account_name: str) -> dict:
-        return {"success": False, "error": "Agent-relayed AD provider is read-only"}
+        return await self._dispatch_cmd("unlock", {"sam_account_name": sam_account_name})
 
     async def enable_account(self, sam_account_name: str) -> dict:
-        return {"success": False, "error": "Agent-relayed AD provider is read-only"}
+        return await self._dispatch_cmd("enable", {"sam_account_name": sam_account_name})
 
     async def disable_account(self, sam_account_name: str) -> dict:
-        return {"success": False, "error": "Agent-relayed AD provider is read-only"}
+        return await self._dispatch_cmd("disable", {"sam_account_name": sam_account_name})
 
-    async def rename_user(self, sam_account_name: str, new_display_name: str, new_first_name: str | None = None, new_last_name: str | None = None) -> dict:
-        return {"success": False, "error": "Agent-relayed AD provider is read-only"}
+    async def rename_user(
+        self,
+        sam_account_name: str,
+        new_display_name: str,
+        new_first_name: str | None = None,
+        new_last_name: str | None = None,
+    ) -> dict:
+        return await self._dispatch_cmd(
+            "rename",
+            {
+                "sam_account_name": sam_account_name,
+                "display_name": new_display_name,
+            },
+        )
 
     async def get_user_groups(self, sam_account_name: str) -> dict:
-        return {"success": False, "error": "Agent-relayed AD provider is read-only"}
+        return await self._dispatch_cmd(
+            "get-user-groups", {"sam_account_name": sam_account_name}
+        )
 
     async def add_to_group(self, sam_account_name: str, group_name: str) -> dict:
-        return {"success": False, "error": "Agent-relayed AD provider is read-only"}
+        return await self._dispatch_cmd(
+            "add-to-group",
+            {"sam_account_name": sam_account_name, "group_name": group_name},
+        )
 
     async def remove_from_group(self, sam_account_name: str, group_name: str) -> dict:
-        return {"success": False, "error": "Agent-relayed AD provider is read-only"}
+        return await self._dispatch_cmd(
+            "remove-from-group",
+            {"sam_account_name": sam_account_name, "group_name": group_name},
+        )
