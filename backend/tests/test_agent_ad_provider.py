@@ -76,3 +76,12 @@ async def test_agent_ad_provider_write_ops_require_db():
     result = await provider.reset_password("admin", "NewPass123!")
     assert result["success"] is False
     assert "No DB or agent_id" in result["error"]
+
+
+@pytest.mark.anyio()
+async def test_agent_ad_provider_get_user_groups_shape():
+    provider = AgentActiveDirectoryProvider(inventory={}, hostname="agent")
+    result = await provider.get_user_groups("admin")
+    assert result["connected"] is False
+    assert result["groups"] == []
+    assert result["error"] is not None
