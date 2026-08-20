@@ -394,12 +394,7 @@ async def get_agent_plugin(agent_id: int, plugin_name: str) -> Response:
 
 
 
-@router.post(
-    "/{agent_id}/bundles/download",
-    include_in_schema=False,
-)
-async def download_agent_bundle(agent_id: int) -> Response:
-    source = Path("/project/.agents/agent-bundle-live.zip")
+async def _serve_bundle(source: Path) -> Response:
     if not source.exists():
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="bundle not found")
     return Response(
@@ -410,21 +405,39 @@ async def download_agent_bundle(agent_id: int) -> Response:
             "Content-Disposition": 'attachment; filename="missioncontrol-agent-3.0.0-rc1.zip"',
         },
     )
+
+
+@router.get(
+    "/{agent_id}/bundles/download",
+    include_in_schema=False,
+)
+async def download_agent_bundle_get(agent_id: int) -> Response:
+    source = Path("/project/.agents/agent-bundle-live.zip")
+    return await _serve_bundle(source)
+
+
+@router.post(
+    "/{agent_id}/bundles/download",
+    include_in_schema=False,
+)
+async def download_agent_bundle_post(agent_id: int) -> Response:
+    source = Path("/project/.agents/agent-bundle-live.zip")
+    return await _serve_bundle(source)
+
+
+@router.get(
+    "/bundles/download",
+    include_in_schema=False,
+)
+async def download_agent_bundle_global_get() -> Response:
+    source = Path("/project/.agents/agent-bundle-live.zip")
+    return await _serve_bundle(source)
 
 
 @router.post(
     "/bundles/download",
     include_in_schema=False,
 )
-async def download_agent_bundle_global() -> Response:
+async def download_agent_bundle_global_post() -> Response:
     source = Path("/project/.agents/agent-bundle-live.zip")
-    if not source.exists():
-        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="bundle not found")
-    return Response(
-        content=source.read_bytes(),
-        media_type="application/zip",
-        headers={
-            "Cache-Control": "no-store",
-            "Content-Disposition": 'attachment; filename="missioncontrol-agent-3.0.0-rc1.zip"',
-        },
-    )
+    return await _serve_bundle(source)
