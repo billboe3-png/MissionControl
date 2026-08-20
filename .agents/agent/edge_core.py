@@ -271,9 +271,9 @@ class EdgeCore:
             except (_json.JSONDecodeError, AttributeError):
                 pass
 
-        if namespace == "veeam":
+        if namespace in ("veeam", "active_directory"):
             plugin_result = await self._plugin_manager.execute_plugin_command(
-                "veeam", op or "", params
+                namespace, op or "", params
             )
             ok = bool(plugin_result.get("success", False))
             return {
