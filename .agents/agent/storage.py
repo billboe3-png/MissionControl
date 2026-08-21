@@ -76,6 +76,12 @@ class HeartbeatRecord:
     latency_ms: float = 0.0
     pushed_at: str = ""
     error: str = ""
+    active_plugins: str = ""
+    health: str = "healthy"
+    cpu_percent: float | None = None
+    memory_percent: float | None = None
+    disk_percent: float | None = None
+    agent_version: str = ""
 
 
 class EdgeStorage:

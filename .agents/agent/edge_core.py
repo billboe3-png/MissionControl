@@ -12,6 +12,7 @@ import time
 from datetime import UTC, datetime
 from pathlib import Path
 
+from agent import __version__
 from agent.config import AgentSettings
 from agent.plugin import PluginManager
 from agent.remote import RemoteManager
@@ -19,6 +20,24 @@ from agent.storage import EdgeStorage, HeartbeatRecord, InventoryRecord, Storage
 from agent.sync import EdgeSync
 
 logger = logging.getLogger("mc-agent")
+
+
+def _collect_health_metrics() -> dict[str, float]:
+    """Best-effort local health metrics for heartbeat payloads."""
+    try:
+        import psutil
+
+        boot_time = psutil.boot_time()
+        uptime_hours = max(0.0, (time.time() - boot_time) / 3600.0)
+        return {
+            "cpu_percent": psutil.cpu_percent(interval=None),
+            "memory_percent": psutil.virtual_memory().percent,
+            "disk_percent": psutil.disk_usage("/").percent,
+            "uptime_hours": uptime_hours,
+        }
+    except Exception as e:  # pragma: no cover - platform dependent
+        logger.debug("Health metrics unavailable: %s", e)
+        return {}
 
 
 def _filter_targets_for_plugin(remote_targets: list[dict[str, Any]], plugin_name: str) -> list[dict[str, Any]]:
@@ -155,11 +174,25 @@ class EdgeCore:
         while self._running:
             try:
                 start = time.monotonic()
+                active_plugins = self._plugin_manager.get_active_plugins()
+                metrics = _collect_health_metrics()
+                cpu = metrics.get("cpu_percent")
+                mem = metrics.get("memory_percent")
+                disk = metrics.get("disk_percent")
+                health = "healthy"
+                if cpu is not None and (cpu > 90 or (mem is not None and mem > 90)):
+                    health = "warning"
                 record = HeartbeatRecord(
                     agent_id=self._agent_id or 0,
                     status="online",
                     latency_ms=(time.monotonic() - start) * 1000.0,
                     pushed_at=datetime.now(UTC).isoformat(),
+                    active_plugins=active_plugins,
+                    health=health,
+                    cpu_percent=cpu,
+                    memory_percent=mem,
+                    disk_percent=disk,
+                    agent_version=__version__,
                 )
                 self._storage.append_heartbeat(record)
 
