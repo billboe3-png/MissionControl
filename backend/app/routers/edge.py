@@ -309,6 +309,13 @@ async def push_edge_heartbeat(
         agent.id,
         status="online",
         last_heartbeat=datetime.now(UTC),
+        health=payload.health,
+        cpu_percent=payload.cpu_percent,
+        memory_percent=payload.memory_percent,
+        disk_percent=payload.disk_percent,
+        ip_address=payload.ip_address,
+        agent_version=payload.agent_version,
+        active_plugins=payload.active_plugins,
     )
 
     return {"status": "ok", "agent_id": agent_id}
@@ -412,7 +419,9 @@ async def get_edge_plugin(
 
 def _plugin_file_for_agent(db: Session, agent, plugin_name: str) -> str | None:
     """Return plugin source content for the edge agent."""
-    plugin_root = Path("/project/.agents/agent/plugins")
+    from app.core.config import get_settings
+
+    plugin_root = Path(get_settings().edge_agent_root) / "agent" / "plugins"
     candidate = plugin_root / plugin_name
     if candidate.exists():
         return candidate.read_text(encoding="utf-8")
@@ -439,7 +448,9 @@ async def download_edge_bundle(
     if agent.id != agent_id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Agent ID mismatch")
 
-    bundle_path = Path("/project/.agents/agent-bundle-live.zip")
+    from app.core.config import get_settings
+
+    bundle_path = Path(get_settings().edge_agent_root) / "agent-bundle-live.zip"
     if not bundle_path.exists():
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Bundle not found")
 

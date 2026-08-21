@@ -234,6 +234,12 @@ class EdgeSync:
             "latency_ms": record.latency_ms,
             "timestamp": datetime.now(UTC).isoformat(),
             "error": record.error,
+            "active_plugins": record.active_plugins,
+            "health": record.health,
+            "cpu_percent": record.cpu_percent,
+            "memory_percent": record.memory_percent,
+            "disk_percent": record.disk_percent,
+            "agent_version": record.agent_version,
         }
         try:
             response = self._client.post(endpoint, json=payload)
