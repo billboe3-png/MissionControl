@@ -204,6 +204,9 @@ def _build_config_manifest(db: Session, agent, service: AgentService) -> dict:
             "heartbeat_interval": agent.heartbeat_interval or 60,
             "inventory_interval": (agent.heartbeat_interval or 60) * 2,
             "data_dir": "/var/lib/mc-agent",
+            "enabled_plugins": [
+                p.strip() for p in (agent.enabled_plugins or "").split(",") if p.strip()
+            ],
         },
         "plugins": pending_plugins,
         "remote_targets": remote_targets,

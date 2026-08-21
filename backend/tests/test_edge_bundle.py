@@ -118,3 +118,21 @@ def test_edge_heartbeat_stores_plugins_and_metrics(client, registered_agent, db_
     assert row.disk_percent == 31.0
     assert row.ip_address == "10.161.0.10"
     assert row.agent_version == "3.0.0-rc1"
+
+
+def test_edge_config_manifest_includes_enabled_plugins(client, registered_agent, db_session):
+    """Config manifests carry the server-selected enabled plugin list."""
+    from app.models.db.agent import Agent
+
+    agent_id, api_key = registered_agent
+    row = db_session.query(Agent).filter(Agent.id == agent_id).first()
+    row.enabled_plugins = "linux,docker"
+    db_session.commit()
+
+    resp = client.get(
+        f"/api/v1/edge/{agent_id}/config",
+        headers={"X-Agent-API-Key": api_key},
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["config"]["enabled_plugins"] == ["linux", "docker"]
