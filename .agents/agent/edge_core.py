@@ -253,6 +253,9 @@ class EdgeCore:
         file_content_b64 = cmd.get("file_content_b64")
         logger.info("Executing edge command %s (type=%s)", command_id, command_type)
         start = _time.monotonic()
+        if command_type == "console_start":
+            self._handle_console_start(command)
+            return
         try:
             if command_type == "remote_execute":
                 result = await self._execute_remote_execute(
@@ -286,6 +289,43 @@ class EdgeCore:
         logger.info(
             "Edge command %s finished: success=%s", command_id, result.get("success")
         )
+
+    def _handle_console_start(self, command: str) -> None:
+        """Start an interactive console relay session (fire-and-forget).
+
+        Session status is reported through the console I/O endpoint, not the
+        command-result channel.
+        """
+        import json as _json
+
+        from agent.console_manager import ConsoleRelay
+
+        if getattr(self, "_console_relay", None) is None:
+            self._console_relay = ConsoleRelay()
+
+        try:
+            payload = _json.loads(command) if command.startswith("{") else {}
+        except _json.JSONDecodeError:
+            payload = {}
+        session_id = str(payload.get("session_id") or "")
+        hostname = str(payload.get("hostname") or "")
+        if not session_id or not hostname:
+            logger.warning("console_start missing session_id/hostname")
+            return
+
+        targets = list(getattr(self._remote_manager, "_targets", {}).values())
+        self._console_relay.start_session(
+            session_id=session_id,
+            agent_id=self._agent_id or 0,
+            base_url=self.config.server_url,
+            api_key=self.config.api_key or "",
+            verify_ssl=self.config.verify_ssl,
+            targets=targets,
+            hostname=hostname,
+            width=int(payload.get("width") or 120),
+            height=int(payload.get("height") or 40),
+        )
+        logger.info("Console relay %s starting for %s", session_id, hostname)
 
     async def _execute_remote_execute(
         self, command: str, timeout: int

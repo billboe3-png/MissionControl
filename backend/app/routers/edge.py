@@ -28,6 +28,7 @@ from app.schemas.agent import (
     AgentPendingCommand,
 )
 from app.services.agent_service import AgentService, agent_service
+from app.services.console_session_manager import manager as console_manager
 
 try:
     from app.ai.assistant import ai_assistant
@@ -362,6 +363,26 @@ async def get_edge_commands(
         )
 
     logger.info("Edge commands returned for agent %s: %d", agent_id, len(commands))
+
+    # Inject pending console-relay start ops (in-memory, no DB rows).
+    console_commands = []
+    for op in console_manager.drain_pending_ops(agent.id):
+        console_commands.append(
+            AgentPendingCommand(
+                id=0,
+                command_type="console_start",
+                command=json.dumps(op),
+                timeout=30,
+            )
+        )
+    if console_commands:
+        logger.info(
+            "Edge console start ops injected for agent %s: %d",
+            agent_id,
+            len(console_commands),
+        )
+    commands.extend(console_commands)
+
     return {"commands": [c.model_dump() for c in commands]}
 
 
@@ -385,6 +406,46 @@ async def post_edge_command_result(
         "Edge command %s result recorded for agent %s", payload.command_id, agent_id
     )
     return result
+
+
+# ------------------------------------------------------------------ #
+# Edge console relay (interactive console via agent)
+# ------------------------------------------------------------------ #
+
+
+class EdgeConsoleIORequest(BaseModel):
+    """Piggyback I/O frame from an edge agent console session."""
+
+    session_id: str
+    output: str = ""
+    status: str | None = None  # connected | error | exited
+    error: str = ""
+    exit_code: int | None = None
+
+
+@router.post("/{agent_id}/console/io")
+async def edge_console_io(
+    agent_id: int,
+    payload: EdgeConsoleIORequest,
+    x_agent_api_key: str | None = Header(None, alias="X-Agent-API-Key"),
+    authorization: str | None = Header(None, alias="Authorization"),
+    db: Session = Depends(get_db),
+    service: AgentService = Depends(get_agent_service),
+):
+    """Console relay I/O: agent posts PTY output, gets queued input back."""
+    api_key = _resolve_api_key(x_agent_api_key, authorization)
+    agent = await service.authenticate_agent(db, api_key)
+    if agent.id != agent_id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Agent ID mismatch")
+
+    return console_manager.apply_agent_update(
+        agent_id=agent.id,
+        session_id=payload.session_id,
+        output=payload.output,
+        status=payload.status,
+        error=payload.error,
+        exit_code=payload.exit_code,
+    )
 
 
 # ------------------------------------------------------------------ #
