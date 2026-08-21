@@ -1,5 +1,5 @@
-import re
 import os
+import re
 
 broken_files = [
     "src/pages/agents/AgentRemoteTargetsTab.tsx",
@@ -27,17 +27,17 @@ for rel_path in broken_files:
     if not os.path.exists(full_path):
         print(f"SKIP {rel_path}: not found")
         continue
-    
-    with open(full_path, 'r') as f:
+
+    with open(full_path) as f:
         lines = f.readlines()
-    
+
     # Find all import { blocks and fix broken ones
     new_lines = []
     i = 0
     fixed = False
     while i < len(lines):
         line = lines[i]
-        
+
         # Pattern: import {\nimport { formatDateTime } from "...";
         if line.strip() == 'import {' and i + 1 < len(lines):
             next_line = lines[i + 1]
@@ -50,7 +50,7 @@ for rel_path in broken_files:
                 fixed = True
                 i += 1
                 continue
-        
+
         # Pattern: import { formatDateTime } from "...";\n    name,
         if line.strip().startswith('import { formatDateTime } from') and i + 1 < len(lines):
             import_line = line
@@ -65,12 +65,12 @@ for rel_path in broken_files:
                 # Skip this line and let the next iteration handle it
                 i += 1
                 continue
-        
+
         new_lines.append(line)
         i += 1
-    
+
     content = ''.join(new_lines)
-    
+
     # Also fix: standalone import { formatDateTime } followed by another import block
     # that should be merged
     content = re.sub(
@@ -78,7 +78,7 @@ for rel_path in broken_files:
         r'import { formatDateTime } from "\1";\nimport {\n    \2\n} from "\3";',
         content
     )
-    
+
     if content != ''.join(lines):
         with open(full_path, 'w') as f:
             f.write(content)

@@ -1,4 +1,7 @@
-import urllib.request, zipfile, os, subprocess
+import os
+import subprocess
+import urllib.request
+import zipfile
 
 BASE = r"C:\MissionControlAgent"
 URL = "https://missioncontrol.optichosting.co.za/api/v1/agents/debug/bundle.zip?platform=windows"

@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """Mission Control Agent - Veeam Backup & Replication plugin."""
 
-import json
 import logging
 import os
 from typing import Any

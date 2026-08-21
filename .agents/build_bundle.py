@@ -1,6 +1,6 @@
+import shutil
 import zipfile
 from pathlib import Path
-import shutil
 
 bundle_dir = Path('.')
 version_file = bundle_dir / 'agent-bundle-live.version'

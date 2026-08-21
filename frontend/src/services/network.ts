@@ -160,6 +160,8 @@ export const DEMO_TOPOLOGY: NetworkTopologyResponse = {
 
 export const networkApi = {
   getTopology(agentId: number) {
-    return Promise.resolve({ data: DEMO_TOPOLOGY });
+    // TODO: replace with real backend call when topology endpoint exists
+    console.warn(`networkApi.getTopology is returning mock data for agent ${agentId}`)
+    return Promise.resolve({ data: DEMO_TOPOLOGY, _mock: true })
   },
 };

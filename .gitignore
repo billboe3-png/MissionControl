@@ -23,3 +23,12 @@ logs/
 # Operating System
 Thumbs.db
 .DS_Store
+
+
+# SSL keys/certs - generate at deploy time
+nginx/ssl/*.key
+nginx/ssl/*.crt
+
+# Backup/build artifacts
+*.bak
+**/tsconfig.app.tsbuildinfo

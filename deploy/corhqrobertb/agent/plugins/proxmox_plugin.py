@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """Mission Control Agent - Proxmox VE plugin."""
 
-import json
 import logging
 import os
 from typing import Any

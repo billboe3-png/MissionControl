@@ -8,16 +8,17 @@ Adds Hyper-V plugin cache tables: hyperv_hosts, hyperv_vms,
 hyperv_networks, hyperv_volumes, hyperv_checkpoints.
 """
 
-from typing import Sequence, Union
+from collections.abc import Sequence
+
+import sqlalchemy as sa
 
 from alembic import op
-import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision: str = "h3y5v6w7x8y9"
-down_revision: Union[str, None] = "f4a5b6c7d8e9"
-branch_labels: Union[str, Sequence[str], None] = None
-depends_on: Union[str, Sequence[str], None] = None
+down_revision: str | None = "f4a5b6c7d8e9"
+branch_labels: str | Sequence[str] | None = None
+depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:

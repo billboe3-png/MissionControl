@@ -41,8 +41,8 @@ class RegistrationManager:
             fingerprint["cpu"] = "unknown"
 
         try:
-            import subprocess
             import os
+            import subprocess
 
             system = platform.system()
             if system == "Linux":

@@ -1,5 +1,5 @@
-from pathlib import Path
 import os
+from pathlib import Path
 
 win_base = os.environ.get('MC_PATCH_BASE') or r'C:\MissionControlAgent\agent'
 base = Path(win_base)
