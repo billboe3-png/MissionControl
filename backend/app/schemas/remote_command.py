@@ -68,6 +68,13 @@ class RemoteExecuteRequest(BaseModel):
         description="Shell to execute the command in.",
         examples=["bash", "powershell", "cmd"],
     )
+    agent_id: int | None = Field(
+        default=None,
+        description=(
+            "Optional edge agent ID. When set, the command is relayed "
+            "through that agent instead of a direct connection."
+        ),
+    )
 
 
 class RemoteExecuteResponse(BaseModel):

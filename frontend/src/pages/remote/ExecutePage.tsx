@@ -3,6 +3,7 @@ import { useSearchParams } from "react-router-dom";
 import PageHeader from "../../components/common/PageHeader";
 import { useToast } from "../../contexts/ToastContext";
 import { remoteApi, hostsApi, HostData } from "../../services/remote";
+import { agentsApi, Agent } from "../../services/agents";
 
 function stripAnsi(str: string): string {
     return str
@@ -22,6 +23,9 @@ export default function ExecutePage() {
     const { showToast } = useToast();
     const [searchParams] = useSearchParams();
     const [hosts, setHosts] = useState<HostData[]>([]);
+    const [agents, setAgents] = useState<Agent[]>([]);
+    const [viaAgent, setViaAgent] = useState(true);
+    const [selectedAgentId, setSelectedAgentId] = useState<number | "">("");
     const [selectedHostId, setSelectedHostId] = useState<number | "">("");
     const [command, setCommand] = useState(() => searchParams.get("command") ?? "");
     const [shell, setShell] = useState(() => searchParams.get("shell") ?? "");
@@ -35,6 +39,10 @@ export default function ExecutePage() {
 
     useEffect(() => {
         hostsApi.list().then((data) => setHosts(data.items)).catch(() => {});
+        agentsApi
+            .list()
+            .then((d) => setAgents(d.items.filter((a) => a.status === "online" && a.enabled)))
+            .catch(() => {});
     }, []);
 
     useEffect(() => {
@@ -47,6 +55,7 @@ export default function ExecutePage() {
 
     const handleExecute = useCallback(async () => {
         if (!selectedHostId || !command.trim()) return;
+        if (viaAgent && !selectedAgentId) return;
         setRunning(true);
         setExitCode(null);
         setSuccess(null);
@@ -62,6 +71,7 @@ export default function ExecutePage() {
                 host_id: selectedHostId,
                 command: command.trim(),
                 shell: shell || undefined,
+                agent_id: viaAgent && selectedAgentId ? selectedAgentId : undefined,
             }, abort.signal);
 
             for await (const chunk of stream) {
@@ -100,7 +110,7 @@ export default function ExecutePage() {
             setRunning(false);
             abortRef.current = null;
         }
-    }, [selectedHostId, command, shell, showToast]);
+    }, [selectedHostId, command, shell, viaAgent, selectedAgentId, showToast]);
 
     const handleStop = useCallback(() => {
         abortRef.current?.abort();
@@ -151,10 +161,35 @@ export default function ExecutePage() {
                         <option value="cmd">CMD</option>
                     </select>
                 </div>
+                <div className="form-row">
+                    <label className="form-label">Connection</label>
+                    <select
+                        className="form-select"
+                        value={viaAgent ? "agent" : "direct"}
+                        onChange={(e) => setViaAgent(e.target.value === "agent")}
+                    >
+                        <option value="direct">Direct (server → host)</option>
+                        <option value="agent">Via agent relay</option>
+                    </select>
+                    {viaAgent && (
+                        <select
+                            className="form-select"
+                            value={selectedAgentId}
+                            onChange={(e) => setSelectedAgentId(Number(e.target.value) || "")}
+                        >
+                            <option value="">Select an agent…</option>
+                            {agents.map((a) => (
+                                <option key={a.id} value={a.id}>
+                                    {a.name} ({a.hostname})
+                                </option>
+                            ))}
+                        </select>
+                    )}
+                </div>
                 <button
                     className="btn btn-primary"
                     onClick={running ? handleStop : handleExecute}
-                    disabled={!running && (!selectedHostId || !command.trim())}
+                    disabled={!running && (!selectedHostId || !command.trim() || (viaAgent && !selectedAgentId))}
                 >
                     {running ? "Stop" : "Execute"}
                 </button>
