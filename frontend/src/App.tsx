@@ -99,6 +99,7 @@ import UniFiControllersPage from "./pages/unifi/ControllersPage";
 import UniFiSitesPage from "./pages/unifi/SitesPage";
 import NetworkTopologyPage from "./pages/network/NetworkTopologyPage";
 import TopologyPage from "./pages/agents/TopologyPage";
+import MikroTikOverviewPage from "./pages/mikrotik/OverviewPage";
 
 export default function App() {
     return (
@@ -176,6 +177,9 @@ export default function App() {
                             <Route path="/veeam/repositories" element={<VeeamRepositoriesPage />} />
 
                             <Route path="/veeam/servers" element={<VeeamServersPage />} />
+
+                            {/* MikroTik */}
+                            <Route path="/mikrotik" element={<MikroTikOverviewPage />} />
 
                             {/* Network */}
                             <Route path="/network/topology" element={<NetworkTopologyPage />} />
