@@ -212,8 +212,11 @@ class AgentActiveDirectoryProvider(ActiveDirectoryProvider):
             timeout=60,
         )
 
+        # Wait window covers the agent poll interval, the PowerShell
+        # execution and the post-command inventory refresh; queued
+        # duplicates from impatient clicks also drain within this budget.
         start = time.monotonic()
-        while time.monotonic() - start < 60:
+        while time.monotonic() - start < 90:
             if callable(getattr(self._db, "expire_all", None)):
                 self._db.expire_all()
             cand = AgentCommandRepository.get_by_id(self._db, cmd.id)
