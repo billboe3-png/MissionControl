@@ -17,7 +17,7 @@ export default function ConsolePage() {
         () => Number(searchParams.get("host_id")) || "",
     );
     const [agents, setAgents] = useState<Agent[]>([]);
-    const [viaAgent, setViaAgent] = useState(false);
+    const [viaAgent, setViaAgent] = useState(true);
     const [selectedAgentId, setSelectedAgentId] = useState<number | "">("");
     const [connected, setConnected] = useState(false);
     const [connecting, setConnecting] = useState(false);
