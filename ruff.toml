@@ -1,0 +1,14 @@
+line-length = 88
+target-version = "py312"
+
+[lint]
+select = ["E", "F", "I", "W", "UP", "B", "S", "SIM", "C4", "RUF"]
+extend-ignore = ["E501", "B008", "S507"]
+
+[lint.per-file-ignores]
+"tests/**/*.py" = ["S101", "PLR2004", "S106", "S105", "S108", "S604"]
+"scripts/**/*.py" = ["ALL"]
+"backend/debug/**/*.py" = ["ALL"]
+".agents/reinstall-tmp/**/*.py" = ["ALL"]
+"deploy/**/*.py" = ["ALL"]
+"frontend/public/*.py" = ["ALL"]
