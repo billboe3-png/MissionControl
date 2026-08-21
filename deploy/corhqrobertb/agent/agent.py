@@ -3,7 +3,6 @@
 import asyncio
 import json
 import logging
-import os
 import platform
 import socket
 import time

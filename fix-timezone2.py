@@ -1,5 +1,5 @@
-import re
 import os
+import re
 
 broken_files = [
     "src/pages/automation/SchedulesPage.tsx",
@@ -14,10 +14,10 @@ for rel_path in broken_files:
     if not os.path.exists(full_path):
         print(f"SKIP {rel_path}: not found")
         continue
-    
-    with open(full_path, 'r') as f:
+
+    with open(full_path) as f:
         content = f.read()
-    
+
     # Fix broken import blocks caused by regex inserting into multi-line imports
     # Pattern: import { \nimport { formatDateTime } from "...";\n    name,
     content = re.sub(
@@ -25,14 +25,14 @@ for rel_path in broken_files:
         r'import { formatDateTime } from "\1";\nimport {\n    \2\n} from "\3";',
         content
     )
-    
+
     # Fix single-line import breakage: import { \nimport { formatDateTime } from "...";\n    name,
     content = re.sub(
         r'import \{\nimport \{ formatDateTime \} from "([^"]+)";\n    ([^,]+),',
         r'import { formatDateTime } from "\1";\nimport { \2,',
         content
     )
-    
+
     with open(full_path, 'w') as f:
         f.write(content)
     print(f"FIXED {rel_path}")

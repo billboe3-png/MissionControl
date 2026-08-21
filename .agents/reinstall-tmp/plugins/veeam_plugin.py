@@ -74,7 +74,7 @@ class VeeamPlugin(AgentPlugin):
             ssh_host = veeam_profile.get("ssh_host")
             ssh_port = veeam_profile.get("ssh_port") or 22
             ssh_username = veeam_profile.get("ssh_username") or ""
-            ssh_password = veeam_profile.get("password") or ""
+            ssh_password = veeam_profile.get("ssh_password") or ""
             if ssh_host:
                 self._api_base = f"https://{ssh_host}:9419"
                 self._username = ssh_username or self._username

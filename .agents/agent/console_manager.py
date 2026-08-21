@@ -69,7 +69,7 @@ class ConsoleSession:
 
     def _connect(self) -> None:
         if not self.target:
-            raise RuntimeError(f"Unknown console target for this agent")
+            raise RuntimeError("Unknown console target for this agent")
         import paramiko
 
         client = paramiko.SSHClient()

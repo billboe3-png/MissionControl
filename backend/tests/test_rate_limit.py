@@ -6,7 +6,6 @@ IP) so normal page loads never lock every logged-in user out with 429s, while
 login stays rate-limited per account.
 """
 
-import pytest
 import starlette.responses
 from fastapi import FastAPI
 from fastapi.testclient import TestClient

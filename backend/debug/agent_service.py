@@ -1,14 +1,15 @@
 """Mission Control Edge Agent - Windows Service Wrapper."""
 from __future__ import annotations
+
 import os
 import subprocess
 import sys
 
 sys.path.insert(0, r'C:\MissionControlAgent')
 
+import win32event
 import win32service
 import win32serviceutil
-import win32event
 
 
 class EdgeAgentService(win32serviceutil.ServiceFramework):

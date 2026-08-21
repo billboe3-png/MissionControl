@@ -124,7 +124,7 @@ class VeeamPlugin(AgentPlugin):
             ssh_host = veeam_profile.get("ssh_host")
             ssh_port = veeam_profile.get("ssh_port") or 22
             ssh_username = veeam_profile.get("ssh_username") or ""
-            ssh_password = veeam_profile.get("password") or ""
+            ssh_password = veeam_profile.get("ssh_password") or ""
             if ssh_host:
                 self._api_base = f"https://{ssh_host}:9419"
                 self._username = ssh_username or self._username
@@ -141,7 +141,8 @@ class VeeamPlugin(AgentPlugin):
                 if remote_target:
                     self._ssh_target = remote_target
 
-        # If still not configured, try to derive from a remote target tagged with veeam plugin
+        # If still not configured, try to derive from a remote target tagged with
+        # veeam plugin
         if not self._api_base or not self._username:
             target = self._find_remote_target_for_plugin()
             if target:
@@ -199,7 +200,8 @@ class VeeamPlugin(AgentPlugin):
         if system == "Linux":
             if not self._api_base or not self._username:
                 logger.warning(
-                    "Veeam REST API not configured (set MC_VEEAM_API_BASE, MC_VEEAM_USERNAME)"
+                    "Veeam REST API not configured (set MC_VEEAM_API_BASE, "
+                    "MC_VEEAM_USERNAME)"
                 )
                 return
             if self._ssh_target:
@@ -382,7 +384,8 @@ class VeeamPlugin(AgentPlugin):
         )
         if jobs is None:
             logger.info(
-                "Veeam REST /jobs failed, trying local PowerShell fallback on agent host"
+                "Veeam REST /jobs failed, trying local PowerShell fallback"
+                "on agent host"
             )
             jobs = await self._run_collector("jobs") or []
             logger.info(
@@ -459,8 +462,10 @@ class VeeamPlugin(AgentPlugin):
     async def _check_veeam(self) -> bool:
         try:
             scripts = [
-                "if (Get-Command Get-VBRJob -ErrorAction SilentlyContinue) { exit 0 } else { exit 1 }",
-                "if (Get-Command Get-VBRSession -ErrorAction SilentlyContinue) { exit 0 } else { exit 1 }",
+                "if (Get-Command Get-VBRJob -ErrorAction SilentlyContinue)"
+                "{ exit 0 } else { exit 1 }",
+                "if (Get-Command Get-VBRSession -ErrorAction SilentlyContinue)"
+                "{ exit 0 } else { exit 1 }",
             ]
             for script in scripts:
                 proc = await asyncio.create_subprocess_exec(
@@ -628,7 +633,8 @@ class VeeamPlugin(AgentPlugin):
         script = (
             "Import-Module Veeam.Backup.PowerShell -ErrorAction SilentlyContinue; "
             "$ver = (Get-Module Veeam.Backup.PowerShell).Version; "
-            "$jobCount = (Get-VBRJob -ErrorAction SilentlyContinue | Measure-Object | Select-Object -ExpandProperty Count); "
+            "$jobCount = (Get-VBRJob -ErrorAction SilentlyContinue | Measure-Object "
+            "| Select-Object -ExpandProperty Count); "
             "if ($ver) { "
             "  @{"
             "    available=$true; "
@@ -636,7 +642,8 @@ class VeeamPlugin(AgentPlugin):
             "    jobCount=[int]$jobCount; "
             "    edition='Enterprise' "
             "  } | ConvertTo-Json -Compress "
-            "} else { @{available=$false; error='Module not loaded'} | ConvertTo-Json -Compress }"
+            "} else { @{available=$false; error='Module not loaded'} "
+            "| ConvertTo-Json -Compress }"
         )
         result = await self._run_script(script, timeout=30)
         if not result["success"]:
@@ -814,7 +821,8 @@ class VeeamPlugin(AgentPlugin):
         if command == "start_job":
             script = (
                 "Import-Module Veeam.Backup.PowerShell -ErrorAction SilentlyContinue; "
-                f"Start-VBRJob -JobId {args.get('job_id', '')} -ErrorAction Stop | ConvertTo-Json -Compress"
+                f"Start-VBRJob -JobId {args.get('job_id', '')} -ErrorAction Stop "
+                "| ConvertTo-Json -Compress"
             )
             result = await self._run_script_via_relay(
                 script, timeout=60, target_id=target_id
@@ -828,7 +836,8 @@ class VeeamPlugin(AgentPlugin):
         if command == "stop_job":
             script = (
                 "Import-Module Veeam.Backup.PowerShell -ErrorAction SilentlyContinue; "
-                f"Stop-VBRJob -JobId {args.get('job_id', '')} -ErrorAction Stop | ConvertTo-Json -Compress"
+                f"Stop-VBRJob -JobId {args.get('job_id', '')} -ErrorAction Stop "
+                "| ConvertTo-Json -Compress"
             )
             result = await self._run_script_via_relay(
                 script, timeout=60, target_id=target_id
@@ -877,8 +886,11 @@ AND js.job_name NOT LIKE '%Malware Detection%'"""
             "$sql = @'\n" + sql + "\n'@\n"
             "$sqlPath = 'C:\\temp\\mc_query.sql'\n"
             "New-Item -ItemType Directory -Force -Path 'C:\\temp' | Out-Null\n"
-            "[System.IO.File]::WriteAllText($sqlPath, $sql, [System.Text.Encoding]::UTF8)\n"
-            "& '" + self._PSQL + "' -h 127.0.0.1 -U " + self._DB_USER + " -d " + self._DB_NAME + " -t -A -f $sqlPath 2>&1 | Out-String\n"
+            "[System.IO.File]::WriteAllText($sqlPath, $sql, "
+            "[System.Text.Encoding]::UTF8)\n"
+            "& '" + self._PSQL + "' -h 127.0.0.1 -U "
+            + self._DB_USER + " -d " + self._DB_NAME
+            + " -t -A -f $sqlPath 2>&1 | Out-String\n"
         )
         result = await self._run_script_via_relay(
             ps_script, timeout=timeout, target_id=target_id

@@ -12,3 +12,5 @@ extend-ignore = ["E501", "B008", "S507"]
 ".agents/reinstall-tmp/**/*.py" = ["ALL"]
 "deploy/**/*.py" = ["ALL"]
 "frontend/public/*.py" = ["ALL"]
+
+".agents/agent/**/*.py" = ["ALL"]

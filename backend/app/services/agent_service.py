@@ -296,6 +296,7 @@ class AgentService:
             IntegrationProfileRepository.get_all_enabled_by_type(db, "veeam")
             + IntegrationProfileRepository.get_all_enabled_by_type(db, "active_directory")
         )
+        profiles = [p for p in profiles if p.agent_id == agent_id]
         result = []
         from app.core.config import get_settings
         from app.core.security import CredentialCipher

@@ -129,7 +129,9 @@ class MissionControlAgent:
                 plugin._context["remote_manager"] = self.remote_manager
 
     def _update_plugin_integration_context(self, response: dict[str, Any]) -> None:
-        """Push integration profiles, remote targets, and remote manager into initialized plugins."""
+        """Push integration profiles, remote targets, and remote manager into
+        initialized plugins.
+        """
         profiles = response.get("integration_profiles") or []
         remote_targets = response.get("remote_targets") or []
         for plugin in self.plugin_manager._plugins.values():
@@ -408,7 +410,8 @@ class MissionControlAgent:
             return "127.0.0.1"
 
     async def _process_pending_plugins(self, heartbeat_response: dict) -> None:
-        """Sync missing plugins from the server and initialize any newly enabled ones."""
+        """Sync missing plugins from the server and initialize any newly
+        enabled ones."""
         pending = heartbeat_response.get("pending_plugins") or []
         if not pending:
             return
