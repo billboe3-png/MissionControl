@@ -277,6 +277,29 @@ class EdgeCore:
                 "exit_code": -1,
             }
         result["duration_ms"] = int((_time.monotonic() - start) * 1000)
+
+        # AD management ops: refresh the AD inventory and push it BEFORE
+        # reporting success, so the server's user/group views reflect the
+        # change the moment the UI is told the command succeeded.
+        if command_type == "remote_execute" and result.get("success"):
+            try:
+                payload = (
+                    _json.loads(command)
+                    if isinstance(command, str) and command.startswith("{")
+                    else {}
+                )
+            except ValueError:
+                payload = {}
+            if payload.get("namespace") == "active_directory":
+                try:
+                    await self._run_single_plugin("active_directory")
+                    if self._sync:
+                        self._sync.push_inventory()
+                except Exception as e:
+                    logger.error(
+                        "Post-command inventory refresh failed: %s", e
+                    )
+
         if self._sync:
             self._sync.push_command_result(command_id, result)
         if command_type == "vm_action":
