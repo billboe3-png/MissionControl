@@ -108,6 +108,7 @@ export interface ExecuteCommandRequest {
     host_id: number;
     command: string;
     shell?: string;
+    agent_id?: number;
 }
 
 export interface ExecuteCommandResponse {

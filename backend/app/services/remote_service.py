@@ -166,13 +166,12 @@ class RemoteService:
                     detail="Credential profile not found",
                 )
         if data.connection_type is not None and data.connection_type not in (
-            "ssh",
-            "winrm",
+            "ssh", "winrm",
         ):
             raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="connection_type must be 'ssh' or 'winrm'",
-                )
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="connection_type must be 'ssh' or 'winrm'",
+            )
         updated = RemoteHostRepository.update(db, host_id, data)
         if updated is None:
             raise HTTPException(
@@ -259,15 +258,13 @@ class RemoteService:
                         status_code=status.HTTP_409_CONFLICT,
                         detail="Credential profile name already exists",
                     )
-        if (
-            data.authentication_type is not None
-            and data.authentication_type
-            not in ("password", "ssh_key", "ntlm", "basic")
+        if data.authentication_type is not None and data.authentication_type not in (
+            "password", "ssh_key", "ntlm", "basic",
         ):
             raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="authentication_type must be password, ssh_key, ntlm, or basic",
-                )
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="authentication_type must be password, ssh_key, ntlm, or basic",
+            )
         password_encrypted = None
         private_key_encrypted = None
         passphrase_encrypted = None
@@ -506,6 +503,117 @@ class RemoteService:
             timestamp=datetime.now(UTC).isoformat(),
         )
 
+    async def _execute_via_agent_stream(
+        self,
+        db: Session,
+        host,
+        request: RemoteExecuteRequest,
+        execution_source: str,
+        username_override: str | None,
+    ):
+        """Relay a command through a specific edge agent and stream its result.
+
+        The command is queued for the agent's poll loop (command_type
+        ``remote_execute`` with the resolved remote-target id); we then wait
+        for the agent to report the result back and emit it as SSE chunks.
+        """
+        import asyncio
+        import json
+        import time
+
+        from app.models.db.agent import Agent
+        from app.models.db.agent_remote_target import AgentRemoteTarget
+        from app.repositories.agent_repository import AgentCommandRepository
+
+        agent = db.query(Agent).filter(Agent.id == request.agent_id).first()
+        if agent is None:
+            yield {"type": "error", "message": "Agent not found"}
+            return
+        if agent.status != "online":
+            yield {
+                "type": "error",
+                "message": f"Agent {agent.name} is {agent.status}",
+            }
+            return
+
+        target = (
+            db.query(AgentRemoteTarget)
+            .filter(
+                AgentRemoteTarget.agent_id == agent.id,
+                AgentRemoteTarget.enabled.is_(True),
+                (
+                    (AgentRemoteTarget.hostname == host.hostname)
+                    | (AgentRemoteTarget.hostname == host.ip_address)
+                ),
+            )
+            .first()
+        )
+        if target is None:
+            yield {
+                "type": "error",
+                "message": (
+                    f"Host {host.name} is not configured as a remote "
+                    f"target of agent {agent.name}"
+                ),
+            }
+            return
+
+        cmd = AgentCommandRepository.create(
+            db=db,
+            agent_id=agent.id,
+            command_type="remote_execute",
+            command=json.dumps({
+                "command": request.command,
+                "target_id": target.id,
+            }),
+            timeout=120,
+            requested_by=username_override or execution_source,
+        )
+        logger.info(
+            "Relaying execute via agent %s target %s (command id %s)",
+            agent.name, target.hostname, cmd.id,
+        )
+
+        start = time.monotonic()
+        timeout_s = 150.0
+        while True:
+            await asyncio.sleep(1.0)
+            current = AgentCommandRepository.get_by_id(db, cmd.id)
+            if current is not None and current.status in ("completed", "failed"):
+                exit_code = current.exit_code if current.exit_code is not None else -1
+                if current.stdout:
+                    yield {"type": "stdout", "data": current.stdout}
+                if current.stderr:
+                    yield {"type": "stderr", "data": current.stderr}
+                yield {"type": "exit", "exit_code": exit_code}
+
+                duration_ms = int((time.monotonic() - start) * 1000)
+                CommandHistoryRepository.create(
+                    db=db,
+                    host_id=host.id,
+                    command=request.command,
+                    shell=request.shell,
+                    stdout=current.stdout or "",
+                    stderr=current.stderr or "",
+                    exit_code=exit_code,
+                    success=exit_code == 0,
+                    duration_ms=duration_ms,
+                    executed_by=username_override or "agent-relay",
+                    credential_id=host.credential_profile_id,
+                    username=None,
+                    execution_source=execution_source,
+                )
+                return
+            if time.monotonic() - start > timeout_s:
+                yield {
+                    "type": "error",
+                    "message": (
+                        f"Timed out waiting for agent {agent.name} "
+                        "to report the result"
+                    ),
+                }
+                return
+
     async def execute_command_stream(
         self,
         db: Session,
@@ -524,6 +632,14 @@ class RemoteService:
         valid_shells = ("bash", "powershell", "cmd")
         if request.shell not in valid_shells:
             yield {"type": "error", "message": f"shell must be one of: {', '.join(valid_shells)}"}
+            return
+
+        # Explicit agent relay: route through the requested edge agent.
+        if request.agent_id is not None:
+            async for chunk in self._execute_via_agent_stream(
+                db, host, request, execution_source, username_override,
+            ):
+                yield chunk
             return
 
         username, password, ssh_key = await self._resolve_credentials(db, host)
@@ -831,7 +947,7 @@ class RemoteService:
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Scheduled command not found",
             )
-        request = RemoteExecuteRequest(  # noqa: S604 - pydantic field selects translation shell, not subprocess
+        request = RemoteExecuteRequest(  # noqa: S604 - stored schedule, not user shell input
             host_id=schedule.host_id,
             command=schedule.command,
             shell="bash",
