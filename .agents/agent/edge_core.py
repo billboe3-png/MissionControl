@@ -74,6 +74,9 @@ class EdgeCore:
         # Sync manager
         self._sync: EdgeSync | None = None
 
+        # Server-selected plugins (None until first config pull = permissive)
+        self._enabled_plugins: set[str] | None = None
+
     async def start(self) -> None:
         """Start the edge agent."""
         logger.info("Mission Control Edge Agent starting")
@@ -168,13 +171,21 @@ class EdgeCore:
     # Heartbeat loop
     # ------------------------------------------------------------------ #
 
+    def _plugin_enabled(self, name: str) -> bool:
+        """True if the server enables this plugin (permissive before first pull)."""
+        return self._enabled_plugins is None or name in self._enabled_plugins
+
     async def _heartbeat_loop(self) -> None:
         """Local heartbeat logging."""
         interval = max(10, self.config.heartbeat_interval or 60)
         while self._running:
             try:
                 start = time.monotonic()
-                active_plugins = self._plugin_manager.get_active_plugins()
+                active_plugins = ",".join(
+                    p
+                    for p in self._plugin_manager.get_active_plugins().split(",")
+                    if p and self._plugin_enabled(p)
+                )
                 metrics = _collect_health_metrics()
                 cpu = metrics.get("cpu_percent")
                 mem = metrics.get("memory_percent")
@@ -348,7 +359,11 @@ class EdgeCore:
 
     async def _run_all_plugins(self) -> None:
         """Execute all enabled plugins and store results."""
-        plugins = list(self._plugin_manager._plugins.keys())
+        plugins = [
+            name
+            for name in self._plugin_manager._plugins
+            if self._plugin_enabled(name)
+        ]
         if not plugins:
             logger.debug("No plugins discovered")
             return
@@ -412,6 +427,16 @@ class EdgeCore:
         integration_profiles = list(
             getattr(manifest, "integration_profiles", None) or []
         )
+
+        enabled = (manifest.config or {}).get("enabled_plugins")
+        if enabled is not None:
+            self._enabled_plugins = {
+                str(p).strip() for p in enabled if str(p).strip()
+            }
+            logger.info(
+                "Server-enabled plugins: %s",
+                ",".join(sorted(self._enabled_plugins)) or "(none)",
+            )
 
         logger.info(
             "Applying pulled config manifest: %d targets, %d profiles",
