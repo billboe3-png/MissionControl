@@ -578,6 +578,9 @@ class RemoteService:
         timeout_s = 150.0
         while True:
             await asyncio.sleep(1.0)
+            # The result is committed by the agent's own request/session;
+            # expire the cached instance so the re-fetch sees fresh values.
+            db.expire(cmd)
             current = AgentCommandRepository.get_by_id(db, cmd.id)
             if current is not None and current.status in ("completed", "failed"):
                 exit_code = current.exit_code if current.exit_code is not None else -1
