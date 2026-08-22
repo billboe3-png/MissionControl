@@ -1,0 +1,12 @@
+{
+  "dev": {
+    "env_file": "False",
+    "values": {},
+    "findings": []
+  },
+  "live": {
+    "env_file": "False",
+    "values": {},
+    "findings": []
+  }
+}
