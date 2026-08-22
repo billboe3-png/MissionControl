@@ -280,6 +280,7 @@ app.include_router(auth.router, prefix="/api/v1")
 app.include_router(agent_token.router, prefix="/api/v1")
 app.include_router(plugin.router, prefix="/api/v1")
 app.include_router(marketplace.router, prefix="/api/v1")
+app.include_router(sop.router, prefix="/api/v1")
 
 
 @app.get("/api/v1")
