@@ -192,7 +192,11 @@ def check_postgres_connectivity() -> CheckResult:
         from app.core.config import get_settings
 
         settings = get_settings()
-        conn = psycopg.connect(settings.database_url)
+        async_dsn = settings.database_url.replace(
+            "postgresql+psycopg://",
+            "postgresql://",
+        )
+        conn = psycopg.connect(async_dsn)
         with conn.cursor() as cur:
             cur.execute("SELECT 1")
             cur.fetchone()
@@ -260,7 +264,11 @@ def check_database_schema() -> CheckResult:
         from app.core.config import get_settings
 
         settings = get_settings()
-        conn = psycopg.connect(settings.database_url)
+        async_dsn = settings.database_url.replace(
+            "postgresql+psycopg://",
+            "postgresql://",
+        )
+        conn = psycopg.connect(async_dsn)
         with conn.cursor() as cur:
             cur.execute(
                 "SELECT EXISTS(SELECT 1 FROM information_schema.tables "
@@ -297,8 +305,13 @@ def check_write_permissions() -> CheckResult:
 
     dirs_to_check = [
         os.path.join(tempfile.gettempdir(), "missioncontrol"),
-        os.path.join(os.path.expanduser("~"), ".config", "mission-control"),
     ]
+
+    home_config = os.path.join(
+        os.path.expanduser("~"), ".config", "mission-control"
+    )
+    if os.path.expanduser("~") != "/nonexistent":
+        dirs_to_check.append(home_config)
 
     issues = []
     for d in dirs_to_check:
