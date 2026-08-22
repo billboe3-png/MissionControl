@@ -486,16 +486,11 @@ class TestVeeamPluginRoutes:
         assert isinstance(response.json(), list)
 
     def test_server_dict_has_live_fields(self, db_session):
-        from app.db.database import SessionLocal
         from app.plugins.installed.official_veeam.cache import cache_manager
-        session = SessionLocal()
-        try:
-            session.add(VeeamBackupServer(name="v1"))
-            session.commit()
-        finally:
-            session.close()
-
+        db_session.query(VeeamBackupServer).delete()
+        db_session.add(VeeamBackupServer(name="v1"))
         db_session.commit()
+
         row = cache_manager.get_servers(db_session)[0]
         assert "edition" in row
         assert "db_type" in row
