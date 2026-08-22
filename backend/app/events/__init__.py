@@ -124,6 +124,18 @@ class EventType(StrEnum):
     INTEGRATION_DISCONNECTED = "integration.disconnected"
     INTEGRATION_ERROR = "integration.error"
 
+    # SOP
+    SOP_CREATED = "sop.created"
+    SOP_UPDATED = "sop.updated"
+    SOP_SUBMITTED = "sop.submitted"
+    SOP_APPROVED = "sop.approved"
+    SOP_REJECTED = "sop.rejected"
+    SOP_PUBLISHED = "sop.published"
+    SOP_ARCHIVED = "sop.archived"
+    SOP_REVIEW_DUE = "sop.review_due"
+    SOP_IMPORTED = "sop.imported"
+    SOP_AI_GENERATED = "sop.ai_generated"
+
     # System
     SYSTEM_STARTUP = "system.startup"
     SYSTEM_SHUTDOWN = "system.shutdown"

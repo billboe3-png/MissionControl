@@ -1,83 +1,100 @@
 """
-Mission Control SOP Document Repository
+Mission Control SOP Repository
 """
-from datetime import UTC, datetime
+import hashlib
 from pathlib import Path
 
-from sqlalchemy import func, select
+from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
-from app.models.db.sop_document import SOPApproval, SOPDocument
-from app.schemas.sop_document import (
-    SOPApprovalCreate,
-    SOPDocumentCreate,
-    SOPDocumentUpdate,
+from app.models.db.sop import (
+    SOP,
+    SOPApproval,
+    SOPAuditEvent,
+    SOPSource,
+    SOPVersion,
+)
+from app.schemas.sop import (
+    SOPCreate,
+    SOPUpdate,
 )
 
 
-def _normalize(value: str | None) -> str | None:
-    if value is None:
-        return None
-    return value.strip() or None
-
-
-class SOPDocumentRepository:
-    """Data access layer for SOP documents stored in PostgreSQL."""
-
+class SOPRepository:
     @staticmethod
-    def get_all(db: Session) -> list[SOPDocument]:
-        stmt = select(SOPDocument).order_by(SOPDocument.updated_at.desc())
+    def get_all(db: Session, company_id: int | None = None, site_id: int | None = None, status: str | None = None, q: str | None = None) -> list[SOP]:
+        stmt = select(SOP)
+        if company_id is not None:
+            stmt = stmt.where(SOP.company_id == company_id)
+        if site_id is not None:
+            stmt = stmt.where(SOP.site_id == site_id)
+        if status:
+            stmt = stmt.where(SOP.status == status)
+        if q:
+            like = f"%{q}%"
+            stmt = stmt.where(or_(SOP.title.ilike(like), SOP.description.ilike(like), SOP.purpose.ilike(like), SOP.procedure.ilike(like)))
+        stmt = stmt.order_by(SOP.updated_at.desc())
         return list(db.scalars(stmt).all())
 
     @staticmethod
-    def get_by_id(db: Session, sop_id: int) -> SOPDocument | None:
-        stmt = select(SOPDocument).where(SOPDocument.id == sop_id)
-        return db.scalar(stmt)
+    def get_by_id(db: Session, sop_id: int) -> SOP | None:
+        return db.scalar(select(SOP).where(SOP.id == sop_id))
 
     @staticmethod
-    def create(db: Session, payload: SOPDocumentCreate) -> SOPDocument:
-        entity = SOPDocument(
+    def create(db: Session, payload: SOPCreate) -> SOP:
+        entity = SOP(
             title=payload.title.strip(),
-            description=_normalize(payload.description),
-            status=payload.status.strip().lower() if payload.status else "draft",
-            approval_status=(
-                payload.approval_status.strip().lower()
-                if payload.approval_status
-                else "pending"
-            ),
-            version=_normalize(payload.version),
-            created_by=_normalize(payload.created_by),
+            description=(payload.description or None),
+            company_id=payload.company_id,
+            site_id=payload.site_id,
+            category_id=payload.category_id,
+            owner_id=payload.owner_id,
+            tags=(payload.tags or None),
+            purpose=payload.purpose,
+            scope=payload.scope,
+            audience=payload.audience,
+            responsibilities=payload.responsibilities,
+            prerequisites=payload.prerequisites,
+            required_permissions=payload.required_permissions,
+            required_tools=payload.required_tools,
+            procedure=payload.procedure,
+            decision_points=payload.decision_points,
+            validation=payload.validation,
+            troubleshooting=payload.troubleshooting,
+            escalation=payload.escalation,
+            rollback=payload.rollback,
+            safety_requirements=payload.safety_requirements,
+            references=payload.references,
+            related_sops=payload.related_sops,
         )
+        db.add(entity)
+        db.flush()
+        version = SOPRepository._create_version(db, entity, payload)
+        entity.current_version = version.version
         db.add(entity)
         db.commit()
         db.refresh(entity)
         return entity
 
     @staticmethod
-    def update(db: Session, sop_id: int, payload: SOPDocumentUpdate) -> SOPDocument | None:
-        entity = SOPDocumentRepository.get_by_id(db, sop_id)
+    def update(db: Session, sop_id: int, payload: SOPUpdate, actor: str | None = None, change_reason: str | None = None) -> SOP | None:
+        entity = SOPRepository.get_by_id(db, sop_id)
         if entity is None:
             return None
-
         updates = payload.model_dump(exclude_unset=True)
         for field, value in updates.items():
-            if field in {"title"} and value is not None:
-                value = value.strip()
-            if field in {"description", "version", "created_by", "approved_by"}:
-                value = _normalize(value)
-            if field == "status" and isinstance(value, str):
-                value = value.strip().lower()
-            if field == "approval_status" and isinstance(value, str):
-                value = value.strip().lower()
-            setattr(entity, field, value)
-
+            if value is not None:
+                setattr(entity, field, value)
+        if change_reason:
+            version = SOPRepository._create_version(db, entity, payload, change_reason=change_reason, created_by=actor)
+            entity.current_version = version.version
         db.commit()
         db.refresh(entity)
         return entity
 
     @staticmethod
     def delete(db: Session, sop_id: int) -> bool:
-        entity = SOPDocumentRepository.get_by_id(db, sop_id)
+        entity = SOPRepository.get_by_id(db, sop_id)
         if entity is None:
             return False
         db.delete(entity)
@@ -85,57 +102,96 @@ class SOPDocumentRepository:
         return True
 
     @staticmethod
-    def get_count(db: Session) -> int:
-        stmt = select(func.count()).select_from(SOPDocument)
-        return db.scalar(stmt) or 0
-
-    @staticmethod
-    def add_approval(db: Session, sop_id: int, payload: SOPApprovalCreate) -> SOPApproval | None:
-        document = SOPDocumentRepository.get_by_id(db, sop_id)
-        if document is None:
-            return None
-        entity = SOPApproval(
-            sop_document_id=sop_id,
-            approver_name=payload.approver_name.strip(),
-            action=payload.action.strip().lower(),
-            comments=_normalize(payload.comments),
-            acted_at=datetime.now(UTC),
+    def add_source(db: Session, sop_id: int, source_name: str, source_type: str, content: str | None, file_hash: str | None = None, importing_user: str | None = None) -> SOPSource:
+        entity = SOPSource(
+            sop_id=sop_id,
+            source_name=source_name,
+            source_type=source_type,
+            source_hash=file_hash,
+            source_size_bytes=len(content.encode("utf-8")) if content else None,
+            imported_by=importing_user,
         )
         db.add(entity)
-        document.approval_status = entity.action
-        document.approved_by = entity.approver_name
-        document.approved_at = entity.acted_at
-        if document.approval_status == "approved":
-            document.status = "active"
-        elif document.approval_status == "rejected":
-            document.status = "draft"
+        return entity
+
+    @staticmethod
+    def add_version(db: Session, sop: SOP, payload: SOPCreate | SOPUpdate, content_type: str = "user_provided", created_by: str | None = None, change_reason: str | None = None) -> SOPVersion:
+        return SOPRepository._create_version(db, sop, payload, content_type=content_type, created_by=created_by, change_reason=change_reason)
+
+    @staticmethod
+    def _create_version(db: Session, sop: SOP, payload: SOPCreate | SOPUpdate, content_type: str = "user_provided", created_by: str | None = None, change_reason: str | None = None) -> SOPVersion:
+        versions = list(db.scalars(select(SOPVersion).where(SOPVersion.sop_id == sop.id).order_by(SOPVersion.id.desc())).all()[:20])
+        next_version = "1.0"
+        if versions:
+            try:
+                major, minor = versions[0].version.split(".", 1)
+                next_version = f"{major}.{int(minor) + 1}"
+            except Exception:
+                next_version = versions[0].version
+        data = payload.model_dump(exclude_unset=True) if hasattr(payload, "model_dump") else payload.__dict__
+        structured_fields = [
+            "title", "description", "purpose", "scope", "audience", "responsibilities",
+            "prerequisites", "required_permissions", "required_tools", "procedure",
+            "decision_points", "validation", "troubleshooting", "escalation", "rollback",
+            "safety_requirements", "references", "related_sops",
+        ]
+        version = SOPVersion(
+            sop_id=sop.id,
+            version=next_version,
+            status=sop.status if sop else "draft",
+            content_type=content_type,
+            change_reason=change_reason,
+            created_by=created_by,
+            **{field: sop.__dict__.get(field) if isinstance(payload, SOPUpdate) else data.get(field) for field in structured_fields},
+        )
+        db.add(version)
+        db.flush()
+        return version
+
+    @staticmethod
+    def add_approval(db: Session, sop_id: int | None, sop_version_id: int | None, action: str, approver_name: str, comments: str | None = None) -> SOPApproval | None:
+        entity = SOPApproval(sop_id=sop_id, sop_version_id=sop_version_id, action=action.strip().lower(), approver_name=approver_name.strip(), comments=comments)
+        db.add(entity)
         db.commit()
         db.refresh(entity)
         return entity
 
     @staticmethod
-    def get_approvals(db: Session, sop_id: int) -> list[SOPApproval]:
+    def audit(db: Session, action: str, sop_id: int | None = None, sop_version_id: int | None = None, actor: str | None = None, details: str | None = None, source: str | None = None, company_id: int | None = None, site_id: int | None = None) -> SOPAuditEvent:
+        entity = SOPAuditEvent(action=action, actor=actor, details=details, source=source, sop_id=sop_id, sop_version_id=sop_version_id, company_id=company_id, site_id=site_id)
+        db.add(entity)
+        db.commit()
+        db.refresh(entity)
+        return entity
+
+
+class SOPSearchRepository:
+    @staticmethod
+    def search(db: Session, q: str, company_id: int | None = None, limit: int = 25) -> list[SOP]:
+        like = f"%{q}%"
         stmt = (
-            select(SOPApproval)
-            .where(SOPApproval.sop_document_id == sop_id)
-            .order_by(SOPApproval.acted_at.desc())
+            select(SOP)
+            .where(
+                or_(
+                    SOP.title.ilike(like),
+                    SOP.description.ilike(like),
+                    SOP.purpose.ilike(like),
+                    SOP.procedure.ilike(like),
+                    SOP.tags.ilike(like),
+                    SOP.references.ilike(like),
+                )
+            )
+            .order_by(SOP.updated_at.desc())
+            .limit(limit)
         )
+        if company_id is not None:
+            stmt = stmt.where(SOP.company_id == company_id)
         return list(db.scalars(stmt).all())
 
 
-def extract_text_from_file(path: str | Path) -> str | None:
-    """Extract text from a PDF or Word document for search/indexing."""
-    suffix = Path(path).suffix.lower()
-    text: str | None = None
-    try:
-        if suffix == ".pdf":
-            from pypdf import PdfReader
-            reader = PdfReader(str(path))
-            text = "\n".join(page.extract_text() or "" for page in reader.pages)
-        elif suffix in {".docx", ".doc"}:
-            import docx
-            document = docx.Document(str(path))
-            text = "\n".join(paragraph.text for paragraph in document.paragraphs)
-    except Exception:
-        text = None
-    return text
+def compute_sha256(path: Path) -> str:
+    h = hashlib.sha256()
+    with path.open("rb") as f:
+        for chunk in iter(lambda: f.read(1024 * 1024), b""):
+            h.update(chunk)
+    return h.hexdigest()

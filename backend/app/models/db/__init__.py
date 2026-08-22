@@ -27,7 +27,7 @@ from .project import Project
 from .remote_host import RemoteHost
 from .resume import Resume
 from .scheduled_command import ScheduledCommand
-from .sop_document import SOPDocument, SOPApproval
+from .sop import SOP, SOPApproval, SOPAuditEvent, SOPCategory, SOPVersion, SOPSource
 from .site import Site
 from .task import Task
 from .user import User
@@ -58,8 +58,12 @@ __all__ = [
     "RemoteHost",
     "Resume",
     "ScheduledCommand",
-    "SOPDocument",
+    "SOP",
     "SOPApproval",
+    "SOPAuditEvent",
+    "SOPCategory",
+    "SOPVersion",
+    "SOPSource",
     "Site",
     "Task",
     "User",

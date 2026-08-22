@@ -1,48 +1,51 @@
 import { useCallback, useEffect, useState } from "react";
 import PageHeader from "../../components/common/PageHeader";
-import StatusBadge from "../../components/common/StatusBadge";
-import { sopApi, SOPDocument, SOPDocumentCreateInput } from "../../services/sop";
+import { sopApi, SOP, SOPCreateInput, SOPImportRequest, SOPVersionResponse } from "../../services/sop";
 
-type StatusFilter = "all" | "draft" | "active" | "archived";
-type ApprovalFilter = "all" | "pending" | "approved" | "rejected";
+type StatusFilter = "all" | "draft" | "pending_review" | "pending_approval" | "approved" | "published" | "rejected" | "archived";
 
-export default function SOPDocumentsPage() {
-  const [documents, setDocuments] = useState<SOPDocument[]>([]);
+export default function SOPLibraryPage() {
+  const [items, setItems] = useState<SOP[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showCreate, setShowCreate] = useState(false);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
-  const [approvalFilter, setApprovalFilter] = useState<ApprovalFilter>("all");
+  const [query, setQuery] = useState("");
+  const [selectedSOP, setSelectedSOP] = useState<SOP | null>(null);
+  const [versions, setVersions] = useState<SOPVersionResponse[]>([]);
 
-  const loadDocuments = useCallback(async () => {
+  const load = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const data = await sopApi.list();
-      let items = data.items;
-      if (statusFilter !== "all") {
-        items = items.filter((item) => item.status === statusFilter);
-      }
-      if (approvalFilter !== "all") {
-        items = items.filter((item) => item.approval_status === approvalFilter);
-      }
-      setDocuments(items);
+      const data = await sopApi.list({ status: statusFilter === "all" ? undefined : statusFilter, q: query || undefined });
+      setItems(data.items);
     } catch (e: any) {
-      setError(e.message || "Failed to load SOP documents");
+      setError(e.message || "Failed to load SOPs");
     } finally {
       setLoading(false);
     }
-  }, [statusFilter, approvalFilter]);
+  }, [statusFilter, query]);
 
   useEffect(() => {
-    loadDocuments();
-  }, [loadDocuments]);
+    load();
+  }, [load]);
+
+  const openSOP = async (sop: SOP) => {
+    setSelectedSOP(sop);
+    try {
+      const data = await sopApi.versions(sop.id);
+      setVersions(data);
+    } catch {
+      setVersions([]);
+    }
+  };
 
   return (
     <>
       <PageHeader
-        title="Standard Operating Procedures"
-        subtitle="Upload PDF/Word SOPs, track approval status, and view extracted text"
+        title="SOP Library"
+        subtitle="Published operational knowledge"
         actions={
           <button className="btn btn-primary" onClick={() => setShowCreate(true)}>
             + New SOP
@@ -53,36 +56,32 @@ export default function SOPDocumentsPage() {
       {error && <div className="error-banner">{error}</div>}
 
       <div className="toolbar">
-        <div className="filters">
-          <label>Status:</label>
-          <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}>
-            <option value="all">All</option>
-            <option value="draft">Draft</option>
-            <option value="active">Active</option>
-            <option value="archived">Archived</option>
-          </select>
-          <label>Approval:</label>
-          <select
-            value={approvalFilter}
-            onChange={(e) => setApprovalFilter(e.target.value as ApprovalFilter)}
-          >
-            <option value="all">All</option>
-            <option value="pending">Pending</option>
-            <option value="approved">Approved</option>
-            <option value="rejected">Rejected</option>
-          </select>
-        </div>
+        <input
+          placeholder="Search SOPs..."
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && load()}
+        />
+        <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}>
+          <option value="all">All Statuses</option>
+          <option value="draft">Draft</option>
+          <option value="pending_review">Pending Review</option>
+          <option value="pending_approval">Pending Approval</option>
+          <option value="approved">Approved</option>
+          <option value="published">Published</option>
+          <option value="rejected">Rejected</option>
+          <option value="archived">Archived</option>
+        </select>
+        <button className="btn" onClick={load}>Refresh</button>
       </div>
 
       {loading ? (
-        <div className="loading-bar">Loading SOP documents…</div>
-      ) : documents.length === 0 ? (
+        <div className="loading-bar">Loading SOPs…</div>
+      ) : items.length === 0 ? (
         <div className="empty-state">
           <h3>No SOPs</h3>
-          <p>Upload a PDF or Word SOP to get started.</p>
-          <button className="btn btn-primary" onClick={() => setShowCreate(true)}>
-            + New SOP
-          </button>
+          <p>Create or import an SOP to get started.</p>
+          <button className="btn btn-primary" onClick={() => setShowCreate(true)}>+ New SOP</button>
         </div>
       ) : (
         <div className="table-container">
@@ -91,34 +90,20 @@ export default function SOPDocumentsPage() {
               <tr>
                 <th>Title</th>
                 <th>Status</th>
-                <th>Approval</th>
                 <th>Version</th>
                 <th>Updated</th>
               </tr>
             </thead>
             <tbody>
-              {documents.map((doc) => (
-                <tr key={doc.id}>
+              {items.map((item) => (
+                <tr key={item.id} onClick={() => openSOP(item)} style={{ cursor: "pointer" }}>
                   <td>
-                    <strong>{doc.title}</strong>
-                    {doc.description && (
-                      <div style={{ fontSize: "0.85em", opacity: 0.6 }}>{doc.description}</div>
-                    )}
+                    <strong>{item.title}</strong>
+                    {item.description && <div style={{ fontSize: "0.85em", opacity: 0.6 }}>{item.description}</div>}
                   </td>
-                  <td>
-                    <span className={`status-badge ${doc.status === "active" ? "status-ok" : "status-disabled"}`}>
-                      {doc.status}
-                    </span>
-                  </td>
-                  <td>
-                    <span
-                      className={`status-badge ${doc.approval_status === "approved" ? "status-ok" : doc.approval_status === "rejected" ? "status-critical" : "status-warning"}`}
-                    >
-                      {doc.approval_status}
-                    </span>
-                  </td>
-                  <td>{doc.version || "—"}</td>
-                  <td>{new Date(doc.updated_at).toLocaleString()}</td>
+                  <td><span className={`status-badge ${item.status === "published" ? "status-ok" : item.status === "approved" ? "status-ok" : "status-warning"}`}>{item.status}</span></td>
+                  <td>{item.current_version || "—"}</td>
+                  <td>{new Date(item.updated_at).toLocaleString()}</td>
                 </tr>
               ))}
             </tbody>
@@ -126,8 +111,30 @@ export default function SOPDocumentsPage() {
         </div>
       )}
 
-      {showCreate && (
-        <SOPCreateModal onClose={() => setShowCreate(false)} onSaved={loadDocuments} />
+      {showCreate && <SOPCreateModal onClose={() => setShowCreate(false)} onSaved={load} />}
+
+      {selectedSOP && (
+        <div className="modal-overlay" onClick={() => setSelectedSOP(null)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()} style={{ width: "720px" }}>
+            <div className="modal-header">
+              <h2>{selectedSOP.title}</h2>
+              <button className="modal-close" onClick={() => setSelectedSOP(null)}>&times;</button>
+            </div>
+            <div className="modal-body">
+              <p><strong>Status:</strong> {selectedSOP.status}</p>
+              {selectedSOP.purpose && <p><strong>Purpose:</strong> {selectedSOP.purpose}</p>}
+              {selectedSOP.procedure && <div style={{ marginTop: "0.5rem" }}><strong>Procedure</strong><pre style={{ whiteSpace: "pre-wrap" }}>{selectedSOP.procedure}</pre></div>}
+              <h3 style={{ marginTop: "1rem" }}>Versions</h3>
+              {versions.length === 0 ? <p>No versions.</p> : (
+                <ul>
+                  {versions.map((v) => (
+                    <li key={v.id}>{v.version} — {v.status} — {new Date(v.created_at).toLocaleString()}</li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </div>
+        </div>
       )}
     </>
   );
@@ -136,8 +143,8 @@ export default function SOPDocumentsPage() {
 function SOPCreateModal({ onClose, onSaved }: { onClose: () => void; onSaved: () => void }) {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
-  const [version, setVersion] = useState("");
-  const [createdBy, setCreatedBy] = useState("");
+  const [purpose, setPurpose] = useState("");
+  const [procedure, setProcedure] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -149,15 +156,12 @@ function SOPCreateModal({ onClose, onSaved }: { onClose: () => void; onSaved: ()
     setSaving(true);
     setError(null);
     try {
-      const payload: SOPDocumentCreateInput = {
+      await sopApi.create({
         title: title.trim(),
         description: description || undefined,
-        version: version || undefined,
-        created_by: createdBy || undefined,
-        status: "draft",
-        approval_status: "pending",
-      };
-      await sopApi.create(payload);
+        purpose: purpose || undefined,
+        procedure: procedure || undefined,
+      });
       onSaved();
       onClose();
     } catch (e: any) {
@@ -176,32 +180,26 @@ function SOPCreateModal({ onClose, onSaved }: { onClose: () => void; onSaved: ()
         </div>
         <div className="modal-body">
           {error && <div className="alert alert-error">{error}</div>}
-
           <div className="form-group">
             <label>Title *</label>
-            <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. Firewall change control SOP" />
+            <input value={title} onChange={(e) => setTitle(e.target.value)} />
           </div>
-
           <div className="form-group">
             <label>Description</label>
             <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={3} />
           </div>
-
           <div className="form-group">
-            <label>Version</label>
-            <input value={version} onChange={(e) => setVersion(e.target.value)} placeholder="e.g. 1.0" />
+            <label>Purpose</label>
+            <textarea value={purpose} onChange={(e) => setPurpose(e.target.value)} rows={3} />
           </div>
-
           <div className="form-group">
-            <label>Created By</label>
-            <input value={createdBy} onChange={(e) => setCreatedBy(e.target.value)} placeholder="e.g. Robert Barnes" />
+            <label>Procedure</label>
+            <textarea value={procedure} onChange={(e) => setProcedure(e.target.value)} rows={5} />
           </div>
         </div>
         <div className="modal-footer">
           <button className="btn" onClick={onClose} disabled={saving}>Cancel</button>
-          <button className="btn btn-primary" onClick={handleSubmit} disabled={saving}>
-            {saving ? "Saving..." : "Create"}
-          </button>
+          <button className="btn btn-primary" onClick={handleSubmit} disabled={saving}>{saving ? "Saving..." : "Create"}</button>
         </div>
       </div>
     </div>
