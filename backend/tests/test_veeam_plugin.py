@@ -148,6 +148,14 @@ class TestVeeamPlugin:
 
     def test_plugin_instantiation(self):
         from app.plugins.installed.official_veeam import VeeamPlugin
+        from app.plugins.installed.official_veeam.models import VeeamBackupServer
+        from app.db.database import SessionLocal
+
+        # Ensure clean Veeam server state for isolation
+        session = SessionLocal()
+        session.query(VeeamBackupServer).delete()
+        session.commit()
+        session.close()
 
         manifest = {
             "id": "official_veeam",
@@ -162,6 +170,14 @@ class TestVeeamPlugin:
     @pytest.mark.asyncio
     async def test_plugin_setup_no_servers(self):
         from app.plugins.installed.official_veeam import VeeamPlugin
+        from app.plugins.installed.official_veeam.models import VeeamBackupServer
+        from app.db.database import SessionLocal
+
+        # Ensure clean Veeam server state for isolation
+        session = SessionLocal()
+        session.query(VeeamBackupServer).delete()
+        session.commit()
+        session.close()
 
         manifest = {
             "id": "official_veeam",
@@ -176,6 +192,14 @@ class TestVeeamPlugin:
     @pytest.mark.asyncio
     async def test_plugin_start_no_servers(self):
         from app.plugins.installed.official_veeam import VeeamPlugin
+        from app.plugins.installed.official_veeam.models import VeeamBackupServer
+        from app.db.database import SessionLocal
+
+        # Ensure clean Veeam server state for isolation
+        session = SessionLocal()
+        session.query(VeeamBackupServer).delete()
+        session.commit()
+        session.close()
 
         manifest = {
             "id": "official_veeam",
@@ -191,6 +215,14 @@ class TestVeeamPlugin:
     @pytest.mark.asyncio
     async def test_plugin_stop(self):
         from app.plugins.installed.official_veeam import VeeamPlugin
+        from app.plugins.installed.official_veeam.models import VeeamBackupServer
+        from app.db.database import SessionLocal
+
+        # Ensure clean Veeam server state for isolation
+        session = SessionLocal()
+        session.query(VeeamBackupServer).delete()
+        session.commit()
+        session.close()
 
         manifest = {
             "id": "official_veeam",
@@ -206,6 +238,14 @@ class TestVeeamPlugin:
     @pytest.mark.asyncio
     async def test_plugin_setup_keeps_db_session_alive(self):
         from app.plugins.installed.official_veeam import VeeamPlugin
+        from app.plugins.installed.official_veeam.models import VeeamBackupServer
+        from app.db.database import SessionLocal
+
+        # Ensure clean Veeam server state for isolation
+        session = SessionLocal()
+        session.query(VeeamBackupServer).delete()
+        session.commit()
+        session.close()
 
         manifest = {
             "id": "official_veeam",
@@ -224,6 +264,14 @@ class TestVeeamPlugin:
     @pytest.mark.asyncio
     async def test_plugin_health_check_no_clients(self):
         from app.plugins.installed.official_veeam import VeeamPlugin
+        from app.plugins.installed.official_veeam.models import VeeamBackupServer
+        from app.db.database import SessionLocal
+
+        # Ensure clean Veeam server state for isolation
+        session = SessionLocal()
+        session.query(VeeamBackupServer).delete()
+        session.commit()
+        session.close()
 
         manifest = {
             "id": "official_veeam",
@@ -239,6 +287,14 @@ class TestVeeamPlugin:
     @pytest.mark.asyncio
     async def test_get_dashboard_widgets(self):
         from app.plugins.installed.official_veeam import VeeamPlugin
+        from app.plugins.installed.official_veeam.models import VeeamBackupServer
+        from app.db.database import SessionLocal
+
+        # Ensure clean Veeam server state for isolation
+        session = SessionLocal()
+        session.query(VeeamBackupServer).delete()
+        session.commit()
+        session.close()
 
         manifest = {
             "id": "official_veeam",
@@ -257,6 +313,14 @@ class TestVeeamPlugin:
     @pytest.mark.asyncio
     async def test_get_navigation_items(self):
         from app.plugins.installed.official_veeam import VeeamPlugin
+        from app.plugins.installed.official_veeam.models import VeeamBackupServer
+        from app.db.database import SessionLocal
+
+        # Ensure clean Veeam server state for isolation
+        session = SessionLocal()
+        session.query(VeeamBackupServer).delete()
+        session.commit()
+        session.close()
 
         manifest = {
             "id": "official_veeam",
@@ -275,6 +339,14 @@ class TestVeeamPlugin:
     @pytest.mark.asyncio
     async def test_get_routes(self):
         from app.plugins.installed.official_veeam import VeeamPlugin
+        from app.plugins.installed.official_veeam.models import VeeamBackupServer
+        from app.db.database import SessionLocal
+
+        # Ensure clean Veeam server state for isolation
+        session = SessionLocal()
+        session.query(VeeamBackupServer).delete()
+        session.commit()
+        session.close()
 
         manifest = {
             "id": "official_veeam",
@@ -290,6 +362,14 @@ class TestVeeamPlugin:
     @pytest.mark.asyncio
     async def test_get_settings_schema(self):
         from app.plugins.installed.official_veeam import VeeamPlugin
+        from app.plugins.installed.official_veeam.models import VeeamBackupServer
+        from app.db.database import SessionLocal
+
+        # Ensure clean Veeam server state for isolation
+        session = SessionLocal()
+        session.query(VeeamBackupServer).delete()
+        session.commit()
+        session.close()
 
         manifest = {
             "id": "official_veeam",

@@ -33,6 +33,7 @@ from app.models.db.remote_host import RemoteHost
 from app.plugins.installed.git.models import GitRepository  # noqa: F401
 from app.plugins.installed.official_docker.models import DockerHost  # noqa: F401
 from app.plugins.installed.official_veeam.models import VeeamBackupServer  # noqa: F401
+from app.plugins.installed.official_mikrotik.models import MikroTikServer  # noqa: F401
 
 
 class _FakeUser:
