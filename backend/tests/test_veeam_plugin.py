@@ -11,7 +11,25 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
+from app.db.database import SessionLocal
+from app.plugins.installed.official_veeam import VeeamPlugin
+from app.plugins.installed.official_veeam.models import VeeamBackupServer
+
 # ------------------------------------------------------------------ #
+# Helpers
+# ------------------------------------------------------------------ #
+
+
+def _clean_veeam_servers() -> None:
+    session = SessionLocal()
+    try:
+        session.query(VeeamBackupServer).delete()
+        session.commit()
+    finally:
+        session.close()
+
+
+# ------------------------------------------------------------------ #---------------------------------------------------------- #
 # Config                                                               #
 # ------------------------------------------------------------------ #
 
@@ -20,7 +38,7 @@ class TestVeeamPluginConfig:
     """Tests for VeeamPluginConfig pydantic model."""
 
     def test_default_config(self):
-        from app.plugins.installed.official_veeam.config import VeeamPluginConfig
+        from app.plugins.installed.official_veeam.config import VeeamPluginConfig  # noqa: I001
 
         cfg = VeeamPluginConfig()
         assert cfg.servers == []
@@ -50,7 +68,7 @@ class TestVeeamPluginConfig:
         assert cfg.auto_sync_enabled is False
 
     def test_server_config_defaults(self):
-        from app.plugins.installed.official_veeam.config import VeeamServerConfig
+        from app.plugins.installed.official_veeam.config import VeeamServerConfig  # noqa: I001
 
         srv = VeeamServerConfig()
         assert srv.name == "default"
@@ -61,7 +79,7 @@ class TestVeeamPluginConfig:
         assert srv.db_type == "auto"
 
     def test_server_config_live_fields(self):
-        from app.plugins.installed.official_veeam.config import VeeamServerConfig
+        from app.plugins.installed.official_veeam.config import VeeamServerConfig  # noqa: I001
 
         srv = VeeamServerConfig()
         assert srv.edition == "enterprise"
@@ -81,12 +99,11 @@ class TestVeeamPluginModels:
     """Tests for Veeam plugin SQLAlchemy models."""
 
     def test_veeam_backup_server_table_name(self):
-        from app.plugins.installed.official_veeam.models import VeeamBackupServer
 
         assert VeeamBackupServer.__tablename__ == "veeam_backup_servers"
 
     def test_veeam_repository_table_name(self):
-        from app.plugins.installed.official_veeam.models import VeeamRepository
+        from app.plugins.installed.official_veeam.models import VeeamRepository  # noqa: I001
 
         assert VeeamRepository.__tablename__ == "veeam_repositories"
 
@@ -96,22 +113,21 @@ class TestVeeamPluginModels:
         assert VeeamJob.__tablename__ == "veeam_jobs"
 
     def test_veeam_restore_point_table_name(self):
-        from app.plugins.installed.official_veeam.models import VeeamRestorePoint
+        from app.plugins.installed.official_veeam.models import VeeamRestorePoint  # noqa: I001
 
         assert VeeamRestorePoint.__tablename__ == "veeam_restore_points"
 
     def test_veeam_license_table_name(self):
-        from app.plugins.installed.official_veeam.models import VeeamLicense
+        from app.plugins.installed.official_veeam.models import VeeamLicense  # noqa: I001
 
         assert VeeamLicense.__tablename__ == "veeam_licenses"
 
     def test_veeam_job_run_table_name(self):
-        from app.plugins.installed.official_veeam.models import VeeamJobRun
+        from app.plugins.installed.official_veeam.models import VeeamJobRun  # noqa: I001
 
         assert VeeamJobRun.__tablename__ == "veeam_job_runs"
 
     def test_veeam_backup_server_live_fields(self):
-        from app.plugins.installed.official_veeam.models import VeeamBackupServer
 
         assert VeeamBackupServer.__table__.c.edition is not None
         assert VeeamBackupServer.__table__.c.data_source is not None
@@ -147,16 +163,7 @@ class TestVeeamPlugin:
         assert "dashboard_widget" in raw["capabilities"]
 
     def test_plugin_instantiation(self):
-        from app.db.database import SessionLocal
-        from app.plugins.installed.official_veeam import VeeamPlugin
-        from app.plugins.installed.official_veeam.models import VeeamBackupServer
-
-        # Ensure clean Veeam server state for isolation
-        session = SessionLocal()
-        session.query(VeeamBackupServer).delete()
-        session.commit()
-        session.close()
-
+        _clean_veeam_servers()
         manifest = {
             "id": "official_veeam",
             "version": "4.0.0",
@@ -169,15 +176,7 @@ class TestVeeamPlugin:
 
     @pytest.mark.asyncio
     async def test_plugin_setup_no_servers(self):
-        from app.db.database import SessionLocal
-        from app.plugins.installed.official_veeam import VeeamPlugin
-        from app.plugins.installed.official_veeam.models import VeeamBackupServer
-
-        # Ensure clean Veeam server state for isolation
-        session = SessionLocal()
-        session.query(VeeamBackupServer).delete()
-        session.commit()
-        session.close()
+        _clean_veeam_servers()
 
         manifest = {
             "id": "official_veeam",
@@ -191,15 +190,7 @@ class TestVeeamPlugin:
 
     @pytest.mark.asyncio
     async def test_plugin_start_no_servers(self):
-        from app.db.database import SessionLocal
-        from app.plugins.installed.official_veeam import VeeamPlugin
-        from app.plugins.installed.official_veeam.models import VeeamBackupServer
-
-        # Ensure clean Veeam server state for isolation
-        session = SessionLocal()
-        session.query(VeeamBackupServer).delete()
-        session.commit()
-        session.close()
+        _clean_veeam_servers()
 
         manifest = {
             "id": "official_veeam",
@@ -214,15 +205,7 @@ class TestVeeamPlugin:
 
     @pytest.mark.asyncio
     async def test_plugin_stop(self):
-        from app.db.database import SessionLocal
-        from app.plugins.installed.official_veeam import VeeamPlugin
-        from app.plugins.installed.official_veeam.models import VeeamBackupServer
-
-        # Ensure clean Veeam server state for isolation
-        session = SessionLocal()
-        session.query(VeeamBackupServer).delete()
-        session.commit()
-        session.close()
+        _clean_veeam_servers()
 
         manifest = {
             "id": "official_veeam",
@@ -237,15 +220,7 @@ class TestVeeamPlugin:
 
     @pytest.mark.asyncio
     async def test_plugin_setup_keeps_db_session_alive(self):
-        from app.db.database import SessionLocal
-        from app.plugins.installed.official_veeam import VeeamPlugin
-        from app.plugins.installed.official_veeam.models import VeeamBackupServer
-
-        # Ensure clean Veeam server state for isolation
-        session = SessionLocal()
-        session.query(VeeamBackupServer).delete()
-        session.commit()
-        session.close()
+        _clean_veeam_servers()
 
         manifest = {
             "id": "official_veeam",
@@ -263,15 +238,7 @@ class TestVeeamPlugin:
 
     @pytest.mark.asyncio
     async def test_plugin_health_check_no_clients(self):
-        from app.db.database import SessionLocal
-        from app.plugins.installed.official_veeam import VeeamPlugin
-        from app.plugins.installed.official_veeam.models import VeeamBackupServer
-
-        # Ensure clean Veeam server state for isolation
-        session = SessionLocal()
-        session.query(VeeamBackupServer).delete()
-        session.commit()
-        session.close()
+        _clean_veeam_servers()
 
         manifest = {
             "id": "official_veeam",
@@ -286,15 +253,7 @@ class TestVeeamPlugin:
 
     @pytest.mark.asyncio
     async def test_get_dashboard_widgets(self):
-        from app.db.database import SessionLocal
-        from app.plugins.installed.official_veeam import VeeamPlugin
-        from app.plugins.installed.official_veeam.models import VeeamBackupServer
-
-        # Ensure clean Veeam server state for isolation
-        session = SessionLocal()
-        session.query(VeeamBackupServer).delete()
-        session.commit()
-        session.close()
+        _clean_veeam_servers()
 
         manifest = {
             "id": "official_veeam",
@@ -312,15 +271,7 @@ class TestVeeamPlugin:
 
     @pytest.mark.asyncio
     async def test_get_navigation_items(self):
-        from app.db.database import SessionLocal
-        from app.plugins.installed.official_veeam import VeeamPlugin
-        from app.plugins.installed.official_veeam.models import VeeamBackupServer
-
-        # Ensure clean Veeam server state for isolation
-        session = SessionLocal()
-        session.query(VeeamBackupServer).delete()
-        session.commit()
-        session.close()
+        _clean_veeam_servers()
 
         manifest = {
             "id": "official_veeam",
@@ -338,15 +289,7 @@ class TestVeeamPlugin:
 
     @pytest.mark.asyncio
     async def test_get_routes(self):
-        from app.db.database import SessionLocal
-        from app.plugins.installed.official_veeam import VeeamPlugin
-        from app.plugins.installed.official_veeam.models import VeeamBackupServer
-
-        # Ensure clean Veeam server state for isolation
-        session = SessionLocal()
-        session.query(VeeamBackupServer).delete()
-        session.commit()
-        session.close()
+        _clean_veeam_servers()
 
         manifest = {
             "id": "official_veeam",
@@ -361,15 +304,7 @@ class TestVeeamPlugin:
 
     @pytest.mark.asyncio
     async def test_get_settings_schema(self):
-        from app.db.database import SessionLocal
-        from app.plugins.installed.official_veeam import VeeamPlugin
-        from app.plugins.installed.official_veeam.models import VeeamBackupServer
-
-        # Ensure clean Veeam server state for isolation
-        session = SessionLocal()
-        session.query(VeeamBackupServer).delete()
-        session.commit()
-        session.close()
+        _clean_veeam_servers()
 
         manifest = {
             "id": "official_veeam",
@@ -394,8 +329,7 @@ class TestVeeamApiClient:
     """Tests for VeeamApiClient initialization and provider delegation."""
 
     def test_api_client_init(self):
-        from app.plugins.installed.official_veeam.api import VeeamApiClient
-        from app.plugins.installed.official_veeam.models import VeeamBackupServer
+        from app.plugins.installed.official_veeam.api import VeeamApiClient  # noqa: I001
         from app.plugins.installed.official_veeam.provider import (
             VeeamServerProvider,
         )
@@ -412,8 +346,7 @@ class TestVeeamApiClient:
 
     @pytest.mark.asyncio
     async def test_get_jobs_delegates_to_provider(self):
-        from app.plugins.installed.official_veeam.api import VeeamApiClient
-        from app.plugins.installed.official_veeam.models import VeeamBackupServer
+        from app.plugins.installed.official_veeam.api import VeeamApiClient  # noqa: I001
 
         server = VeeamBackupServer(
             name="v1",
@@ -466,7 +399,9 @@ class TestVeeamPluginRoutes:
         """Provide a FastAPI test client with veeam plugin router mounted."""
         from app.db.database import get_db
         from app.main import app as _app
-        from app.plugins.installed.official_veeam.routes import router as veeam_router
+        from app.plugins.installed.official_veeam.routes import (
+            router as veeam_router,
+        )
 
         def override_get_db():
             try:
@@ -551,10 +486,15 @@ class TestVeeamPluginRoutes:
         assert isinstance(response.json(), list)
 
     def test_server_dict_has_live_fields(self, db_session):
+        from app.db.database import SessionLocal
         from app.plugins.installed.official_veeam.cache import cache_manager
-        from app.plugins.installed.official_veeam.models import VeeamBackupServer
+        session = SessionLocal()
+        try:
+            session.add(VeeamBackupServer(name="v1"))
+            session.commit()
+        finally:
+            session.close()
 
-        db_session.add(VeeamBackupServer(name="v1"))
         db_session.commit()
         row = cache_manager.get_servers(db_session)[0]
         assert "edition" in row
