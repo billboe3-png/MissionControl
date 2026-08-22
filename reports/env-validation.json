@@ -1,12 +1,224 @@
 {
   "dev": {
-    "env_file": "False",
-    "values": {},
-    "findings": []
+    "env_file": "True",
+    "values": {
+      "PROJECT_NAME": "Mission Control",
+      "ENVIRONMENT": "development",
+      "EDITION": "community",
+      "MISSIONCONTROL_SECRET_KEY": "CHANGE_ME_DEV",
+      "POSTGRES_DB": "missioncontrol_dev",
+      "POSTGRES_USER": "missioncontrol_dev",
+      "POSTGRES_PASSWORD": "CHANGE_ME_DEV_DB",
+      "POSTGRES_HOST": "postgres",
+      "POSTGRES_PORT": "5432",
+      "REDIS_HOST": "redis",
+      "REDIS_PORT": "6379",
+      "BACKEND_CORS_ORIGINS": "https://missioncontroldev.optichosting.co.za,http://localhost:3000,http://localhost:5173",
+      "COMPOSE_PROJECT_NAME": "missioncontrol-dev"
+    },
+    "findings": [
+      {
+        "env": "DEV",
+        "key": "PROJECT_NAME",
+        "expected": "Mission Control",
+        "actual": "Mission Control",
+        "pass": true
+      },
+      {
+        "env": "DEV",
+        "key": "ENVIRONMENT",
+        "expected": "development",
+        "actual": "development",
+        "pass": true
+      },
+      {
+        "env": "DEV",
+        "key": "EDITION",
+        "expected": "community",
+        "actual": "community",
+        "pass": true
+      },
+      {
+        "env": "DEV",
+        "key": "MISSIONCONTROL_SECRET_KEY",
+        "expected": "CHANGE_ME_DEV",
+        "actual": "CHANGE_ME_DEV",
+        "pass": true
+      },
+      {
+        "env": "DEV",
+        "key": "POSTGRES_DB",
+        "expected": "missioncontrol_dev",
+        "actual": "missioncontrol_dev",
+        "pass": true
+      },
+      {
+        "env": "DEV",
+        "key": "POSTGRES_USER",
+        "expected": "missioncontrol_dev",
+        "actual": "missioncontrol_dev",
+        "pass": true
+      },
+      {
+        "env": "DEV",
+        "key": "POSTGRES_PASSWORD",
+        "expected": "CHANGE_ME_DEV_DB",
+        "actual": "CHANGE_ME_DEV_DB",
+        "pass": true
+      },
+      {
+        "env": "DEV",
+        "key": "POSTGRES_HOST",
+        "expected": "postgres",
+        "actual": "postgres",
+        "pass": true
+      },
+      {
+        "env": "DEV",
+        "key": "POSTGRES_PORT",
+        "expected": "5432",
+        "actual": "5432",
+        "pass": true
+      },
+      {
+        "env": "DEV",
+        "key": "REDIS_HOST",
+        "expected": "redis",
+        "actual": "redis",
+        "pass": true
+      },
+      {
+        "env": "DEV",
+        "key": "REDIS_PORT",
+        "expected": "6379",
+        "actual": "6379",
+        "pass": true
+      },
+      {
+        "env": "DEV",
+        "key": "BACKEND_CORS_ORIGINS",
+        "expected": "https://missioncontroldev.optichosting.co.za,http://localhost:3000,http://localhost:5173",
+        "actual": "https://missioncontroldev.optichosting.co.za,http://localhost:3000,http://localhost:5173",
+        "pass": true
+      },
+      {
+        "env": "DEV",
+        "key": "COMPOSE_PROJECT_NAME",
+        "expected": "missioncontrol-dev",
+        "actual": "missioncontrol-dev",
+        "pass": true
+      }
+    ]
   },
   "live": {
-    "env_file": "False",
-    "values": {},
-    "findings": []
+    "env_file": "True",
+    "values": {
+      "PROJECT_NAME": "Mission Control",
+      "ENVIRONMENT": "production",
+      "EDITION": "community",
+      "MISSIONCONTROL_SECRET_KEY": "CHANGE_ME_PRODUCTION",
+      "POSTGRES_DB": "missioncontrol_live",
+      "POSTGRES_USER": "missioncontrol_live",
+      "POSTGRES_PASSWORD": "CHANGE_ME_LIVE_DB",
+      "POSTGRES_HOST": "postgres",
+      "POSTGRES_PORT": "5432",
+      "REDIS_HOST": "redis",
+      "REDIS_PORT": "6379",
+      "BACKEND_CORS_ORIGINS": "https://missioncontrol.optihosting.co.za",
+      "COMPOSE_PROJECT_NAME": "missioncontrol-live"
+    },
+    "findings": [
+      {
+        "env": "LIVE",
+        "key": "PROJECT_NAME",
+        "expected": "Mission Control",
+        "actual": "Mission Control",
+        "pass": true
+      },
+      {
+        "env": "LIVE",
+        "key": "ENVIRONMENT",
+        "expected": "production",
+        "actual": "production",
+        "pass": true
+      },
+      {
+        "env": "LIVE",
+        "key": "EDITION",
+        "expected": "community",
+        "actual": "community",
+        "pass": true
+      },
+      {
+        "env": "LIVE",
+        "key": "MISSIONCONTROL_SECRET_KEY",
+        "expected": "CHANGE_ME_PRODUCTION",
+        "actual": "CHANGE_ME_PRODUCTION",
+        "pass": true
+      },
+      {
+        "env": "LIVE",
+        "key": "POSTGRES_DB",
+        "expected": "missioncontrol_live",
+        "actual": "missioncontrol_live",
+        "pass": true
+      },
+      {
+        "env": "LIVE",
+        "key": "POSTGRES_USER",
+        "expected": "missioncontrol_live",
+        "actual": "missioncontrol_live",
+        "pass": true
+      },
+      {
+        "env": "LIVE",
+        "key": "POSTGRES_PASSWORD",
+        "expected": "CHANGE_ME_LIVE_DB",
+        "actual": "CHANGE_ME_LIVE_DB",
+        "pass": true
+      },
+      {
+        "env": "LIVE",
+        "key": "POSTGRES_HOST",
+        "expected": "postgres",
+        "actual": "postgres",
+        "pass": true
+      },
+      {
+        "env": "LIVE",
+        "key": "POSTGRES_PORT",
+        "expected": "5432",
+        "actual": "5432",
+        "pass": true
+      },
+      {
+        "env": "LIVE",
+        "key": "REDIS_HOST",
+        "expected": "redis",
+        "actual": "redis",
+        "pass": true
+      },
+      {
+        "env": "LIVE",
+        "key": "REDIS_PORT",
+        "expected": "6379",
+        "actual": "6379",
+        "pass": true
+      },
+      {
+        "env": "LIVE",
+        "key": "BACKEND_CORS_ORIGINS",
+        "expected": "https://missioncontrol.optihosting.co.za",
+        "actual": "https://missioncontrol.optihosting.co.za",
+        "pass": true
+      },
+      {
+        "env": "LIVE",
+        "key": "COMPOSE_PROJECT_NAME",
+        "expected": "missioncontrol-live",
+        "actual": "missioncontrol-live",
+        "pass": true
+      }
+    ]
   }
 }
