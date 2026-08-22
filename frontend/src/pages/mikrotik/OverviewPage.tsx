@@ -1,6 +1,5 @@
 import { useState, useEffect } from "react";
 import PageHeader from "../../components/common/PageHeader";
-import StatusBadge from "../../components/common/StatusBadge";
 import { mikrotikApi, MikroTikServer, MikroTikInterface } from "../../services/mikrotik";
 
 export default function MikroTikOverviewPage() {
@@ -57,7 +56,7 @@ export default function MikroTikOverviewPage() {
                     {server.api_enabled && server.api_port ? ` | API: ${server.api_port}` : ""}
                   </div>
                 </div>
-                <StatusBadge status={server.status} />
+                <span className="status-badge status-disabled">{server.status}</span>
               </div>
               <div className="card-body">
                 <div className="grid gap-2">
@@ -87,7 +86,7 @@ export default function MikroTikOverviewPage() {
                   {(interfaces[server.id] || []).map((iface) => (
                     <div key={iface.name} style={{ display: "flex", gap: 12 }}>
                       <span>{iface.name}</span>
-                      <StatusBadge status={iface.status || "unknown"} />
+                      <span className="status-badge status-disabled">{iface.status || "unknown"}</span>
                       <span className="muted">
                         RX: {iface.rx_bytes} / TX: {iface.tx_bytes}
                       </span>

@@ -70,7 +70,7 @@ export default function ProjectsPage() {
     };
 
     const goToProject = (project: Project) => {
-        navigate(`/companies?project=${project.id}`);
+        navigate(`/projects/${project.id}`);
     };
 
     return (
@@ -121,6 +121,8 @@ export default function ProjectsPage() {
                             <tr>
                                 <th>Name</th>
                                 <th>Status</th>
+                                <th>Tasks</th>
+                                <th>Notes</th>
                                 <th>Updated</th>
                                 <th style={{ textAlign: "right" }}>Actions</th>
                             </tr>
@@ -139,6 +141,8 @@ export default function ProjectsPage() {
                                             {p.active ? "Active" : "Inactive"}
                                         </span>
                                     </td>
+                                    <td>{p.task_count ?? 0}</td>
+                                    <td>{p.note_count ?? 0}</td>
                                     <td>{formatDateTime(p.updated_at)}</td>
                                     <td onClick={(e) => e.stopPropagation()}>
                                         <button

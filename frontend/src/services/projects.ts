@@ -7,6 +7,8 @@ export interface Project {
     name: string;
     description: string | null;
     active: boolean;
+    task_count: number;
+    note_count: number;
     created_at: string;
     updated_at: string;
 }

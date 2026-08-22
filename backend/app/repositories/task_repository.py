@@ -4,6 +4,8 @@ Mission Control Task Repository
 All database access for Task entities.
 """
 
+from datetime import UTC, datetime
+
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 
@@ -90,6 +92,9 @@ class TaskRepository:
             description=task.description,
             status=task.status,
             priority=task.priority,
+            assignee=getattr(task, "assignee", None),
+            due_date=getattr(task, "due_date", None),
+            started_at=datetime.now(UTC) if getattr(task, "status", None) == "in_progress" else None,
         )
         db.add(entity)
         db.commit()
@@ -120,6 +125,10 @@ class TaskRepository:
         updates = task.model_dump(exclude_unset=True)
         if "title" in updates and updates["title"] is not None:
             updates["title"] = updates["title"].strip()
+        if updates.get("status") == "in_progress" and not entity.started_at:
+            updates["started_at"] = datetime.now(UTC)
+        if updates.get("status") == "completed" and not entity.completed_at:
+            updates["completed_at"] = datetime.now(UTC)
         for field, value in updates.items():
             setattr(entity, field, value)
 

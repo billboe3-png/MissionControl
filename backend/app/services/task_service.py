@@ -166,10 +166,7 @@ class TaskService:
 
     @staticmethod
     def _serialize_task(task: Task) -> dict:
-        """
-        Map a Task ORM instance to the dashboard item shape.
-        """
-        return {
+        data = {
             "id": str(task.id),
             "project_id": str(task.project_id),
             "project_name": task.project.name,
@@ -177,9 +174,14 @@ class TaskService:
             "description": task.description,
             "status": task.status,
             "priority": task.priority,
+            "assignee": task.assignee,
+            "due_date": task.due_date.isoformat() if task.due_date else None,
+            "started_at": task.started_at.isoformat() if task.started_at else None,
+            "completed_at": task.completed_at.isoformat() if task.completed_at else None,
             "created_at": task.created_at.isoformat(),
             "updated_at": task.updated_at.isoformat(),
         }
+        return data
 
 
 task_service = TaskService()

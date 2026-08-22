@@ -101,6 +101,11 @@ class ResumeService:
             "available": resume.available,
             "title": resume.title,
             "description": resume.description,
+            "context": resume.context,
+            "target_page": resume.target_page,
+            "started_at": resume.started_at.isoformat() if resume.started_at else None,
+            "paused_at": resume.paused_at.isoformat() if resume.paused_at else None,
+            "resumed_at": resume.resumed_at.isoformat() if resume.resumed_at else None,
         }
 
 
