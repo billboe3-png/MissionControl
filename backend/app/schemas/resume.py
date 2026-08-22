@@ -10,7 +10,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 
 class ResumeCreate(BaseModel):
-    """Payload for creating a new resume."""
+    """Payload for creating a new resume entry."""
 
     title: str = Field(
         ...,
@@ -30,10 +30,21 @@ class ResumeCreate(BaseModel):
         description="Whether this resume is the active resume.",
         examples=[True],
     )
+    context: str | None = Field(
+        default=None,
+        description="Saved work context / last state.",
+        examples=["Wiring dashboard to PostgreSQL"],
+    )
+    target_page: str | None = Field(
+        default=None,
+        max_length=200,
+        description="Page to resume on.",
+        examples=["/projects"],
+    )
 
 
 class ResumeUpdate(BaseModel):
-    """Payload for updating an existing resume."""
+    """Payload for updating an existing resume entry."""
 
     title: str | None = Field(
         default=None,
@@ -52,6 +63,15 @@ class ResumeUpdate(BaseModel):
         default=None,
         description="Whether this resume is the active resume.",
         examples=[True],
+    )
+    context: str | None = Field(
+        default=None,
+        description="Updated saved work context.",
+    )
+    target_page: str | None = Field(
+        default=None,
+        max_length=200,
+        description="Updated page to resume on.",
     )
 
 
@@ -79,6 +99,31 @@ class ResumeResponse(BaseModel):
         ...,
         description="Whether the resume is available for use.",
         examples=[True],
+    )
+    context: str | None = Field(
+        default=None,
+        description="Saved work context / last state.",
+        examples=["Wiring dashboard to PostgreSQL"],
+    )
+    target_page: str | None = Field(
+        default=None,
+        description="Page to resume on.",
+        examples=["/projects"],
+    )
+    started_at: datetime | None = Field(
+        default=None,
+        description="When this resume context was started.",
+        examples=["2026-08-21T09:00:00"],
+    )
+    paused_at: datetime | None = Field(
+        default=None,
+        description="When this resume context was paused.",
+        examples=["2026-08-21T10:00:00"],
+    )
+    resumed_at: datetime | None = Field(
+        default=None,
+        description="When this resume context was resumed.",
+        examples=["2026-08-21T11:00:00"],
     )
     created_at: datetime = Field(
         ...,

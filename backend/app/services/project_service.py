@@ -143,18 +143,15 @@ class ProjectService:
 
     @staticmethod
     def _serialize_project(project: Project) -> dict:
-        """
-        Map a Project ORM instance to the dashboard item shape.
-
-        Status is derived from the stored active flag. Priority is not
-        persisted in the current schema and is returned as null.
-        """
+        task_count = len(project.tasks)
         return {
             "id": str(project.id),
             "name": project.name,
             "description": project.description,
             "status": "active" if project.active else "inactive",
             "priority": None,
+            "task_count": task_count,
+            "note_count": len(project.notes),
             "created_at": project.created_at.isoformat(),
             "updated_at": project.updated_at.isoformat(),
         }
