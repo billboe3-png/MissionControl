@@ -156,6 +156,8 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
 
 setup_logging(level="INFO")
 logger = logging.getLogger("missioncontrol")
+import importlib as _importlib  # noqa: E402
+
 from app.routers import (  # noqa: E402
     agent,
     agent_remote_target,
@@ -184,7 +186,7 @@ from app.routers import (  # noqa: E402
     version,
     zabbix,
 )
-import importlib as _importlib
+
 sop = _importlib.import_module("app.sop.router")
 
 

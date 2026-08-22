@@ -22,7 +22,7 @@ class MikroTikSSHClient:
         try:
             import asyncssh
         except ImportError:
-            raise RuntimeError("asyncssh is required for MikroTik SSH support")
+            raise RuntimeError("asyncssh is required for MikroTik SSH support") from None
 
         async with asyncssh.connect(
             self.host,

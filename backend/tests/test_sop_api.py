@@ -1,5 +1,7 @@
 from fastapi.testclient import TestClient
+
 from app.main import app
+
 
 class _FakeUser:
     id=1
@@ -12,8 +14,8 @@ class _FakeUser:
 
 def _make_client():
     from app.core.auth_dependency import get_current_user
-    from app.db.database import Base, SessionLocal, engine
     from app.db import get_db
+    from app.db.database import Base, SessionLocal, engine
     client = TestClient(app)
     client.app.dependency_overrides[get_current_user] = lambda: _FakeUser()
     try:

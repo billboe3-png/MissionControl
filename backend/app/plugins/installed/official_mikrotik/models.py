@@ -3,7 +3,7 @@ MikroTik Plugin SQLAlchemy Models
 """
 from datetime import UTC, datetime
 
-from sqlalchemy import Boolean, DateTime, Integer, String, Text
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.database import Base

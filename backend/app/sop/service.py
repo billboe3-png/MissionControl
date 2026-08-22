@@ -19,9 +19,9 @@ from app.schemas.sop import (
     SOPListResponse,
     SOPResponse,
     SOPReviewResponse,
+    SOPSourceResponse,
     SOPUpdate,
     SOPVersionResponse,
-    SOPSourceResponse,
 )
 from app.sop.ai_helpers import ai_query_sops, ai_review_sop
 from app.sop.repository import (
