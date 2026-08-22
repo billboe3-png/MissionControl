@@ -1,9 +1,16 @@
 """
 SOP workflow tests using in-memory SQLite schema.
 """
+from pathlib import Path
+
 from fastapi.testclient import TestClient
 
 from app.main import app
+
+
+def _make_client() -> TestClient:
+    client = TestClient(app)
+    return client
 
 
 def test_submit_changes_status():
@@ -65,7 +72,7 @@ def test_ai_review_endpoint():
 
 def test_ai_query_endpoint():
     client = _make_client()
-    response = client.post("/api/v1/sops/query", json={"query": "test"})
+    response = client.post("/api/v1/sops/query", params={"query": "test"})
     assert response.status_code == 200, response.text
     assert "answer" in response.json()
 
