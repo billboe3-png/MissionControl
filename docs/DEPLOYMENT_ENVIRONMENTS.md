@@ -55,11 +55,44 @@ COMPOSE_PROJECT_NAME=missioncontrol-live ENV_FILE=.env.production ./scripts/depl
 
 ## Backup
 
-- Run `scripts/backup-db.ps1` against LIVE PostgreSQL container.
-- Store backups outside application containers and outside DEV environments.
+### DEV backup
+
+```bash
+COMPOSE_PROJECT_NAME=missioncontrol-dev POSTGRES_DB=missioncontrol_dev ./scripts/backup-db.ps1 backups
+```
+
+### LIVE backup
+
+```bash
+COMPOSE_PROJECT_NAME=missioncontrol-live POSTGRES_DB=missioncontrol_live ./scripts/backup-db.ps1 backups
+```
+
+Store backups outside application containers and outside DEV environments. Recommended naming: `missioncontrol_<project>_<timestamp>.sql.gz`.
+
+## Restore
+
+### DEV restore
+
+```bash
+COMPOSE_PROJECT_NAME=missioncontrol-dev POSTGRES_DB=missioncontrol_dev ./scripts/restore-db.ps1 backups/missioncontrol_missioncontrol-dev_20260822_120000.sql.gz
+```
+
+### LIVE restore
+
+```bash
+COMPOSE_PROJECT_NAME=missioncontrol-live POSTGRES_DB=missioncontrol_live ./scripts/restore-db.ps1 backups/missioncontrol_missioncontrol-live_20260822_120000.sql.gz
+```
+
+## Backup validation
+
+```bash
+bash scripts/validate_backup.sh -e dev
+bash scripts/validate_backup.sh -e live
+```
 
 ## Rollback
 
-- Identify last known-good Git commit on `main`.
-- Redeploy LIVE from that commit.
-- Database rollback is a separate concern; if a migration is irreversible, restore from the most recent LIVE backup.
+1. Identify last known-good Git commit on the target branch (`main` for LIVE, `develop` for DEV).
+2. Redeploy that branch/commit via the appropriate deploy script.
+3. If a database migration is irreversible and must be undone, restore the most recent environment-specific backup using the restore script above.
+4. Do not migrate backups between environments; DEV and LIVE backups are not interchangeable due to different databases and secrets.
