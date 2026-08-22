@@ -184,6 +184,9 @@ from app.routers import (  # noqa: E402
     version,
     zabbix,
 )
+import importlib as _importlib
+sop = _importlib.import_module("app.sop.router")
+
 
 try:
     settings = get_settings()
@@ -279,8 +282,6 @@ app.include_router(setup.router, prefix="/api/v1")
 app.include_router(auth.router, prefix="/api/v1")
 app.include_router(agent_token.router, prefix="/api/v1")
 app.include_router(plugin.router, prefix="/api/v1")
-app.include_router(sop.router, prefix="/api/v1")
-app.include_router(sop.router, prefix="/api/v1")
 app.include_router(marketplace.router, prefix="/api/v1")
 app.include_router(sop.router, prefix="/api/v1")
 

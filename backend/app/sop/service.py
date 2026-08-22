@@ -10,15 +10,10 @@ from fastapi import HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.ai.prompts import SYSTEM_PROMPT
 from app.events import Event, EventType, event_bus
-from app.sop.ai_helpers import ai_query_sops, ai_review_sop
-from app.sop.repository import SOPRepository, SOPSearchRepository, compute_sha256, extract_text_from_file
+from app.models.db.sop import SOPSource, SOPVersion
 from app.schemas.sop import (
     AIQueryResponse,
-    CategoryCreate,
-    CategoryResponse,
-    SOPApprovalResponse,
     SOPCreate,
     SOPImportResponse,
     SOPListResponse,
@@ -26,6 +21,14 @@ from app.schemas.sop import (
     SOPReviewResponse,
     SOPUpdate,
     SOPVersionResponse,
+    SOPSourceResponse,
+)
+from app.sop.ai_helpers import ai_query_sops, ai_review_sop
+from app.sop.repository import (
+    SOPRepository,
+    SOPSearchRepository,
+    compute_sha256,
+    extract_text_from_file,
 )
 
 logger = logging.getLogger(__name__)
@@ -133,9 +136,9 @@ class SOPService:
         file_hash = compute_sha256(file_path)
         existing = db.scalars(select(SOPSource).where(SOPSource.source_hash == file_hash).limit(1)).first()
         if existing and existing.sop_id:
-            sop = self._repository.get_by_id(db, existing.sop_id)
-            if sop:
-                return SOPImportResponse(sop=SOPResponse.model_validate(sop), source=SOPSourceResponse.model_validate(existing), extracted_text=text, source_deleted=True)
+            existing_sop = self._repository.get_by_id(db, existing.sop_id)
+            if existing_sop:
+                return SOPImportResponse(sop=SOPResponse.model_validate(existing_sop), source=SOPSourceResponse.model_validate(existing), extracted_text=text, source_deleted=True)
         create_payload = SOPCreate(
             title=payload.title,
             description=payload.description,

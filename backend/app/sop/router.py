@@ -2,6 +2,7 @@
 Mission Control SOP Router
 """
 import logging
+from pathlib import Path
 
 from fastapi import APIRouter, Depends, status
 from sqlalchemy.orm import Session
@@ -20,7 +21,7 @@ from app.schemas.sop import (
     SOPUpdate,
     SOPVersionResponse,
 )
-from app.services.sop_service import SOPService, sop_service
+from app.sop.service import SOPService, sop_service
 
 logger = logging.getLogger(__name__)
 
@@ -39,12 +40,18 @@ def get_sop_service() -> SOPService:
 async def list_sops(
     company_id: int | None = None,
     site_id: int | None = None,
-    status: str | None = None,
-    q: str | None = None,
+    category_id: int | None = None,
+    status_filter: str | None = None,
     db: Session = Depends(get_db),
     service: SOPService = Depends(get_sop_service),
 ) -> SOPListResponse:
-    return await service.list_sops(db, company_id=company_id, site_id=site_id, status=status, q=q)
+    return await service.list_sops(
+        db,
+        company_id=company_id,
+        site_id=site_id,
+        category_id=category_id,
+        status_filter=status_filter,
+    )
 
 
 @router.get("/search", response_model=SOPListResponse, summary="Search SOPs")
@@ -55,6 +62,32 @@ async def search_sops(
     service: SOPService = Depends(get_sop_service),
 ) -> SOPListResponse:
     return await service.search(db, q, company_id=company_id)
+
+
+@router.post("/import", response_model=SOPImportResponse, summary="Import temporary document into SOP")
+async def import_document(
+    payload: SOPImportRequest,
+    db: Session = Depends(get_db),
+    service: SOPService = Depends(get_sop_service),
+    current_user: User = Depends(get_current_user),
+) -> SOPImportResponse:
+    return await service.import_document(
+        db,
+        Path(payload.file_path),
+        source_name=payload.source_name,
+        payload=payload,
+        importing_user=current_user.email,
+    )
+
+
+@router.post("/query", response_model=AIQueryResponse, summary="Query approved SOPs via AI")
+async def ai_query(
+    query: str,
+    company_id: int | None = None,
+    db: Session = Depends(get_db),
+    service: SOPService = Depends(get_sop_service),
+) -> AIQueryResponse:
+    return await service.ai_query(db, query, company_id=company_id)
 
 
 @router.get("/{sop_id}", response_model=SOPResponse, summary="Get SOP")
@@ -149,22 +182,6 @@ async def list_versions(
     return await service.get_versions(db, sop_id)
 
 
-@router.post("/import", response_model=SOPImportResponse, summary="Import temporary document into SOP")
-async def import_document(
-    payload: SOPImportRequest,
-    db: Session = Depends(get_db),
-    service: SOPService = Depends(get_sop_service),
-    current_user: User = Depends(get_current_user),
-) -> SOPImportResponse:
-    return await service.import_document(
-        db,
-        Path(payload.file_path),
-        source_name=payload.source_name,
-        payload=payload,
-        importing_user=current_user.email,
-    )
-
-
 @router.post("/{sop_id}/ai/review", response_model=SOPReviewResponse, summary="AI review SOP")
 async def ai_review(
     sop_id: int,
@@ -172,13 +189,3 @@ async def ai_review(
     service: SOPService = Depends(get_sop_service),
 ) -> SOPReviewResponse:
     return await service.ai_review(db, sop_id)
-
-
-@router.post("/query", response_model=AIQueryResponse, summary="Query approved SOPs via AI")
-async def ai_query(
-    query: str,
-    company_id: int | None = None,
-    db: Session = Depends(get_db),
-    service: SOPService = Depends(get_sop_service),
-) -> AIQueryResponse:
-    return await service.ai_query(db, query, company_id=company_id)
