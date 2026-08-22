@@ -48,6 +48,10 @@ class CommandExecutor:
                 result = await self._handle_download(file_path)
             elif command_type == "inventory":
                 result = await self._collect_inventory()
+            elif command_type == "vm_action":
+                result = await self._execute_shell(
+                    command, effective_timeout
+                )
             else:
                 result = {
                     "success": False,
@@ -59,7 +63,7 @@ class CommandExecutor:
             result["duration_ms"] = duration_ms
             return result
 
-        except asyncio.TimeoutError:
+        except TimeoutError:
             return {
                 "success": False,
                 "stderr": f"Command timed out after {effective_timeout}s",
@@ -84,7 +88,7 @@ class CommandExecutor:
         """Execute a shell command."""
         system = platform.system()
         if system == "Windows":
-            shell_cmd = ["cmd", "/c", command]
+            shell_cmd = ["powershell", "-ExecutionPolicy", "Bypass", "-Command", command]
         else:
             shell_cmd = ["bash", "-c", command]
 
@@ -98,7 +102,7 @@ class CommandExecutor:
             stdout, stderr = await asyncio.wait_for(
                 process.communicate(), timeout=timeout
             )
-        except asyncio.TimeoutError:
+        except TimeoutError:
             process.kill()
             await process.wait()
             raise
@@ -146,7 +150,7 @@ class CommandExecutor:
                 stdout, stderr = await asyncio.wait_for(
                     process.communicate(), timeout=timeout
                 )
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 process.kill()
                 await process.wait()
                 raise
@@ -158,7 +162,7 @@ class CommandExecutor:
                 "success": process.returncode == 0,
             }
         finally:
-            try:
+            try:  # noqa: SIM105
                 os.unlink(tmp_path)
             except OSError:
                 pass

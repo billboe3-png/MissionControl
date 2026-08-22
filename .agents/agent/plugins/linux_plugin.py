@@ -15,7 +15,7 @@ class LinuxPlugin(AgentPlugin):
     """Linux-specific inventory and management plugin."""
 
     name = "linux"
-    version = "1.0.0"
+    version = "3.0.0-rc1"
     description = "Linux system management plugin"
     platform_required = "linux"
 
@@ -74,9 +74,7 @@ class LinuxPlugin(AgentPlugin):
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.DEVNULL,
             )
-            stdout, _ = await asyncio.wait_for(
-                proc.communicate(), timeout=10
-            )
+            stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=10)
             services = []
             for line in stdout.decode().strip().split("\n"):
                 parts = line.split(None, 4)
@@ -105,17 +103,13 @@ class LinuxPlugin(AgentPlugin):
     def _get_users(self) -> list[str]:
         try:
             with open("/etc/passwd") as f:
-                return [
-                    line.split(":")[0]
-                    for line in f
-                    if not line.startswith("#")
-                ][:100]
+                return [line.split(":")[0] for line in f if not line.startswith("#")][
+                    :100
+                ]
         except Exception:
             return []
 
-    async def _systemctl(
-        self, args: dict[str, Any]
-    ) -> dict[str, Any]:
+    async def _systemctl(self, args: dict[str, Any]) -> dict[str, Any]:
         action = args.get("action", "status")
         service = args.get("service", "")
         proc = await asyncio.create_subprocess_exec(
@@ -125,9 +119,7 @@ class LinuxPlugin(AgentPlugin):
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
-        stdout, stderr = await asyncio.wait_for(
-            proc.communicate(), timeout=30
-        )
+        stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=30)
         return {
             "success": proc.returncode == 0,
             "stdout": stdout.decode(errors="replace"),
@@ -135,9 +127,7 @@ class LinuxPlugin(AgentPlugin):
             "exit_code": proc.returncode,
         }
 
-    async def _journalctl(
-        self, args: dict[str, Any]
-    ) -> dict[str, Any]:
+    async def _journalctl(self, args: dict[str, Any]) -> dict[str, Any]:
         lines = args.get("lines", "50")
         service = args.get("service", "")
         cmd = ["journalctl", "-n", lines, "--no-pager"]
@@ -148,9 +138,7 @@ class LinuxPlugin(AgentPlugin):
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
-        stdout, stderr = await asyncio.wait_for(
-            proc.communicate(), timeout=30
-        )
+        stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=30)
         return {
             "success": proc.returncode == 0,
             "stdout": stdout.decode(errors="replace"),
@@ -158,9 +146,7 @@ class LinuxPlugin(AgentPlugin):
             "exit_code": proc.returncode,
         }
 
-    async def _disk_usage(
-        self, args: dict[str, Any]
-    ) -> dict[str, Any]:
+    async def _disk_usage(self, args: dict[str, Any]) -> dict[str, Any]:
         path = args.get("path", "/")
         proc = await asyncio.create_subprocess_exec(
             "df",
@@ -169,9 +155,7 @@ class LinuxPlugin(AgentPlugin):
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
-        stdout, _ = await asyncio.wait_for(
-            proc.communicate(), timeout=10
-        )
+        stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=10)
         return {
             "success": proc.returncode == 0,
             "stdout": stdout.decode(errors="replace"),

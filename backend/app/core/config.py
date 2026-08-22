@@ -58,6 +58,17 @@ class Settings(BaseSettings):
             ) from exc
         return v
 
+
+    # ------------------------------------------------------------------
+    # Edge Agent Bundle
+    # ------------------------------------------------------------------
+
+    edge_agent_root: str = Field(
+        default="/project/.agents",
+        alias="MC_EDGE_AGENT_ROOT",
+        description="Root directory for edge agent bundle storage",
+    )
+
     # ------------------------------------------------------------------
     # PostgreSQL
     # ------------------------------------------------------------------
@@ -271,13 +282,18 @@ class Settings(BaseSettings):
     # ------------------------------------------------------------------
 
     rate_limit_per_minute: int = Field(
-        default=60,
+        default=300,
         description="Max requests per minute per IP",
     )
 
     rate_limit_auth_per_minute: int = Field(
-        default=5,
+        default=20,
         description="Max login attempts per minute per IP",
+    )
+
+    rate_limit_authenticated_per_minute: int = Field(
+        default=600,
+        description="Max requests per minute per authenticated user",
     )
 
     # ------------------------------------------------------------------

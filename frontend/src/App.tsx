@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "./contexts/AuthContext";
 import { SidebarProvider } from "./contexts/SidebarContext";
 import { ToastProvider } from "./contexts/ToastContext";
+import { SiteProvider } from "./contexts/SiteContext";
 import AppLayout from "./layouts/AppLayout";
 import RequireAuth from "./layouts/RequireAuth";
 import RequireSetup from "./layouts/RequireSetup";
@@ -22,6 +23,7 @@ import IdentityOverviewPage from "./pages/identity/IdentityOverviewPage";
 import ActiveDirectoryPage from "./pages/identity/ActiveDirectoryPage";
 import Microsoft365Page from "./pages/identity/Microsoft365Page";
 import GeneralPage from "./pages/settings/GeneralPage";
+import ProfilePage from "./pages/settings/ProfilePage";
 import UsersPage from "./pages/settings/UsersPage";
 import IntegrationsPage from "./pages/settings/IntegrationsPage";
 import AppearancePage from "./pages/settings/AppearancePage";
@@ -69,6 +71,13 @@ import AICorrelationsPage from "./pages/ai/CorrelationsPage";
 import AIHealthScorePage from "./pages/ai/HealthScorePage";
 import AIHistoryPage from "./pages/ai/HistoryPage";
 import CompaniesPage from "./pages/companies/CompaniesPage";
+import ProjectsPage from "./pages/projects/ProjectsPage";
+import ProjectDetailPage from "./pages/projects/ProjectDetailPage";
+import TasksPage from "./pages/tasks/TasksPage";
+import ResumesPage from "./pages/resume/ResumesPage";
+import SOPLibraryPage from "./pages/sop/SOPDocumentsPage";
+import SOPReaderPage from "./pages/sop/SOPReaderPage";
+import SOPEditorPage from "./pages/sop/SOPEditorPage";
 import CompanyDetailPage from "./pages/companies/CompanyDetailPage";
 import CompanyWorkspacePage from "./pages/companies/CompanyWorkspacePage";
 import TimelinePage from "./pages/remote/TimelinePage";
@@ -85,6 +94,7 @@ import TriggersPage from "./pages/automation/TriggersPage";
 import AuditPage from "./pages/automation/AuditPage";
 import AgentsOverviewPage from "./pages/agents/AgentsOverviewPage";
 import AgentDetailPage from "./pages/agents/AgentDetailPage";
+import AgentInstallPage from "./pages/agents/AgentInstallPage";
 import UniFiDashboardPage from "./pages/unifi/DashboardPage";
 import UniFiDevicesPage from "./pages/unifi/DevicesPage";
 import UniFiClientsPage from "./pages/unifi/ClientsPage";
@@ -92,6 +102,9 @@ import UniFiAlertsPage from "./pages/unifi/AlertsPage";
 import UniFiWirelessPage from "./pages/unifi/WirelessPage";
 import UniFiControllersPage from "./pages/unifi/ControllersPage";
 import UniFiSitesPage from "./pages/unifi/SitesPage";
+import NetworkTopologyPage from "./pages/network/NetworkTopologyPage";
+import TopologyPage from "./pages/agents/TopologyPage";
+import MikroTikOverviewPage from "./pages/mikrotik/OverviewPage";
 
 export default function App() {
     return (
@@ -99,7 +112,8 @@ export default function App() {
             <AuthProvider>
                 <SidebarProvider>
                     <ToastProvider>
-                        <Routes>
+                        <SiteProvider>
+                            <Routes>
                             <Route path="/setup" element={<SetupWizardPage />} />
                             <Route element={<RequireSetup />}>
                                 <Route path="/login" element={<LoginPage />} />
@@ -137,6 +151,13 @@ export default function App() {
                             <Route path="/identity/active-directory" element={<ActiveDirectoryPage />} />
                             <Route path="/identity/microsoft-365" element={<Microsoft365Page />} />
 
+                            <Route path="/projects" element={<ProjectsPage />} />
+                            <Route path="/projects/:id" element={<ProjectDetailPage />} />
+                            <Route path="/tasks" element={<TasksPage />} />
+                            <Route path="/resume" element={<ResumesPage />} />
+                            <Route path="/sop" element={<SOPLibraryPage />} />
+                            <Route path="/sop/:id" element={<SOPReaderPage />} />
+                            <Route path="/sop/:id/edit" element={<SOPEditorPage />} />
                             <Route path="/companies" element={<CompaniesPage />} />
                             <Route path="/companies/:id" element={<CompanyDetailPage />} />
 
@@ -167,6 +188,15 @@ export default function App() {
 
                             <Route path="/veeam/servers" element={<VeeamServersPage />} />
 
+                            {/* MikroTik */}
+                            <Route path="/mikrotik" element={<MikroTikOverviewPage />} />
+
+                            {/* Network */}
+                            <Route path="/network/topology" element={<NetworkTopologyPage />} />
+
+                            {/* Agents Topology */}
+                            <Route path="/agents/topology" element={<TopologyPage />} />
+
                             {/* UniFi */}
                             <Route path="/unifi" element={<UniFiDashboardPage />} />
                             <Route path="/unifi/devices" element={<UniFiDevicesPage />} />
@@ -177,6 +207,7 @@ export default function App() {
                             <Route path="/unifi/sites" element={<UniFiSitesPage />} />
 
                             <Route path="/settings" element={<GeneralPage />} />
+                            <Route path="/settings/profile" element={<ProfilePage />} />
                             <Route path="/settings/users" element={<UsersPage />} />
                             <Route path="/settings/integrations" element={<IntegrationsPage />} />
                             <Route path="/settings/appearance" element={<AppearancePage />} />
@@ -185,6 +216,7 @@ export default function App() {
 
                             <Route path="/agents" element={<AgentsOverviewPage />} />
                             <Route path="/agents/:id" element={<AgentDetailPage />} />
+                            <Route path="/agents/install" element={<AgentInstallPage />} />
 
                             <Route path="/fleet" element={<AgentsOverviewPage />} />
                             <Route path="/fleet/timeline" element={<TimelinePage />} />
@@ -213,6 +245,7 @@ export default function App() {
                         </Route>
                         </Route>
                         </Routes>
+                    </SiteProvider>
                     </ToastProvider>
                 </SidebarProvider>
             </AuthProvider>

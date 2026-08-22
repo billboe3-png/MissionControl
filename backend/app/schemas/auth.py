@@ -21,7 +21,7 @@ class LoginResponse(BaseModel):
     """Login response with token and user info."""
 
     access_token: str
-    token_type: str = "bearer"
+    token_type: str = "bearer"  # noqa: S105 - field name, not a secret assignment
     user: "UserSummary"
 
 

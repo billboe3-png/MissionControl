@@ -16,5 +16,5 @@ select = ["E", "F", "I", "UP", "B", "S", "SIM", "C4", "RUF"]
 extend-ignore = ["E501", "B008", "S507"]
 
 [tool.ruff.lint.per-file-ignores]
-"tests/**/*.py" = ["S101", "PLR2004"]
+"tests/**/*.py" = ["S101", "PLR2004", "S106", "S105", "S108", "S604", "S110", "SIM105"]
 "scripts/**/*.py" = ["S101", "BLE001", "PLW1510", "SIM115", "TRY004", "RUF059"]

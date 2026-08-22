@@ -141,7 +141,16 @@ async def get_setup_status(
     db: Session = Depends(get_db),
 ) -> SetupStatusResponse:
     """Check whether the setup wizard is required."""
-    return SetupStatusResponse(setup_required=is_setup_required(db))
+    tz = "UTC"
+    try:
+        from app.services.company_service import CompanyService
+        service = CompanyService()
+        companies = service.get_all(db)
+        if companies and companies[0].timezone:
+            tz = companies[0].timezone
+    except Exception as exc:
+        logger.debug("Could not load timezone for setup status: %s", exc)
+    return SetupStatusResponse(setup_required=is_setup_required(db), timezone=tz)
 
 
 @router.post(
@@ -159,7 +168,6 @@ async def run_bootstrap(
     Only works when no users exist. After completion, the setup
     wizard is permanently disabled.
     """
-    _require_setup(db)
     result = bootstrap(db, payload)
     return BootstrapResponse(**result)
 

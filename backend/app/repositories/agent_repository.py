@@ -157,12 +157,12 @@ class AgentCommandRepository:
     def get_pending_for_agent(
         db: Session, agent_id: int, limit: int = 10
     ) -> list[AgentCommand]:
-        """Return pending commands for an agent."""
+        """Return pending/dispatched commands for an agent."""
         stmt = (
             select(AgentCommand)
             .where(
                 AgentCommand.agent_id == agent_id,
-                AgentCommand.status == "pending",
+                AgentCommand.status.in_({"pending", "dispatched"}),
             )
             .order_by(AgentCommand.created_at.asc())
             .limit(limit)

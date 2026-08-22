@@ -26,13 +26,30 @@ def _server_to_dict(s: VeeamBackupServer) -> dict[str, Any]:
     return {
         "id": s.id,
         "name": s.name,
-        "url": s.url,
+        "edition": s.edition,
+        "data_source": s.data_source,
+        "db_type": s.db_type,
+        "column_case": s.column_case,
+        "agent_id": s.agent_id,
+        "target_id": s.target_id,
+        "rest_url": s.rest_url,
         "enabled": s.enabled,
         "status": s.status,
         "version": s.version,
         "last_sync_at": s.last_sync_at.isoformat() if s.last_sync_at else None,
         "last_error": s.last_error,
+        "last_diagnostic": _parse_diagnostic(s.last_diagnostic),
     }
+
+
+def _parse_diagnostic(raw: str | None) -> dict[str, Any] | None:
+    if not raw:
+        return None
+    try:
+        import json
+        return json.loads(raw)
+    except (ValueError, TypeError):
+        return None
 
 
 def _repo_to_dict(r: VeeamRepository) -> dict[str, Any]:

@@ -26,15 +26,26 @@ from app.db.database import Base
 
 
 class VeeamBackupServer(Base):
-    """Registered Veeam B&R server connection."""
+    """Registered Veeam B&R server connection (live registry)."""
 
     __tablename__ = "veeam_backup_servers"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     name: Mapped[str] = mapped_column(String(200), nullable=False, unique=True)
-    url: Mapped[str] = mapped_column(String(500), nullable=False)
-    username: Mapped[str] = mapped_column(String(200), nullable=False)
-    encrypted_password: Mapped[str | None] = mapped_column(Text, nullable=True)
+    edition: Mapped[str] = mapped_column(String(20), nullable=False, default="enterprise")
+    data_source: Mapped[str] = mapped_column(String(20), nullable=False, default="both")
+    db_type: Mapped[str] = mapped_column(String(20), nullable=False, default="auto")
+    column_case: Mapped[str] = mapped_column(String(20), nullable=False, default="pascal")
+    agent_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("agents.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    target_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("agent_remote_targets.id", ondelete="SET NULL"),
+        nullable=True, index=True,
+    )
+    rest_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    rest_username: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    rest_password_encrypted: Mapped[str | None] = mapped_column(Text, nullable=True)
     verify_ssl: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     timeout: Mapped[int] = mapped_column(Integer, nullable=False, default=30)
     enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, index=True)
@@ -42,6 +53,11 @@ class VeeamBackupServer(Base):
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="unknown")
     last_error: Mapped[str | None] = mapped_column(Text, nullable=True)
     last_sync_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    last_diagnostic: Mapped[str | None] = mapped_column(Text, nullable=True)
+    legacy_ssh_host: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    legacy_ssh_port: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    legacy_ssh_username: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    legacy_ssh_password_encrypted: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime, default=lambda: datetime.now(UTC)
     )

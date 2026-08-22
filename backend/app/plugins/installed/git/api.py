@@ -58,7 +58,7 @@ class GitApiClient:
                 )
                 if attempt < self._retries:
                     await asyncio.sleep(1)
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 last_error = TimeoutError(f"git command timed out after {self._timeout}s")
                 if attempt < self._retries:
                     await asyncio.sleep(1)
@@ -188,7 +188,7 @@ class GitApiClient:
         if not result["success"]:
             return {"clean": False, "error": result["stderr"]}
 
-        lines = [l for l in result["stdout"].strip().splitlines() if l]
+        lines = [line for line in result["stdout"].strip().splitlines() if line]
         return {
             "clean": len(lines) == 0,
             "dirty": len(lines) > 0,

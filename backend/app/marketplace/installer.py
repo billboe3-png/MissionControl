@@ -54,18 +54,7 @@ class PluginInstaller:
 
         logger.info("Installing plugin %s v%s from %s", plugin_id, version, repo_name)
 
-        # 1. Verify signature and checksum
-        verify = plugin_verifier.verify_package(plugin_meta, zip_path, signature_info, trust_level)
-        if not verify["passed"]:
-            return {
-                "success": False,
-                "plugin_id": plugin_id,
-                "version": version,
-                "error": "Verification failed: " + "; ".join(verify["errors"]),
-                "warnings": verify["warnings"],
-            }
-
-        # 2. Check compatibility
+        # 1. Check compatibility
         compat = compatibility_engine.check_all(plugin_meta)
         if not compat["compatible"]:
             reasons = compatibility_engine.reject_reasons(plugin_meta)
@@ -74,6 +63,17 @@ class PluginInstaller:
                 "plugin_id": plugin_id,
                 "version": version,
                 "error": "Incompatible: " + "; ".join(reasons),
+                "warnings": [],
+            }
+
+        # 2. Verify signature and checksum
+        verify = plugin_verifier.verify_package(plugin_meta, zip_path, signature_info, trust_level)
+        if not verify["passed"]:
+            return {
+                "success": False,
+                "plugin_id": plugin_id,
+                "version": version,
+                "error": "Verification failed: " + "; ".join(verify["errors"]),
                 "warnings": verify["warnings"],
             }
 

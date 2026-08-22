@@ -45,7 +45,11 @@ class CommandQueue:
         if not commands:
             return None
         now = time.time()
-        executable = [c for c in commands if c.get("scheduled_at") is None or c["scheduled_at"] <= now]
+        executable = [
+            c
+            for c in commands
+            if c.get("scheduled_at") is None or c["scheduled_at"] <= now
+        ]
         if not executable:
             return None
         executable.sort(key=lambda c: (c.get("priority", 3), c.get("queued_at", 0)))
@@ -68,7 +72,9 @@ class CommandQueue:
                 return True
         return False
 
-    def update_progress(self, command_id: int, progress: int, message: str = "") -> None:
+    def update_progress(
+        self, command_id: int, progress: int, message: str = ""
+    ) -> None:
         """Update progress for a command (0-100 percent)."""
         progress = max(0, min(100, progress))
         data = self._load_progress()
@@ -86,13 +92,22 @@ class CommandQueue:
         for cmd in commands:
             if cmd.get("id") == command_id:
                 if cmd.get("retry_count", 0) >= cmd.get("max_retries", 3):
-                    logger.warning("Command %d exceeded max retries (%d)", command_id, cmd.get("max_retries", 3))
+                    logger.warning(
+                        "Command %d exceeded max retries (%d)",
+                        command_id,
+                        cmd.get("max_retries", 3),
+                    )
                     return False
                 cmd["retry_count"] = cmd.get("retry_count", 0) + 1
                 cmd["status"] = "queued"
                 cmd["queued_at"] = time.time()
                 self._save_queue(commands)
-                logger.info("Re-queued command %d (retry %d/%d)", command_id, cmd["retry_count"], cmd["max_retries"])
+                logger.info(
+                    "Re-queued command %d (retry %d/%d)",
+                    command_id,
+                    cmd["retry_count"],
+                    cmd["max_retries"],
+                )
                 return True
         return False
 
@@ -120,8 +135,7 @@ class CommandQueue:
         now = time.time()
         original_count = len(commands)
         commands = [
-            c for c in commands
-            if (now - c.get("queued_at", now)) < max_age_seconds
+            c for c in commands if (now - c.get("queued_at", now)) < max_age_seconds
         ]
         removed = original_count - len(commands)
         if removed > 0:

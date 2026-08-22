@@ -4,6 +4,7 @@ import {
     integrationsApi,
     IntegrationProfile,
 } from "../../services/integrations";
+import AgentSelector from "../common/AgentSelector";
 
 interface ADConfigModalProps {
     profile: IntegrationProfile | null;
@@ -25,6 +26,7 @@ export default function ADConfigModal({
     const [password, setPassword] = useState("");
     const [useSsl, setUseSsl] = useState(profile?.use_ssl ?? true);
     const [timeout, setTimeout_] = useState(String(profile?.timeout ?? 30));
+    const [agentId, setAgentId] = useState<number | null>(profile?.agent_id ?? null);
     const [loading, setLoading] = useState(false);
 
     const isEditing = profile !== null;
@@ -34,27 +36,24 @@ export default function ADConfigModal({
         setLoading(true);
 
         try {
+            const payload: Record<string, unknown> = {
+                name,
+                domain,
+                base_dn: baseDn || undefined,
+                username,
+                use_ssl: useSsl,
+                timeout: parseInt(timeout, 10) || 30,
+                agent_id: agentId,
+            };
+            if (password) payload.password = password;
+
             if (isEditing) {
-                await integrationsApi.update(profile.id, {
-                    name,
-                    domain,
-                    base_dn: baseDn || undefined,
-                    username,
-                    password: password || undefined,
-                    use_ssl: useSsl,
-                    timeout: parseInt(timeout, 10) || 30,
-                });
+                await integrationsApi.update(profile!.id, payload);
             } else {
                 await integrationsApi.create({
-                    name,
+                    ...payload,
                     integration_type: "active_directory",
-                    domain,
-                    base_dn: baseDn || undefined,
-                    username,
-                    password,
-                    use_ssl: useSsl,
-                    timeout: parseInt(timeout, 10) || 30,
-                });
+                } as Parameters<typeof integrationsApi.create>[0]);
             }
             onSave();
         } catch (err) {
@@ -86,6 +85,8 @@ export default function ADConfigModal({
                         />
                     </div>
 
+                    <AgentSelector value={agentId} onChange={setAgentId} />
+
                     <div className="form-group">
                         <label htmlFor="ad-domain">Domain</label>
                         <input
@@ -94,7 +95,7 @@ export default function ADConfigModal({
                             className="form-input"
                             value={domain}
                             onChange={(e) => setDomain(e.target.value)}
-                            placeholder="corp.example.com"
+                            placeholder="example.com"
                             required
                         />
                     </div>

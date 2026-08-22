@@ -11,6 +11,7 @@ and caches results into local DB tables for dashboard widgets and REST API.
 """
 
 import asyncio
+import contextlib
 import logging
 from datetime import UTC, datetime
 from typing import Any
@@ -74,7 +75,7 @@ class HyperVPlugin(ServerPluginSDK):
         hosts = await asyncio.to_thread(_load)
 
         for host in hosts:
-            def _upsert_host():
+            def _upsert_host(host=host):
                 session = SessionLocal()
                 try:
                     existing = session.execute(
@@ -129,10 +130,8 @@ class HyperVPlugin(ServerPluginSDK):
         """Cancel sync task."""
         if self._sync_task and not self._sync_task.done():
             self._sync_task.cancel()
-            try:
+            with contextlib.suppress(asyncio.CancelledError):
                 await self._sync_task
-            except asyncio.CancelledError:
-                pass
         logger.info("Hyper-V plugin stopped")
 
     # ------------------------------------------------------------------ #
@@ -205,13 +204,13 @@ class HyperVPlugin(ServerPluginSDK):
         cp_sync = CheckpointSync()
         host_id = host.id
 
-        def _do_sync():
+        async def _do_sync():
             session = SessionLocal()
             try:
-                vm_sync.sync(session, provider, host_id)
-                net_sync.sync(session, provider, host_id)
-                vol_sync.sync(session, provider, host_id)
-                cp_sync.sync(session, provider, host_id)
+                await vm_sync.sync(session, provider, host_id)
+                await net_sync.sync(session, provider, host_id)
+                await vol_sync.sync(session, provider, host_id)
+                await cp_sync.sync(session, provider, host_id)
 
                 host_row = session.get(HyperVHost, host_id)
                 if host_row:
@@ -222,7 +221,7 @@ class HyperVPlugin(ServerPluginSDK):
             finally:
                 session.close()
 
-        await asyncio.to_thread(_do_sync)
+        await _do_sync()
 
     @staticmethod
     async def _mark_host_error(host_id: int, error_msg: str) -> None:

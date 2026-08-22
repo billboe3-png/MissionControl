@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import LoadingButton from "../../components/common/LoadingButton";
 import StatusBadge from "../../components/common/StatusBadge";
+import { formatDateTime } from "../../utils/dateFormat";
 import {
     agentRemoteTargetApi,
     RemoteTarget,
@@ -202,22 +203,25 @@ export default function AgentRemoteTargetsTab({ agentId }: Props) {
                             />
                         </div>
                         <div className="form-row">
-                            <label>{form.protocol === "ssh" ? "SSH Key (optional)" : "Password"}</label>
-                            {form.protocol === "ssh" ? (
-                                <textarea
-                                    value={form.ssh_key || ""}
-                                    onChange={(e) => setForm((f) => ({ ...f, ssh_key: e.target.value }))}
-                                    placeholder="Paste SSH private key (optional)"
-                                    rows={3}
-                                />
-                            ) : (
-                                <input
-                                    type="password"
-                                    value={form.password || ""}
-                                    onChange={(e) => setForm((f) => ({ ...f, password: e.target.value }))}
-                                    placeholder={editingTarget ? "Leave blank to keep current" : ""}
-                                />
-                            )}
+                            <label>{form.protocol === "ssh" ? "Password (preferred)" : "Password"}</label>
+                            <input
+                                type="password"
+                                value={form.password || ""}
+                                onChange={(e) => setForm((f) => ({ ...f, password: e.target.value }))}
+                                placeholder={editingTarget ? "Leave blank to keep current" : ""}
+                            />
+                        </div>
+                        <div className="form-row">
+                            <label>SSH Key</label>
+                            <textarea
+                                value={form.ssh_key || ""}
+                                onChange={(e) => setForm((f) => ({ ...f, ssh_key: e.target.value }))}
+                                placeholder="Leave empty unless password auth is unavailable"
+                                rows={3}
+                            />
+                            <small className="form-hint">
+                                Only used if no password is configured.
+                            </small>
                         </div>
                         <div className="form-row">
                             <label>Tags</label>
@@ -290,7 +294,7 @@ export default function AgentRemoteTargetsTab({ agentId }: Props) {
                                         </td>
                                         <td>
                                             {t.last_collected_at
-                                                ? new Date(t.last_collected_at).toLocaleString()
+                                                ? formatDateTime(t.last_collected_at)
                                                 : "Never"}
                                         </td>
                                         <td>

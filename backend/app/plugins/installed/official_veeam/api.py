@@ -1,7 +1,7 @@
 """
 Veeam Plugin API Client
 
-Wraps the existing VeeamRESTProvider to provide sync/async methods
+Wraps the plugin-native VeeamServerProvider to provide sync/async methods
 for the plugin's background sync and route handlers.
 """
 
@@ -10,43 +10,24 @@ import concurrent.futures
 import logging
 from typing import Any
 
-from app.providers.veeam.veeam_provider import VeeamRESTProvider
+from app.plugins.installed.official_veeam.provider import (
+    VeeamServerProvider,
+    build_server_provider,
+)
 
 logger = logging.getLogger("plugin.veeam.api")
 
 
 class VeeamApiClient:
-    """Wrapper around VeeamRESTProvider for plugin use."""
+    """Wrapper around VeeamServerProvider for plugin use."""
 
-    def __init__(
-        self,
-        base_url: str,
-        username: str,
-        password: str,
-        verify_ssl: bool = True,
-        timeout: int = 30,
-        ssh_host: str = "",
-        ssh_port: int = 22,
-        ssh_username: str = "",
-        ssh_password: str = "",
-        data_source: str = "both",
-        db_type: str = "postgresql",
-        column_case: str = "pascal",
-    ) -> None:
-        self._provider = VeeamRESTProvider(
-            base_url=base_url,
-            username=username,
-            password=password,
-            timeout=timeout,
-            verify_ssl=verify_ssl,
-            ssh_host=ssh_host,
-            ssh_port=ssh_port,
-            ssh_username=ssh_username,
-            ssh_password=ssh_password,
-            data_source=data_source,
-            db_type=db_type,
-            column_case=column_case,
-        )
+    def __init__(self, provider: VeeamServerProvider) -> None:
+        self._provider = provider
+
+    @classmethod
+    def from_server(cls, db: Any, server: Any) -> "VeeamApiClient":
+        """Build a client around the capability-routed provider for a server row."""
+        return cls(build_server_provider(db, server))
 
     async def test_connection(self) -> dict[str, Any]:
         return await self._provider.get_health()

@@ -11,7 +11,7 @@ from fastapi import APIRouter
 
 router = APIRouter(prefix="/version", tags=["version"])
 
-APP_VERSION = "3.0.0"
+APP_VERSION = "3.0.0-rc1"
 DB_SCHEMA_VERSION = "3.0.0"
 MIN_AGENT_VERSION = "3.0.0"
 PLUGIN_SDK_VERSION = "3.0.0"

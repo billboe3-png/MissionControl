@@ -7,6 +7,7 @@ encryption/decryption of secrets, and provider injection.
 Sprint 2.3.1 - Integration Management (Production Configuration UI).
 """
 
+import asyncio
 import logging
 from datetime import UTC, datetime
 
@@ -15,14 +16,23 @@ from sqlalchemy.orm import Session
 
 from app.core.security import CredentialCipher
 from app.models.db.integration_profile import IntegrationProfile
-from app.providers.hyperv.provider_factory import reset_hyperv_provider
-from app.providers.proxmox.provider_factory import reset_proxmox_provider
-from app.repositories.integration_profile_repository import (
-    IntegrationProfileRepository,
-)
 from app.plugins.installed.official_unifi.bridge import (
     delete_profile_controllers as _unifi_delete_controllers,
+)
+from app.plugins.installed.official_unifi.bridge import (
     sync_profile_to_controllers as _unifi_sync_controllers,
+)
+from app.plugins.installed.official_veeam.bridge import (
+    delete_profile_server as _veeam_delete_server,
+)
+from app.plugins.installed.official_veeam.bridge import (
+    sync_profile_to_server as _veeam_sync_server,
+)
+from app.providers.hyperv.provider_factory import reset_hyperv_provider
+from app.providers.proxmox.provider_factory import reset_proxmox_provider
+from app.repositories.agent_repository import AgentCommandRepository
+from app.repositories.integration_profile_repository import (
+    IntegrationProfileRepository,
 )
 from app.schemas.integration import (
     IntegrationProfileCreate,
@@ -102,6 +112,7 @@ class IntegrationService:
         kwargs = {
             "description": data.description,
             "enabled": data.enabled,
+            "agent_id": data.agent_id,
             "base_url": data.base_url,
             "username": data.username,
             "encrypted_secret": _encrypt(data.password),
@@ -131,10 +142,10 @@ class IntegrationService:
             reset_hyperv_provider(profile.id)
         if data.integration_type == "proxmox":
             reset_proxmox_provider()
-        if data.integration_type == "veeam":
-            self._reset_veeam_singleton()
         if data.integration_type == "unifi":
             _unifi_sync_controllers(db, profile)
+        if data.integration_type == "veeam":
+            _veeam_sync_server(db, profile)
         return self._to_response(profile)
 
     async def update_profile(
@@ -212,10 +223,10 @@ class IntegrationService:
             reset_hyperv_provider(profile.id)
         if profile.integration_type == "proxmox":
             reset_proxmox_provider()
-        if profile.integration_type == "veeam":
-            self._reset_veeam_singleton()
         if profile.integration_type == "unifi":
             _unifi_sync_controllers(db, profile)
+        if profile.integration_type == "veeam":
+            _veeam_sync_server(db, profile)
         return self._to_response(profile)
 
     async def delete_profile(
@@ -235,10 +246,10 @@ class IntegrationService:
             reset_hyperv_provider(profile_id)
         if existing and existing.integration_type == "proxmox":
             reset_proxmox_provider()
-        if existing and existing.integration_type == "veeam":
-            self._reset_veeam_singleton()
         if existing and existing.integration_type == "unifi":
             _unifi_delete_controllers(db, profile_id)
+        if existing and existing.integration_type == "veeam":
+            _veeam_delete_server(db, existing.name)
 
     # ------------------------------------------------------------------ #
     # Actions                                                             #
@@ -262,8 +273,6 @@ class IntegrationService:
             reset_hyperv_provider(profile.id)
         if profile.integration_type == "proxmox":
             reset_proxmox_provider()
-        if profile.integration_type == "veeam":
-            self._reset_veeam_singleton()
         if profile.integration_type == "unifi":
             _unifi_sync_controllers(db, profile)
         return self._to_response(profile)
@@ -286,8 +295,6 @@ class IntegrationService:
             reset_hyperv_provider(profile.id)
         if profile.integration_type == "proxmox":
             reset_proxmox_provider()
-        if profile.integration_type == "veeam":
-            self._reset_veeam_singleton()
         if profile.integration_type == "unifi":
             _unifi_sync_controllers(db, profile)
         return self._to_response(profile)
@@ -304,7 +311,7 @@ class IntegrationService:
             )
 
         try:
-            result = await self._test_provider(profile)
+            result = await self._test_profile(db, profile)
         except Exception as e:
             logger.error("Connection test failed: %s", e)
             IntegrationProfileRepository.update(
@@ -313,24 +320,17 @@ class IntegrationService:
                 last_test=datetime.now(UTC),
                 last_error=str(e),
             )
-            return IntegrationTestResponse(
-                success=False, error=str(e)
-            )
+            return IntegrationTestResponse(success=False, error=str(e))
 
         now = datetime.now(UTC)
         update_kwargs: dict = {"last_test": now}
-
         if result.get("connected"):
             update_kwargs["last_success"] = now
             update_kwargs["last_error"] = None
         else:
-            update_kwargs["last_error"] = result.get(
-                "error", "Unknown error"
-            )
+            update_kwargs["last_error"] = result.get("error", "Unknown error")
 
-        IntegrationProfileRepository.update(
-            db, profile_id, **update_kwargs
-        )
+        IntegrationProfileRepository.update(db, profile_id, **update_kwargs)
 
         return IntegrationTestResponse(
             success=result.get("connected", False),
@@ -344,6 +344,79 @@ class IntegrationService:
     # ------------------------------------------------------------------ #
     # Provider Injection                                                  #
     # ------------------------------------------------------------------ #
+
+    async def _test_profile(self, db: Session, profile: IntegrationProfile) -> dict:
+        if profile.agent_id:
+            return await self._test_via_agent(db, profile)
+        return await self._test_provider(profile)
+
+    async def _test_via_agent(
+        self, db: Session, profile: IntegrationProfile
+    ) -> dict:
+        from app.schemas.agent import AgentCommandDispatchRequest
+        from app.services.agent_service import AgentService
+
+        agent_service = AgentService()
+        cmd = AgentCommandDispatchRequest(
+            agent_id=profile.agent_id,
+            command_type="integration_test",
+            command=str(profile.integration_type or "").lower(),
+            integration_profile={
+                "base_url": profile.base_url,
+                "username": profile.username,
+                "password": _decrypt(profile.encrypted_secret),
+                "verify_ssl": profile.verify_ssl,
+                "timeout": profile.timeout,
+                "tenant_id": profile.tenant_id,
+                "client_id": profile.client_id,
+                "domain": profile.domain,
+                "base_dn": profile.base_dn,
+                "use_ssl": profile.use_ssl,
+                "data_source": profile.data_source,
+                "ssh_host": profile.ssh_host,
+                "ssh_port": profile.ssh_port,
+                "ssh_username": profile.ssh_username,
+            },
+            timeout=max((profile.timeout or 30) + 5, 90),
+            requested_by="integration_test",
+        )
+        dispatch = await agent_service.dispatch_command(db, cmd)
+        pending = AgentCommandRepository.get_pending_for_agent(db, profile.agent_id)
+        [c for c in pending if c.command_type == "integration_test" and c.command == profile.integration_type and c.status == "dispatched"]
+        timeout = max(profile.timeout or 30, 60)
+        datetime.now(UTC)
+        target = dispatch.id
+        poll = 0.2
+        waited = 0.0
+        cmd = None
+
+        while waited < timeout:
+            cand = AgentCommandRepository.get_by_id(db, target)
+            if not cand or cand.status in {"completed", "failed"}:
+                cmd = cand
+                break
+            cmd = cand
+            if cmd.status in {"completed", "failed"}:
+                break
+            await asyncio.sleep(min(poll, 1.0))
+            waited += min(poll, 1.0)
+
+        if cmd is None or cmd.status not in {"completed", "failed"}:
+            return {"connected": False, "error": f"Timed out waiting for agent result after {timeout}s"}
+
+        success = bool(cmd.success)
+        stderr = (cmd.stdout or "") + ("\n" + cmd.stderr if cmd.stderr else "")
+        error = cmd.error_message or (stderr.strip() if not success else None)
+        details: dict[str, object] = {
+            "agent_id": profile.agent_id,
+            "command_id": target,
+            "status": cmd.status,
+            "agent_result": cmd.stdout or cmd.stderr,
+            "duration_ms": cmd.duration_ms,
+        }
+        if success:
+            return {"connected": True, "message": "Agent test succeeded", "details": details}
+        return {"connected": False, "error": error or "Agent test failed", "details": details}
 
     async def _test_provider(
         self, profile: IntegrationProfile
@@ -359,8 +432,6 @@ class IntegrationService:
             return await self._test_hyperv(profile)
         elif profile.integration_type == "proxmox":
             return await self._test_proxmox(profile)
-        elif profile.integration_type == "veeam":
-            return await self._test_veeam(profile)
         elif profile.integration_type == "unifi":
             return await self._test_unifi(profile)
         else:
@@ -474,10 +545,7 @@ class IntegrationService:
         if not token_id:
             return {"connected": False, "error": "Proxmox API token ID is required"}
 
-        if token_secret:
-            full_token = f"{token_id}={token_secret}"
-        else:
-            full_token = token_id
+        full_token = f"{token_id}={token_secret}" if token_secret else token_id
 
         provider = ProxmoxRESTProvider(
             base_url=base_url,
@@ -485,35 +553,6 @@ class IntegrationService:
             timeout=profile.timeout or 30,
             verify_ssl=profile.verify_ssl if profile.verify_ssl is not None else True,
         )
-        return await provider.test_connection()
-
-    async def _test_veeam(
-        self, profile: IntegrationProfile
-    ) -> dict:
-        """Test Veeam B&R connection using profile config.
-
-        Supports both REST API (Enterprise) and PowerShell (Community Edition).
-        Delegates to provider_factory which handles db_type detection.
-        """
-        from app.core.config import get_settings
-        from app.core.security import CredentialCipher
-        from app.providers.veeam.provider_factory import _build_provider
-
-        settings = get_settings()
-        cipher = CredentialCipher(settings.missioncontrol_secret_key)
-        try:
-            provider = _build_provider(profile)
-        except ValueError as e:
-            msg = str(e)
-            if "Decryption failed" in msg:
-                return {
-                    "connected": False,
-                    "error": "Stored Veeam credentials could not be decrypted with the current key. "
-                    "Re-save the SSH password for this integration to re-encrypt it.",
-                }
-            return {"connected": False, "error": "Veeam server URL or SSH connection is required"}
-        if provider is None:
-            return {"connected": False, "error": "Veeam server URL or SSH connection is required"}
         return await provider.test_connection()
 
     async def _test_unifi(
@@ -567,16 +606,6 @@ class IntegrationService:
 
         reset_zabbix_provider()
         logger.info("Zabbix provider singleton reset after profile change")
-
-    @staticmethod
-    def _reset_veeam_singleton() -> None:
-        """Reset the cached Veeam provider so profile changes take effect."""
-        from app.providers.veeam.provider_factory import (
-            reset_veeam_provider,
-        )
-
-        reset_veeam_provider()
-        logger.info("Veeam provider singleton reset after profile change")
 
     def _to_response(
         self, profile: IntegrationProfile

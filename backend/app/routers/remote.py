@@ -442,9 +442,11 @@ async def get_metrics(
 # ------------------------------------------------------------------ #
 
 import asyncio  # noqa: E402
+import contextlib  # noqa: E402
 import json  # noqa: E402
 import logging  # noqa: E402
 
+import paramiko  # noqa: E402
 from fastapi import WebSocket, WebSocketDisconnect  # noqa: E402
 
 from app.providers.remote.ssh_provider import SSHProvider  # noqa: E402
@@ -507,14 +509,12 @@ async def console_ws(
                     await websocket.send_json({"type": "exit", "exit_code": chan.recv_exit_status()})
                     break
                 else:
-                    try:
+                    with contextlib.suppress(OSError, paramiko.SSHException):
                         # Drain any pending bytes; non-blocking recv raises on
                         # no data, which is expected and must be ignored.
                         if chan.recv_ready():
                             data = chan.recv(4096).decode("utf-8", errors="replace")
                             await websocket.send_json({"type": "output", "data": data})
-                    except (OSError, paramiko.SSHException):
-                        pass
                     await asyncio.sleep(0.05)
 
         async def read_ws():
@@ -534,7 +534,7 @@ async def console_ws(
         read_task = asyncio.create_task(read_ssh())
         write_task = asyncio.create_task(read_ws())
 
-        done, pending = await asyncio.wait(
+        _done, pending = await asyncio.wait(
             [read_task, write_task],
             return_when=asyncio.FIRST_COMPLETED,
         )
@@ -545,18 +545,190 @@ async def console_ws(
         pass
     except Exception as e:
         logger.warning("WebSocket console error: %s", e)
-        try:
+        with contextlib.suppress(Exception):
             await websocket.send_json({"type": "error", "message": str(e)})
-        except Exception:
-            pass
     finally:
         if chan is not None:
-            try:
+            with contextlib.suppress(Exception):
                 chan.close()
-            except Exception:
-                pass
         if client is not None:
-            try:
+            with contextlib.suppress(Exception):
                 client.close()
-            except Exception:
-                pass
+
+
+# ------------------------------------------------------------------ #
+# Interactive Console relayed through an edge agent (WebSocket)       #
+# ------------------------------------------------------------------ #
+
+import time as _time  # noqa: E402
+
+from app.models.db.agent import Agent as AgentModel  # noqa: E402
+from app.services.auth_service import AuthService  # noqa: E402
+from app.services.console_session_manager import (  # noqa: E402
+    manager as console_manager,
+)
+
+CONNECT_TIMEOUT = 45.0
+
+
+@router.websocket("/console-agent")
+async def console_agent_ws(
+    websocket: WebSocket,
+    host_id: int = Query(...),
+    agent_id: int = Query(...),
+    token: str | None = Query(None),
+    db: Session = Depends(get_db),
+):
+    """Interactive console to a host, relayed via an edge agent.
+
+    The agent owns the SSH PTY; this socket only bridges bytes between the
+    browser and the in-memory session that the agent's console I/O
+    endpoint feeds. Message protocol matches /console exactly.
+    """
+    await websocket.accept()
+
+    user = None
+    if token:
+        try:
+            user = AuthService.get_current_user(db, token)
+        except ValueError:
+            user = None
+    if user is None:
+        await websocket.send_json({"type": "error", "message": "Unauthorized"})
+        await websocket.close()
+        return
+
+    host = RemoteHostRepository.get_by_id(db, host_id)
+    if host is None or not host.enabled:
+        await websocket.send_json({"type": "error", "message": "Host not found or disabled"})
+        await websocket.close()
+        return
+
+    agent = db.query(AgentModel).filter(AgentModel.id == agent_id).first()
+    if agent is None or not getattr(agent, "enabled", True):
+        await websocket.send_json({"type": "error", "message": "Agent not found or disabled"})
+        await websocket.close()
+        return
+    if agent.status != "online":
+        await websocket.send_json(
+            {"type": "error", "message": f"Agent {agent.name} is offline"}
+        )
+        await websocket.close()
+        return
+
+    # The agent matches console targets against its remote-target hostnames,
+    # which may store either the host's hostname or its IP address.
+    from app.models.db.agent_remote_target import AgentRemoteTarget
+
+    target_row = (
+        db.query(AgentRemoteTarget)
+        .filter(
+            AgentRemoteTarget.agent_id == agent.id,
+            AgentRemoteTarget.enabled.is_(True),
+        )
+        .filter(
+            (AgentRemoteTarget.hostname == host.hostname)
+            | (AgentRemoteTarget.hostname == host.ip_address)
+        )
+        .first()
+    )
+    if target_row is None:
+        await websocket.send_json(
+            {
+                "type": "error",
+                "message": f"Host {host.name} is not a remote target of agent {agent.name}",
+            }
+        )
+        await websocket.close()
+        return
+
+    session = console_manager.create_session(
+        agent_id=agent.id,
+        host_id=host.id,
+        hostname=target_row.hostname,
+    )
+    logger.info(
+        "Console relay session %s: host %s via agent %s (%s)",
+        session.session_id, host.name, agent.name, agent.hostname,
+    )
+
+    await websocket.send_json({"type": "connecting", "session_id": session.session_id})
+
+    ws_cursor = 0
+    connected_sent = False
+
+    async def pump():
+        nonlocal ws_cursor, connected_sent
+        deadline = _time.time() + CONNECT_TIMEOUT
+        while True:
+            output, ws_cursor = console_manager.read_output(
+                session.session_id, ws_cursor
+            )
+            if output:
+                await websocket.send_json({"type": "output", "data": output})
+
+            current = console_manager.get_session(session.session_id)
+            if current is None:
+                await websocket.send_json({"type": "exit", "exit_code": -1})
+                return
+            if current.status == "connected" and not connected_sent:
+                connected_sent = True
+                await websocket.send_json({"type": "connected", "host": host.name})
+            elif current.status == "error":
+                message = current.error or "Console failed on agent"
+                await websocket.send_json({"type": "error", "message": message})
+                return
+            elif current.status == "closed":
+                if not connected_sent:
+                    await websocket.send_json(
+                        {
+                            "type": "error",
+                            "message": current.error or "Session closed before connecting",
+                        }
+                    )
+                else:
+                    exit_code = current.exit_code if current.exit_code is not None else 0
+                    await websocket.send_json({"type": "exit", "exit_code": exit_code})
+                return
+            if not connected_sent and _time.time() > deadline:
+                console_manager.request_close(session.session_id)
+                await websocket.send_json(
+                    {"type": "error", "message": "Timed out waiting for agent console"}
+                )
+                return
+            await asyncio.sleep(0.1)
+
+    async def reader():
+        while True:
+            msg = await websocket.receive_text()
+            try:
+                data = json.loads(msg)
+            except json.JSONDecodeError:
+                data = {"type": "input", "data": msg}
+
+            kind = data.get("type")
+            if kind == "input":
+                console_manager.send_input(session.session_id, data.get("data", ""))
+            elif kind == "resize":
+                with contextlib.suppress(TypeError, ValueError):
+                    console_manager.request_resize(
+                        session.session_id,
+                        int(data.get("width", 120)),
+                        int(data.get("height", 40)),
+                    )
+            elif kind == "close":
+                console_manager.request_close(session.session_id)
+                return
+
+    pump_task = asyncio.create_task(pump())
+    reader_task = asyncio.create_task(reader())
+    _done, pending = await asyncio.wait(
+        [pump_task, reader_task], return_when=asyncio.FIRST_COMPLETED
+    )
+    for task in pending:
+        task.cancel()
+
+    # Browser gone or session ended — make sure the agent tears down the PTY.
+    console_manager.request_close(session.session_id)
+    with contextlib.suppress(Exception):
+        await websocket.close()

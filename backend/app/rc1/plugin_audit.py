@@ -22,7 +22,7 @@ from app.rc1.validator import AuditResult, CheckResult, CheckStatus
 
 logger = logging.getLogger(__name__)
 
-OFFICIAL_PLUGINS = ["zabbix", "official_veeam", "official_unifi", "official_docker"]
+OFFICIAL_PLUGINS = ["zabbix", "official_veeam", "official_unifi", "official_docker", "official_mikrotik"]
 
 PLUGIN_REQUIRED_FILES = ["__init__.py", "plugin.json", "config.py", "models.py", "api.py", "sync.py", "cache.py", "routes.py"]
 

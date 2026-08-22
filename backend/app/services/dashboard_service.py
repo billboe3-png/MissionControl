@@ -16,6 +16,7 @@ import logging
 from datetime import UTC, datetime
 
 from sqlalchemy.orm import Session
+
 from app.providers.health_provider import health_provider
 from app.providers.note_provider import note_provider
 from app.providers.parking_lot_provider import parking_lot_provider
@@ -64,9 +65,10 @@ class DashboardService:
             "application": {
                 "name": "Mission Control",
                 "tagline": "The Daily Workspace for IT Operations",
-                "version": "3.0.0",
+                "version": "3.0.0-rc1",
             },
             "generated": datetime.now(UTC).isoformat(),
+            "system": self._get_system_data(),
             "summary": {
                 "projects": projects["count"],
                 "active_projects": projects["statistics"]["active"],
@@ -120,19 +122,36 @@ class DashboardService:
             from app.plugins.registry import plugin_registry
 
             if plugin_registry.has_plugin("git"):
-                return await plugin_registry.get_widget_data(
+                data = await plugin_registry.get_widget_data(
                     "git", "git-summary"
                 )
-        except Exception:
-            pass
+                if data:
+                    return {
+                        "available": data.get("available", False),
+                        "current_branch": None,
+                        "latest_commit": None,
+                        **data,
+                    }
+        except Exception as exc:
+            logger.debug("Dashboard: Git plugin data failed: %s", exc)
 
         try:
             from app.plugins.installed.git.cache import cache_manager
 
-            return cache_manager.get_summary(db)
+            cached = cache_manager.get_summary(db)
+            # Ensure expected keys are present for dashboard consumers
+            return {
+                "available": cached.get("available", False),
+                "current_branch": None,
+                "latest_commit": None,
+                **cached,
+            }
         except Exception as e:
             logger.warning("Dashboard: Git data failed: %s", e)
             return {
+                "available": False,
+                "current_branch": None,
+                "latest_commit": None,
                 "repo_count": 0,
                 "branch_count": 0,
                 "commit_count": 0,
@@ -148,11 +167,19 @@ class DashboardService:
             from app.plugins.registry import plugin_registry
 
             if plugin_registry.has_plugin("zabbix"):
-                return await plugin_registry.get_widget_data(
+                data = await plugin_registry.get_widget_data(
                     "zabbix", "zabbix-summary"
                 )
-        except Exception:
-            pass
+                if data:
+                    return {
+                        "connected": bool(
+                            data.get("host_count", 0) > 0
+                            or data.get("server_count", 0) > 0
+                        ),
+                        **data,
+                    }
+        except Exception as exc:
+            logger.debug("Dashboard: Zabbix plugin data failed: %s", exc)
 
         # Fall back to direct provider call
         try:
@@ -180,25 +207,18 @@ class DashboardService:
                 return await plugin_registry.get_widget_data(
                     "official_veeam", "veeam-summary"
                 )
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("Dashboard: Veeam plugin data failed: %s", exc)
 
-        try:
-            from app.providers.veeam.provider_factory import get_veeam_provider
-
-            provider = get_veeam_provider(db)
-            return await provider.get_summary()
-        except Exception as e:
-            logger.warning("Dashboard: Veeam data failed: %s", e)
-            return {
-                "connected": False,
-                "server_count": 0,
-                "repository_count": 0,
-                "job_count": 0,
-                "restore_point_count": 0,
-                "total_space_bytes": 0,
-                "free_space_bytes": 0,
-            }
+        return {
+            "connected": False,
+            "server_count": 0,
+            "repository_count": 0,
+            "job_count": 0,
+            "restore_point_count": 0,
+            "total_space_bytes": 0,
+            "free_space_bytes": 0,
+        }
 
     async def _get_unifi_data(self, db: Session) -> dict:
         """Get UniFi data, preferring plugin cache over live provider."""
@@ -209,8 +229,8 @@ class DashboardService:
                 return await plugin_registry.get_widget_data(
                     "official_unifi", "unifi-summary"
                 )
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("Dashboard: UniFi plugin data failed: %s", exc)
 
         try:
             from app.plugins.installed.official_unifi.cache import cache_manager
@@ -236,19 +256,34 @@ class DashboardService:
             from app.plugins.registry import plugin_registry
 
             if plugin_registry.has_plugin("official_docker"):
-                return await plugin_registry.get_widget_data(
+                data = await plugin_registry.get_widget_data(
                     "official_docker", "docker-summary"
                 )
-        except Exception:
-            pass
+                if data:
+                    return {
+                        "engine": "running" if data.get("available") else "stopped",
+                        "connected": bool(data.get("available")),
+                        "containers": [],
+                        **data,
+                    }
+        except Exception as exc:
+            logger.debug("Dashboard: Docker plugin data failed: %s", exc)
 
         try:
             from app.plugins.installed.official_docker.cache import cache_manager
 
-            return cache_manager.get_summary(db)
+            cached = cache_manager.get_summary(db)
+            # Ensure expected keys are present for dashboard consumers
+            return {
+                "engine": "running" if cached.get("available") else "stopped",
+                "connected": bool(cached.get("available")),
+                "containers": [],
+                **cached,
+            }
         except Exception as e:
             logger.warning("Dashboard: Docker data failed: %s", e)
             return {
+                "engine": "stopped",
                 "connected": False,
                 "host_count": 0,
                 "container_count": 0,
@@ -258,6 +293,7 @@ class DashboardService:
                 "image_count": 0,
                 "volume_count": 0,
                 "network_count": 0,
+                "containers": [],
             }
 
     async def _get_hyperv_data(self, db: Session) -> dict:
@@ -354,6 +390,31 @@ class DashboardService:
                 "failed": 0,
                 "pending_approvals": 0,
                 "audit_entries": 0,
+            }
+
+    def _get_system_data(self) -> dict:
+        """Return local system information for the dashboard."""
+        try:
+            import platform
+            import socket
+
+            import psutil
+
+            return {
+                "hostname": socket.gethostname(),
+                "os": platform.platform(),
+                "cpu_percent": psutil.cpu_percent(interval=0.1),
+                "memory_percent": psutil.virtual_memory().percent,
+                "disk_percent": psutil.disk_usage("/").percent,
+            }
+        except Exception as e:
+            logger.warning("Dashboard: system data failed: %s", e)
+            return {
+                "hostname": "unknown",
+                "os": "unknown",
+                "cpu_percent": 0,
+                "memory_percent": 0,
+                "disk_percent": 0,
             }
 
 

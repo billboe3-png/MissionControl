@@ -160,7 +160,12 @@ def check_secret_key_validity() -> CheckResult:
             "Secret Key",
             False,
             "not set",
-            instruction="Set MISSIONCONTROL_SECRET_KEY in your .env file.",
+            instruction=(
+                "Set MISSIONCONTROL_SECRET_KEY in your .env file.\n"
+                "Generate one using:\n"
+                '  python -c "from cryptography.fernet import Fernet; '
+                'print(Fernet.generate_key().decode())"'
+            ),
             critical=True,
         )
 
@@ -172,7 +177,7 @@ def check_secret_key_validity() -> CheckResult:
         return CheckResult(
             "Secret Key",
             False,
-            "invalid Fernet key format",
+            "not a valid Fernet key",
             instruction=(
                 "Generate a new key:\n"
                 '  python -c "from cryptography.fernet import Fernet; '

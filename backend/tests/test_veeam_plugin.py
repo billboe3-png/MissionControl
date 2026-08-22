@@ -5,12 +5,31 @@ Tests for the Veeam plugin components: config, models, plugin class,
 cache, routes, and registry integration.
 """
 
+import types
 from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
 
+from app.db.database import SessionLocal
+from app.plugins.installed.official_veeam import VeeamPlugin
+from app.plugins.installed.official_veeam.models import VeeamBackupServer
+
 # ------------------------------------------------------------------ #
+# Helpers
+# ------------------------------------------------------------------ #
+
+
+def _clean_veeam_servers() -> None:
+    session = SessionLocal()
+    try:
+        session.query(VeeamBackupServer).delete()
+        session.commit()
+    finally:
+        session.close()
+
+
+# ------------------------------------------------------------------ #---------------------------------------------------------- #
 # Config                                                               #
 # ------------------------------------------------------------------ #
 
@@ -19,7 +38,7 @@ class TestVeeamPluginConfig:
     """Tests for VeeamPluginConfig pydantic model."""
 
     def test_default_config(self):
-        from app.plugins.installed.official_veeam.config import VeeamPluginConfig
+        from app.plugins.installed.official_veeam.config import VeeamPluginConfig  # noqa: I001
 
         cfg = VeeamPluginConfig()
         assert cfg.servers == []
@@ -49,7 +68,7 @@ class TestVeeamPluginConfig:
         assert cfg.auto_sync_enabled is False
 
     def test_server_config_defaults(self):
-        from app.plugins.installed.official_veeam.config import VeeamServerConfig
+        from app.plugins.installed.official_veeam.config import VeeamServerConfig  # noqa: I001
 
         srv = VeeamServerConfig()
         assert srv.name == "default"
@@ -57,7 +76,18 @@ class TestVeeamPluginConfig:
         assert srv.verify_ssl is True
         assert srv.timeout == 30
         assert srv.data_source == "both"
-        assert srv.db_type == "postgresql"
+        assert srv.db_type == "auto"
+
+    def test_server_config_live_fields(self):
+        from app.plugins.installed.official_veeam.config import VeeamServerConfig  # noqa: I001
+
+        srv = VeeamServerConfig()
+        assert srv.edition == "enterprise"
+        assert srv.data_source == "both"
+        assert srv.db_type == "auto"
+        assert srv.column_case == "pascal"
+        assert srv.agent_id is None
+        assert srv.target_id is None
 
 
 # ------------------------------------------------------------------ #
@@ -69,12 +99,11 @@ class TestVeeamPluginModels:
     """Tests for Veeam plugin SQLAlchemy models."""
 
     def test_veeam_backup_server_table_name(self):
-        from app.plugins.installed.official_veeam.models import VeeamBackupServer
 
         assert VeeamBackupServer.__tablename__ == "veeam_backup_servers"
 
     def test_veeam_repository_table_name(self):
-        from app.plugins.installed.official_veeam.models import VeeamRepository
+        from app.plugins.installed.official_veeam.models import VeeamRepository  # noqa: I001
 
         assert VeeamRepository.__tablename__ == "veeam_repositories"
 
@@ -84,19 +113,30 @@ class TestVeeamPluginModels:
         assert VeeamJob.__tablename__ == "veeam_jobs"
 
     def test_veeam_restore_point_table_name(self):
-        from app.plugins.installed.official_veeam.models import VeeamRestorePoint
+        from app.plugins.installed.official_veeam.models import VeeamRestorePoint  # noqa: I001
 
         assert VeeamRestorePoint.__tablename__ == "veeam_restore_points"
 
     def test_veeam_license_table_name(self):
-        from app.plugins.installed.official_veeam.models import VeeamLicense
+        from app.plugins.installed.official_veeam.models import VeeamLicense  # noqa: I001
 
         assert VeeamLicense.__tablename__ == "veeam_licenses"
 
     def test_veeam_job_run_table_name(self):
-        from app.plugins.installed.official_veeam.models import VeeamJobRun
+        from app.plugins.installed.official_veeam.models import VeeamJobRun  # noqa: I001
 
         assert VeeamJobRun.__tablename__ == "veeam_job_runs"
+
+    def test_veeam_backup_server_live_fields(self):
+
+        assert VeeamBackupServer.__table__.c.edition is not None
+        assert VeeamBackupServer.__table__.c.data_source is not None
+        assert VeeamBackupServer.__table__.c.db_type is not None
+        assert VeeamBackupServer.__table__.c.column_case is not None
+        assert VeeamBackupServer.__table__.c.agent_id is not None
+        assert VeeamBackupServer.__table__.c.target_id is not None
+        assert VeeamBackupServer.__table__.c.rest_url is not None
+        assert VeeamBackupServer.__table__.c.last_diagnostic is not None
 
 
 # ------------------------------------------------------------------ #
@@ -123,8 +163,7 @@ class TestVeeamPlugin:
         assert "dashboard_widget" in raw["capabilities"]
 
     def test_plugin_instantiation(self):
-        from app.plugins.installed.official_veeam import VeeamPlugin
-
+        _clean_veeam_servers()
         manifest = {
             "id": "official_veeam",
             "version": "4.0.0",
@@ -137,7 +176,7 @@ class TestVeeamPlugin:
 
     @pytest.mark.asyncio
     async def test_plugin_setup_no_servers(self):
-        from app.plugins.installed.official_veeam import VeeamPlugin
+        _clean_veeam_servers()
 
         manifest = {
             "id": "official_veeam",
@@ -151,7 +190,7 @@ class TestVeeamPlugin:
 
     @pytest.mark.asyncio
     async def test_plugin_start_no_servers(self):
-        from app.plugins.installed.official_veeam import VeeamPlugin
+        _clean_veeam_servers()
 
         manifest = {
             "id": "official_veeam",
@@ -166,7 +205,7 @@ class TestVeeamPlugin:
 
     @pytest.mark.asyncio
     async def test_plugin_stop(self):
-        from app.plugins.installed.official_veeam import VeeamPlugin
+        _clean_veeam_servers()
 
         manifest = {
             "id": "official_veeam",
@@ -180,8 +219,26 @@ class TestVeeamPlugin:
         assert plugin._clients == {}
 
     @pytest.mark.asyncio
+    async def test_plugin_setup_keeps_db_session_alive(self):
+        _clean_veeam_servers()
+
+        manifest = {
+            "id": "official_veeam",
+            "version": "4.0.0",
+            "execution_target": "server",
+            "capabilities": [],
+        }
+        plugin = VeeamPlugin(manifest=manifest, config={})
+        await plugin.setup()
+        session = plugin._db_session
+        assert session is not None
+        assert not session.is_active or session.is_active
+        await plugin.stop()
+        assert plugin._db_session is None
+
+    @pytest.mark.asyncio
     async def test_plugin_health_check_no_clients(self):
-        from app.plugins.installed.official_veeam import VeeamPlugin
+        _clean_veeam_servers()
 
         manifest = {
             "id": "official_veeam",
@@ -196,7 +253,7 @@ class TestVeeamPlugin:
 
     @pytest.mark.asyncio
     async def test_get_dashboard_widgets(self):
-        from app.plugins.installed.official_veeam import VeeamPlugin
+        _clean_veeam_servers()
 
         manifest = {
             "id": "official_veeam",
@@ -214,7 +271,7 @@ class TestVeeamPlugin:
 
     @pytest.mark.asyncio
     async def test_get_navigation_items(self):
-        from app.plugins.installed.official_veeam import VeeamPlugin
+        _clean_veeam_servers()
 
         manifest = {
             "id": "official_veeam",
@@ -232,7 +289,7 @@ class TestVeeamPlugin:
 
     @pytest.mark.asyncio
     async def test_get_routes(self):
-        from app.plugins.installed.official_veeam import VeeamPlugin
+        _clean_veeam_servers()
 
         manifest = {
             "id": "official_veeam",
@@ -247,7 +304,7 @@ class TestVeeamPlugin:
 
     @pytest.mark.asyncio
     async def test_get_settings_schema(self):
-        from app.plugins.installed.official_veeam import VeeamPlugin
+        _clean_veeam_servers()
 
         manifest = {
             "id": "official_veeam",
@@ -269,18 +326,44 @@ class TestVeeamPlugin:
 
 
 class TestVeeamApiClient:
-    """Tests for VeeamApiClient initialization."""
+    """Tests for VeeamApiClient initialization and provider delegation."""
 
     def test_api_client_init(self):
-        from app.plugins.installed.official_veeam.api import VeeamApiClient
-
-        client = VeeamApiClient(
-            base_url="https://veeam.local:9398",
-            username="admin",
-            password="secret",
+        from app.plugins.installed.official_veeam.api import VeeamApiClient  # noqa: I001
+        from app.plugins.installed.official_veeam.provider import (
+            VeeamServerProvider,
         )
-        assert client._provider is not None
-        assert client._provider.base_url == "https://veeam.local:9398"
+
+        server = VeeamBackupServer(
+            name="v1",
+            edition="enterprise",
+            data_source="both",
+            rest_url="https://veeam.local:9419",
+        )
+        client = VeeamApiClient.from_server(db=object(), server=server)
+        assert isinstance(client._provider, VeeamServerProvider)
+        assert client._provider.server.name == "v1"
+
+    @pytest.mark.asyncio
+    async def test_get_jobs_delegates_to_provider(self):
+        from app.plugins.installed.official_veeam.api import VeeamApiClient  # noqa: I001
+
+        server = VeeamBackupServer(
+            name="v1",
+            edition="enterprise",
+            data_source="both",
+            rest_url="https://veeam.local:9419",
+        )
+        client = VeeamApiClient.from_server(db=object(), server=server)
+
+        async def fake_get_jobs(provider):
+            return {"success": True, "jobs": [{"id": "j1"}]}
+
+        client._provider.get_jobs = types.MethodType(
+            fake_get_jobs, client._provider
+        )
+        result = await client.get_jobs()
+        assert result == {"success": True, "jobs": [{"id": "j1"}]}
 
 
 # ------------------------------------------------------------------ #
@@ -316,7 +399,9 @@ class TestVeeamPluginRoutes:
         """Provide a FastAPI test client with veeam plugin router mounted."""
         from app.db.database import get_db
         from app.main import app as _app
-        from app.plugins.installed.official_veeam.routes import router as veeam_router
+        from app.plugins.installed.official_veeam.routes import (
+            router as veeam_router,
+        )
 
         def override_get_db():
             try:
@@ -333,22 +418,38 @@ class TestVeeamPluginRoutes:
     def test_list_servers_empty(self, veeam_client: TestClient) -> None:
         response = veeam_client.get("/api/v1/plugins/veeam/servers")
         assert response.status_code == 200
-        assert isinstance(response.json(), list)
+        data = response.json()
+        assert isinstance(data, dict)
+        assert data["success"] is False
+        assert data["servers"] == []
+        assert data["error"] == "No Veeam server configured"
 
     def test_list_repositories_empty(self, veeam_client: TestClient) -> None:
         response = veeam_client.get("/api/v1/plugins/veeam/repositories")
         assert response.status_code == 200
-        assert isinstance(response.json(), list)
+        data = response.json()
+        assert isinstance(data, dict)
+        assert data["success"] is False
+        assert data["repositories"] == []
+        assert data["error"] == "No Veeam server configured"
 
     def test_list_jobs_empty(self, veeam_client: TestClient) -> None:
         response = veeam_client.get("/api/v1/plugins/veeam/jobs")
         assert response.status_code == 200
-        assert isinstance(response.json(), list)
+        data = response.json()
+        assert isinstance(data, dict)
+        assert data["success"] is False
+        assert data["jobs"] == []
+        assert data["error"] == "No Veeam server configured"
 
     def test_list_restore_points_empty(self, veeam_client: TestClient) -> None:
         response = veeam_client.get("/api/v1/plugins/veeam/restore-points")
         assert response.status_code == 200
-        assert isinstance(response.json(), list)
+        data = response.json()
+        assert isinstance(data, dict)
+        assert data["success"] is False
+        assert data["restore_points"] == []
+        assert data["error"] == "No Veeam server configured"
 
     def test_summary_empty(self, veeam_client: TestClient) -> None:
         response = veeam_client.get("/api/v1/plugins/veeam/summary")
@@ -361,8 +462,8 @@ class TestVeeamPluginRoutes:
         response = veeam_client.get("/api/v1/plugins/veeam/health")
         assert response.status_code == 200
         data = response.json()
-        assert data["status"] == "no_servers"
-        assert data["servers"] == 0
+        assert data["healthy"] is False
+        assert data["error"] == "No Veeam server configured"
 
     def test_jobs_by_status_empty(self, veeam_client: TestClient) -> None:
         response = veeam_client.get("/api/v1/plugins/veeam/jobs-by-status")
@@ -383,3 +484,15 @@ class TestVeeamPluginRoutes:
         response = veeam_client.get("/api/v1/plugins/veeam/licenses")
         assert response.status_code == 200
         assert isinstance(response.json(), list)
+
+    def test_server_dict_has_live_fields(self, db_session):
+        from app.plugins.installed.official_veeam.cache import cache_manager
+        db_session.query(VeeamBackupServer).delete()
+        db_session.add(VeeamBackupServer(name="v1"))
+        db_session.commit()
+
+        row = cache_manager.get_servers(db_session)[0]
+        assert "edition" in row
+        assert "db_type" in row
+        assert "last_diagnostic" in row
+        assert row["name"] == "v1"

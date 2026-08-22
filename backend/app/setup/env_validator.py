@@ -164,8 +164,8 @@ class EnvironmentValidator:
             mem.dwLength = ctypes.sizeof(MEMORYSTATUSEX)
             if kernel32.GlobalMemoryStatusEx(ctypes.byref(mem)):
                 return int(mem.ullTotalPhys / (1024 * 1024))
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("Could not read Windows memory stats: %s", exc)
 
         return None
 
@@ -451,7 +451,7 @@ class EnvironmentValidator:
                 active = "active" in output.lower() or "running" in output.lower()
                 return _result(
                     "firewall",
-                    "info" if active else "info",
+                    "info",
                     f"Detected {label}" + (" (active)" if active else ""),
                     output.strip()[:500],
                 )
@@ -491,11 +491,12 @@ class EnvironmentValidator:
     def _get_cmd_version(cmd: list[str]) -> str | None:
         """Run a command and return its first line, or None on failure."""
         try:
-            result = subprocess.run(
+            result = subprocess.run(  # noqa: S603 - cmd is a static list, no shell, no user input
                 cmd,
                 capture_output=True,
                 text=True,
                 timeout=10,
+                shell=False,
                 creationflags=(
                     subprocess.CREATE_NO_WINDOW
                     if sys.platform == "win32"
@@ -511,11 +512,12 @@ class EnvironmentValidator:
     def _get_cmd_output(cmd: list[str]) -> str | None:
         """Run a command and return its combined output, or None."""
         try:
-            result = subprocess.run(
+            result = subprocess.run(  # noqa: S603 - cmd is a static list, no shell, no user input
                 cmd,
                 capture_output=True,
                 text=True,
                 timeout=10,
+                shell=False,
                 creationflags=(
                     subprocess.CREATE_NO_WINDOW
                     if sys.platform == "win32"

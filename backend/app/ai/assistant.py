@@ -258,11 +258,18 @@ class AIAssistant:
         healthy = 0
         total = 0
         for name in plugin_sources:
-            data = sources.get(name, {})
-            if isinstance(data, dict) and "error" not in data:
-                total += 1
-                if data.get("connected") is not False and data.get("status") != "error":
-                    healthy += 1
+            if name not in sources:
+                continue
+            data = sources[name]
+            if not isinstance(data, dict):
+                continue
+            total += 1
+            if (
+                "error" not in data
+                and data.get("connected") is not False
+                and data.get("status") != "error"
+            ):
+                healthy += 1
 
         if total == 0:
             return {"status": "no_plugins", "healthy": 0, "total": 0}

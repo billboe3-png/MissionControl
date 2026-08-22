@@ -88,9 +88,11 @@ class TaskService:
 
         updates = data.model_dump(exclude_unset=True)
 
-        if "project_id" in updates:
-            if ProjectRepository().get_by_id(db, updates["project_id"]) is None:
-                raise HTTPException(
+        if (
+            "project_id" in updates
+            and ProjectRepository().get_by_id(db, updates["project_id"]) is None
+        ):
+            raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,
                     detail="Project not found",
                 )
@@ -104,12 +106,11 @@ class TaskService:
             and updates["project_id"] != existing.project_id
         ):
             combination_changes = True
-        if "title" in updates and updates["title"] is not None:
-            if (
-                updates["title"].strip().lower()
-                != existing.title.strip().lower()
-            ):
-                combination_changes = True
+        if "title" in updates and updates["title"] is not None and (
+            updates["title"].strip().lower()
+            != existing.title.strip().lower()
+        ):
+            combination_changes = True
 
         if combination_changes:
             duplicate = self._repository.get_by_project_and_title(
@@ -165,10 +166,7 @@ class TaskService:
 
     @staticmethod
     def _serialize_task(task: Task) -> dict:
-        """
-        Map a Task ORM instance to the dashboard item shape.
-        """
-        return {
+        data = {
             "id": str(task.id),
             "project_id": str(task.project_id),
             "project_name": task.project.name,
@@ -176,9 +174,14 @@ class TaskService:
             "description": task.description,
             "status": task.status,
             "priority": task.priority,
+            "assignee": task.assignee,
+            "due_date": task.due_date.isoformat() if task.due_date else None,
+            "started_at": task.started_at.isoformat() if task.started_at else None,
+            "completed_at": task.completed_at.isoformat() if task.completed_at else None,
             "created_at": task.created_at.isoformat(),
             "updated_at": task.updated_at.isoformat(),
         }
+        return data
 
 
 task_service = TaskService()

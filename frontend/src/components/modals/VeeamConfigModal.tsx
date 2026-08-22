@@ -4,6 +4,7 @@ import {
     integrationsApi,
     IntegrationProfile,
 } from "../../services/integrations";
+import AgentSelector from "../common/AgentSelector";
 
 interface VeeamConfigModalProps {
     profile: IntegrationProfile | null;
@@ -32,6 +33,7 @@ export default function VeeamConfigModal({
     const [timeout, setTimeout_] = useState(String(profile?.timeout ?? 30));
     const [verifySsl, setVerifySsl] = useState(profile?.verify_ssl ?? true);
     const [dataSource, setDataSource] = useState(profile?.data_source ?? "both");
+    const [agentId, setAgentId] = useState<number | null>(profile?.agent_id ?? null);
 
     const [sshHost, setSshHost] = useState(profile?.ssh_host ?? "");
     const [sshPort, setSshPort] = useState(String(profile?.ssh_port ?? 22));
@@ -52,6 +54,7 @@ export default function VeeamConfigModal({
             const payload: Record<string, unknown> = {
                 name,
                 timeout: parseInt(timeout, 10) || 30,
+                agent_id: agentId,
             };
 
             if (isEnterprise) {
@@ -60,7 +63,6 @@ export default function VeeamConfigModal({
                 payload.verify_ssl = verifySsl;
                 payload.data_source = dataSource;
                 if (password) payload.password = password;
-                // Include SSH fields when data_source needs them
                 if (needsSsh) {
                     payload.ssh_host = sshHost;
                     payload.ssh_port = parseInt(sshPort, 10) || 22;
@@ -81,13 +83,12 @@ export default function VeeamConfigModal({
             }
 
             if (isEditing) {
-                await integrationsApi.update(profile.id, payload);
+                await integrationsApi.update(profile!.id, payload);
             } else {
                 await integrationsApi.create({
-                    name,
-                    integration_type: "veeam",
                     ...payload,
-                } as any);
+                    integration_type: "veeam",
+                } as Parameters<typeof integrationsApi.create>[0]);
             }
             onSave();
         } catch (err) {
@@ -151,6 +152,8 @@ export default function VeeamConfigModal({
                             autoFocus
                         />
                     </div>
+
+                    <AgentSelector value={agentId} onChange={setAgentId} />
 
                     {isEnterprise && (
                         <>
@@ -217,7 +220,7 @@ export default function VeeamConfigModal({
                                         className="form-input"
                                         value={username}
                                         onChange={(e) => setUsername(e.target.value)}
-                                        placeholder="DOMAIN\username or username"
+                                        placeholder="DOMAIN\\username or username"
                                         required
                                     />
                                 </div>

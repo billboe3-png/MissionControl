@@ -12,7 +12,7 @@ class DockerPlugin(AgentPlugin):
     """Docker management plugin."""
 
     name = "docker"
-    version = "1.0.0"
+    version = "3.0.0-rc1"
     description = "Docker container management plugin"
     platform_required = None
 
@@ -52,15 +52,8 @@ class DockerPlugin(AgentPlugin):
                         "id": c.short_id,
                         "name": c.name,
                         "status": c.status,
-                        "image": str(c.image.tags)
-                        if c.image.tags
-                        else c.image.id[:12],
-                        "ports": [
-                            str(p)
-                            for p in c.ports.values()
-                        ]
-                        if c.ports
-                        else [],
+                        "image": str(c.image.tags) if c.image.tags else c.image.id[:12],
+                        "ports": [str(p) for p in c.ports.values()] if c.ports else [],
                     }
                     for c in containers[:100]
                 ],
@@ -98,9 +91,7 @@ class DockerPlugin(AgentPlugin):
             return await handler(args)
         return {"success": False, "error": f"Unknown command: {command}"}
 
-    async def _start_container(
-        self, args: dict[str, Any]
-    ) -> dict[str, Any]:
+    async def _start_container(self, args: dict[str, Any]) -> dict[str, Any]:
         name = args.get("container", "")
         try:
             container = self._client.containers.get(name)
@@ -117,9 +108,7 @@ class DockerPlugin(AgentPlugin):
                 "exit_code": 1,
             }
 
-    async def _stop_container(
-        self, args: dict[str, Any]
-    ) -> dict[str, Any]:
+    async def _stop_container(self, args: dict[str, Any]) -> dict[str, Any]:
         name = args.get("container", "")
         try:
             container = self._client.containers.get(name)
@@ -136,9 +125,7 @@ class DockerPlugin(AgentPlugin):
                 "exit_code": 1,
             }
 
-    async def _restart_container(
-        self, args: dict[str, Any]
-    ) -> dict[str, Any]:
+    async def _restart_container(self, args: dict[str, Any]) -> dict[str, Any]:
         name = args.get("container", "")
         try:
             container = self._client.containers.get(name)
@@ -155,16 +142,12 @@ class DockerPlugin(AgentPlugin):
                 "exit_code": 1,
             }
 
-    async def _container_logs(
-        self, args: dict[str, Any]
-    ) -> dict[str, Any]:
+    async def _container_logs(self, args: dict[str, Any]) -> dict[str, Any]:
         name = args.get("container", "")
         tail = args.get("tail", "100")
         try:
             container = self._client.containers.get(name)
-            logs = container.logs(tail=int(tail)).decode(
-                errors="replace"
-            )
+            logs = container.logs(tail=int(tail)).decode(errors="replace")
             return {
                 "success": True,
                 "stdout": logs,
@@ -177,9 +160,7 @@ class DockerPlugin(AgentPlugin):
                 "exit_code": 1,
             }
 
-    async def _container_inspect(
-        self, args: dict[str, Any]
-    ) -> dict[str, Any]:
+    async def _container_inspect(self, args: dict[str, Any]) -> dict[str, Any]:
         name = args.get("container", "")
         try:
             container = self._client.containers.get(name)

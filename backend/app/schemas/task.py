@@ -4,7 +4,7 @@ Mission Control Task API Schemas
 Pydantic models for Task API endpoints.
 """
 
-from datetime import datetime
+from datetime import date, datetime
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -42,6 +42,17 @@ class TaskCreate(BaseModel):
         description="Task priority level.",
         examples=["medium"],
     )
+    assignee: str | None = Field(
+        default=None,
+        max_length=200,
+        description="Person or system responsible.",
+        examples=["Robert Barnes"],
+    )
+    due_date: date | None = Field(
+        default=None,
+        description="Due date for the task.",
+        examples=["2026-08-24"],
+    )
 
 
 class TaskUpdate(BaseModel):
@@ -75,7 +86,18 @@ class TaskUpdate(BaseModel):
         default=None,
         max_length=50,
         description="Updated task priority.",
-        examples=["low"],
+        examples=["high"],
+    )
+    assignee: str | None = Field(
+        default=None,
+        max_length=200,
+        description="Updated assignee.",
+        examples=["Robert Barnes"],
+    )
+    due_date: date | None = Field(
+        default=None,
+        description="Updated due date.",
+        examples=["2026-08-24"],
     )
 
 
@@ -113,6 +135,26 @@ class TaskResponse(BaseModel):
         ...,
         description="Task priority level.",
         examples=["high"],
+    )
+    assignee: str | None = Field(
+        default=None,
+        description="Person or system responsible for this task.",
+        examples=["Robert Barnes"],
+    )
+    due_date: date | None = Field(
+        default=None,
+        description="Due date for the task.",
+        examples=["2026-08-24"],
+    )
+    started_at: datetime | None = Field(
+        default=None,
+        description="When work on this task began.",
+        examples=["2026-08-21T09:00:00"],
+    )
+    completed_at: datetime | None = Field(
+        default=None,
+        description="When this task was marked completed.",
+        examples=["2026-08-21T12:00:00"],
     )
     created_at: datetime = Field(
         ...,

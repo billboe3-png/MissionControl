@@ -8,6 +8,17 @@ export const navigation: NavGroup[] = [
         defaultOpen: true,
     },
     {
+        label: "Work Context",
+        icon: "📋",
+        items: [
+            { label: "Resume", path: "/resume", icon: "📝" },
+            { label: "Projects", path: "/projects", icon: "📁" },
+            { label: "Tasks", path: "/tasks", icon: "✅" },
+            { label: "SOPs", path: "/sop", icon: "📄" },
+        ],
+        defaultOpen: true,
+    },
+    {
         label: "Tenants",
         icon: "🏢",
         items: [
@@ -104,6 +115,17 @@ export const navigation: NavGroup[] = [
         ],
     },
     {
+        label: "MikroTik",
+        icon: "📡",
+        items: [
+            { label: "Overview", path: "/mikrotik", icon: "📊" },
+            { label: "Interfaces", path: "/mikrotik/interfaces", icon: "🌐" },
+            { label: "Firewall", path: "/mikrotik/firewall", icon: "🛡️" },
+            { label: "DHCP", path: "/mikrotik/dhcp", icon: "🔌" },
+            { label: "Console", path: "/mikrotik/console", icon: "💻" },
+        ],
+    },
+    {
         label: "Networking",
         icon: "📶",
         items: [
@@ -114,6 +136,7 @@ export const navigation: NavGroup[] = [
             { label: "Wireless", path: "/unifi/wireless", icon: "📡" },
             { label: "Controllers", path: "/unifi/controllers", icon: "🎛️" },
             { label: "Sites", path: "/unifi/sites", icon: "🗺️" },
+            { label: "Topology", path: "/network/topology", icon: "🕸️" },
         ],
     },
     {
@@ -129,13 +152,6 @@ export const navigation: NavGroup[] = [
         ],
     },
     {
-        label: "Agents",
-        icon: "🤖",
-        items: [
-            { label: "Overview", path: "/agents", icon: "📊" },
-        ],
-    },
-    {
         label: "Fleet Workspace",
         icon: "🚁",
         items: [
@@ -145,6 +161,7 @@ export const navigation: NavGroup[] = [
             { label: "Health Center", path: "/fleet/health", icon: "❤️" },
             { label: "Plugin Center", path: "/fleet/plugins", icon: "🧩" },
             { label: "Company Workspace", path: "/fleet/companies", icon: "🏢" },
+            { label: "Topology", path: "/agents/topology", icon: "🕸️" },
         ],
     },
     {
@@ -165,7 +182,9 @@ export const navigation: NavGroup[] = [
         icon: "⚙️",
         items: [
             { label: "General", path: "/settings", icon: "🔧" },
+            { label: "Profile", path: "/settings/profile", icon: "👤" },
             { label: "Users", path: "/settings/users", icon: "👥" },
+            { label: "Agents", path: "/agents", icon: "🤖" },
             { label: "Integrations", path: "/settings/integrations", icon: "🔌" },
             { label: "Appearance", path: "/settings/appearance", icon: "🎨" },
             { label: "My Dashboard", path: "/settings/dashboard", icon: "📊" },

@@ -261,6 +261,7 @@ class CacheManager:
         resource = self.get_resource_usage(db)
 
         return {
+            "available": online_hosts > 0 or host_count > 0,
             "host_count": host_count,
             "online_hosts": online_hosts,
             "container_count": container_count,

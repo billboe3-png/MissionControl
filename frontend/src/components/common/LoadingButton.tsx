@@ -4,6 +4,7 @@ interface LoadingButtonProps {
     onClick?: () => void;
     className?: string;
     type?: "button" | "submit";
+    title?: string;
     children: React.ReactNode;
 }
 
@@ -13,6 +14,7 @@ export default function LoadingButton({
     onClick,
     className = "btn btn-primary",
     type = "button",
+    title,
     children,
 }: LoadingButtonProps) {
     return (
@@ -21,6 +23,7 @@ export default function LoadingButton({
             className={className}
             onClick={onClick}
             disabled={loading || disabled}
+            title={title}
         >
             {loading && <span className="spinner" />}
             {children}

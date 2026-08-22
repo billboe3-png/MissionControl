@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 
 
 class CheckStatus(StrEnum):
-    PASS = "pass"
+    PASS = "pass"  # noqa: S105 - enum member name, not a password
     FAIL = "fail"
     WARN = "warn"
     SKIP = "skip"

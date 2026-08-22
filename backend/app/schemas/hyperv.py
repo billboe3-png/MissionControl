@@ -172,6 +172,8 @@ class HyperVHealthHostResponse(BaseModel):
     status: str
     cpu_percent: float = 0.0
     memory_percent: float = 0.0
+    memory_used_gb: float = 0.0
+    memory_total_gb: float = 0.0
     uptime_seconds: int = 0
     vm_count: int = 0
     version: str | None = None

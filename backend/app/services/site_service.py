@@ -368,8 +368,8 @@ class SiteService:
                 )
                 if company is not None:
                     company_name = company.display_name
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.debug("Could not resolve company name for site: %s", exc)
 
         return SiteResponse(
             id=site.id,

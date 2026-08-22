@@ -18,6 +18,7 @@ States:
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from datetime import UTC, datetime
 from enum import StrEnum
@@ -53,6 +54,7 @@ class AgentStateEngine:
 
     def __init__(self) -> None:
         self._state_cache: dict[int, AgentState] = {}
+        self._publish_tasks: set[asyncio.Task] = set()
 
     def get_state(self, agent: Agent) -> AgentState:
         """Determine the current state of an agent from its model."""
@@ -89,11 +91,9 @@ class AgentStateEngine:
                 state.value,
             )
             # Publish state change event
-            import asyncio
-
             try:
                 loop = asyncio.get_running_loop()
-                loop.create_task(
+                task = loop.create_task(
                     event_bus.publish(
                         Event(
                             type=EventType.AGENT_HEALTH_CHANGED,
@@ -106,6 +106,8 @@ class AgentStateEngine:
                         )
                     )
                 )
+                self._publish_tasks.add(task)
+                task.add_done_callback(self._publish_tasks.discard)
             except RuntimeError:
                 # No event loop running (e.g., during testing)
                 pass

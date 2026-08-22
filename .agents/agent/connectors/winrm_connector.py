@@ -34,6 +34,7 @@ class WinRMConnector(RemoteConnector):
     async def _run_ps(self, script: str, timeout: int = 30) -> dict:
         """Run a PowerShell script on the remote host via WinRM."""
         try:
+
             def _exec():
                 session = self._get_session()
                 result = session.run_ps(script)
@@ -53,15 +54,24 @@ class WinRMConnector(RemoteConnector):
                 "stderr": stderr,
                 "exit_code": exit_code,
             }
-        except asyncio.TimeoutError:
-            return {"success": False, "stdout": "", "stderr": "Command timed out", "exit_code": -1}
+        except TimeoutError:
+            return {
+                "success": False,
+                "stdout": "",
+                "stderr": "Command timed out",
+                "exit_code": -1,
+            }
         except Exception as e:
             return {"success": False, "stdout": "", "stderr": str(e), "exit_code": -1}
 
     async def test_connection(self) -> dict:
         result = await self._run_ps("hostname", timeout=10)
         if result["success"]:
-            return {"connected": True, "hostname": result["stdout"].strip(), "latency_ms": 0}
+            return {
+                "connected": True,
+                "hostname": result["stdout"].strip(),
+                "latency_ms": 0,
+            }
         return {"connected": False, "error": result["stderr"], "latency_ms": 0}
 
     async def execute(self, command: str, timeout: int = 60) -> dict:
@@ -121,7 +131,11 @@ class WinRMConnector(RemoteConnector):
                     vms_raw = data.get("vms", "[]")
                     switches_raw = data.get("switches", "[]")
                     vms = json.loads(vms_raw) if isinstance(vms_raw, str) else vms_raw
-                    switches = json.loads(switches_raw) if isinstance(switches_raw, str) else switches_raw
+                    switches = (
+                        json.loads(switches_raw)
+                        if isinstance(switches_raw, str)
+                        else switches_raw
+                    )
                     if isinstance(vms, dict):
                         vms = [vms]
                     if isinstance(switches, dict):
@@ -133,8 +147,12 @@ class WinRMConnector(RemoteConnector):
                                 "name": v.get("Name", ""),
                                 "state": v.get("State", "Unknown"),
                                 "cpu_usage": v.get("CPUUsage", 0),
-                                "memory_mb": round((v.get("MemoryAssigned") or 0) / (1024 * 1024), 0),
-                                "memory_startup_mb": round((v.get("MemoryStartup") or 0) / (1024 * 1024), 0),
+                                "memory_mb": round(
+                                    (v.get("MemoryAssigned") or 0) / (1024 * 1024), 0
+                                ),
+                                "memory_startup_mb": round(
+                                    (v.get("MemoryStartup") or 0) / (1024 * 1024), 0
+                                ),
                                 "uptime": str(v.get("Uptime", "")),
                                 "status": v.get("Status", ""),
                                 "generation": v.get("Generation", 0),
@@ -215,7 +233,11 @@ class WinRMConnector(RemoteConnector):
                 if isinstance(data, dict):
                     data = [data]
                 return [
-                    {"name": s.get("Name", ""), "display_name": s.get("DisplayName", ""), "status": s.get("Status", "")}
+                    {
+                        "name": s.get("Name", ""),
+                        "display_name": s.get("DisplayName", ""),
+                        "status": s.get("Status", ""),
+                    }
                     for s in data
                 ]
             except json.JSONDecodeError:

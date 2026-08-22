@@ -5,11 +5,12 @@ Production-grade plugin for Veeam B&R integration.
 Provides background sync, cached data, dashboard widgets,
 plugin-scoped routes, and Event Bus integration.
 
-All API communication flows through VeeamRESTProvider.
-DashboardService remains the only frontend data source.
+All API communication flows through the plugin-native VeeamServerProvider
+built from each server row. DashboardService remains the only frontend data source.
 """
 
 import asyncio
+import contextlib
 import logging
 from datetime import UTC, datetime
 from typing import Any
@@ -49,44 +50,36 @@ class VeeamPlugin(ServerPluginSDK):
     # ------------------------------------------------------------------ #
 
     async def setup(self) -> None:
-        """Initialize: load server configs from DB and create API clients."""
-        def _load():
+        """Initialize: load enabled server rows and build API clients."""
+        def _load() -> dict[int, VeeamApiClient]:
             session = SessionLocal()
             try:
-                return list(
-                    session.execute(
-                        select(VeeamBackupServer).where(
-                            VeeamBackupServer.enabled.is_(True)
-                        )
-                    ).scalars().all()
-                )
-            finally:
-                session.close()
-
-        servers = await asyncio.to_thread(_load)
-
-        for server in servers:
-            if server.encrypted_password:
-                try:
-                    from app.core.config import get_settings
-                    from app.core.security import CredentialCipher
-                    cipher = CredentialCipher(
-                        get_settings().missioncontrol_secret_key
+                clients: dict[int, VeeamApiClient] = {}
+                servers = session.execute(
+                    select(VeeamBackupServer).where(
+                        VeeamBackupServer.enabled.is_(True)
                     )
-                    password = cipher.decrypt(server.encrypted_password)
-                except Exception:
-                    password = ""
-            else:
-                password = ""
+                ).scalars().all()
+                for server in servers:
+                    try:
+                        clients[server.id] = VeeamApiClient.from_server(
+                            db=session, server=server
+                        )
+                    except (ValueError, TypeError) as exc:
+                        logger.warning(
+                            "Skipping Veeam server %s: %s", server.name, exc
+                        )
+                # Keep the session alive for the plugin's lifetime: the
+                # providers use it lazily for executor/rest access and the
+                # diagnostics db_type writeback. Closed here would silently
+                # no-op those writes. Closed in stop().
+                self._db_session = session
+                return clients
+            except Exception:
+                session.close()
+                raise
 
-            client = VeeamApiClient(
-                base_url=server.url,
-                username=server.username,
-                password=password,
-                verify_ssl=server.verify_ssl,
-                timeout=server.timeout,
-            )
-            self._clients[server.id] = client
+        self._clients = await asyncio.to_thread(_load)
 
         logger.info(
             "Veeam plugin setup: %d server(s) configured",
@@ -106,11 +99,12 @@ class VeeamPlugin(ServerPluginSDK):
         """Cancel sync task and close all API clients."""
         if self._sync_task and not self._sync_task.done():
             self._sync_task.cancel()
-            try:
+            with contextlib.suppress(asyncio.CancelledError):
                 await self._sync_task
-            except asyncio.CancelledError:
-                pass
         self._clients.clear()
+        if getattr(self, "_db_session", None) is not None:
+            self._db_session.close()
+            self._db_session = None
         logger.info("Veeam plugin stopped")
 
     # ------------------------------------------------------------------ #

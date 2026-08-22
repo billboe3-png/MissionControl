@@ -211,7 +211,7 @@ class InstallationReporter:
 
     def _get_version(self, cmd: list[str]) -> str | None:
         try:
-            result = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=10, shell=False)  # noqa: S603 - static command list, no shell
             return result.stdout.strip().split("\n")[0] if result.returncode == 0 else None
         except Exception:
             return None
@@ -269,7 +269,7 @@ class InstallationReporter:
             ("redis", ["redis-cli", "ping"]),
         ]:
             try:
-                result = subprocess.run(cmd, capture_output=True, timeout=5)
+                result = subprocess.run(cmd, capture_output=True, timeout=5, shell=False)  # noqa: S603 - static command list, no shell
                 healthy = result.returncode == 0
                 health[name] = {
                     "healthy": healthy,

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import PageHeader from "../../components/common/PageHeader";
 import EmptyState from "../../components/common/EmptyState";
 import StatusBadge from "../../components/common/StatusBadge";
+import { formatDateTime } from "../../utils/dateFormat";
 import {
     automationApi,
     PlaybookExecutionData,
@@ -149,7 +150,7 @@ export default function ExecutionsPage() {
                                         {item.duration_ms != null ? `${item.duration_ms}ms` : "—"}
                                     </span>
                                     <span style={{ fontSize: "0.85rem", color: "var(--text-muted)" }}>
-                                        {new Date(item.created_at).toLocaleString()}
+                                        {formatDateTime(item.created_at)}
                                     </span>
                                 </div>
                             </div>

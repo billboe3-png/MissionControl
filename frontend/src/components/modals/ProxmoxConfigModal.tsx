@@ -4,6 +4,7 @@ import {
     integrationsApi,
     IntegrationProfile,
 } from "../../services/integrations";
+import AgentSelector from "../common/AgentSelector";
 
 interface ProxmoxConfigModalProps {
     profile: IntegrationProfile | null;
@@ -24,6 +25,7 @@ export default function ProxmoxConfigModal({
     const [password, setPassword] = useState("");
     const [timeout, setTimeout_] = useState(String(profile?.timeout ?? 30));
     const [verifySsl, setVerifySsl] = useState(profile?.verify_ssl ?? true);
+    const [agentId, setAgentId] = useState<number | null>(profile?.agent_id ?? null);
     const [loading, setLoading] = useState(false);
 
     const isEditing = profile !== null;
@@ -33,25 +35,23 @@ export default function ProxmoxConfigModal({
         setLoading(true);
 
         try {
+            const payload: Record<string, unknown> = {
+                name,
+                base_url: baseUrl,
+                username,
+                timeout: parseInt(timeout, 10) || 30,
+                verify_ssl: verifySsl,
+                agent_id: agentId,
+            };
+            if (password) payload.password = password;
+
             if (isEditing) {
-                await integrationsApi.update(profile.id, {
-                    name,
-                    base_url: baseUrl,
-                    username,
-                    password: password || undefined,
-                    timeout: parseInt(timeout, 10) || 30,
-                    verify_ssl: verifySsl,
-                });
+                await integrationsApi.update(profile!.id, payload);
             } else {
                 await integrationsApi.create({
-                    name,
+                    ...payload,
                     integration_type: "proxmox",
-                    base_url: baseUrl,
-                    username,
-                    password,
-                    timeout: parseInt(timeout, 10) || 30,
-                    verify_ssl: verifySsl,
-                });
+                } as Parameters<typeof integrationsApi.create>[0]);
             }
             onSave();
         } catch (err) {
@@ -70,9 +70,9 @@ export default function ProxmoxConfigModal({
 
                 <form onSubmit={handleSubmit}>
                     <div className="form-group">
-                        <label htmlFor="pm-name">Name</label>
+                        <label htmlFor="px-name">Name</label>
                         <input
-                            id="pm-name"
+                            id="px-name"
                             type="text"
                             className="form-input"
                             value={name}
@@ -83,15 +83,17 @@ export default function ProxmoxConfigModal({
                         />
                     </div>
 
+                    <AgentSelector value={agentId} onChange={setAgentId} />
+
                     <div className="form-group">
-                        <label htmlFor="pm-url">Server URL</label>
+                        <label htmlFor="px-url">Proxmox Host / Cluster</label>
                         <input
-                            id="pm-url"
-                            type="url"
+                            id="px-url"
+                            type="text"
                             className="form-input"
                             value={baseUrl}
                             onChange={(e) => setBaseUrl(e.target.value)}
-                            placeholder="https://pve.example.com:8006"
+                            placeholder="https://proxmox.example.com:8006"
                             required
                         />
                     </div>

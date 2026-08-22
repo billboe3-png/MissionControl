@@ -1,8 +1,22 @@
 import { useLocation } from "react-router-dom";
 import { useSidebar } from "../contexts/SidebarContext";
+import { useAuth } from "../contexts/AuthContext";
 import { navigation } from "../config/navigation";
 import NavGroup from "../components/sidebar/NavGroup";
 import UserBadge from "../components/sidebar/UserBadge";
+
+function LogoutButton() {
+    const { logout } = useAuth();
+    return (
+        <button
+            className="btn btn-sm btn-outline"
+            onClick={logout}
+            title="Log out"
+        >
+            Logout
+        </button>
+    );
+}
 
 export default function Sidebar() {
     const { collapsed, toggle } = useSidebar();
@@ -27,6 +41,7 @@ export default function Sidebar() {
 
             <div className="sidebar-footer">
                 <UserBadge />
+                <LogoutButton />
                 <button
                     className="sidebar-collapse-btn"
                     onClick={toggle}

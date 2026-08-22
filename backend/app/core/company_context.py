@@ -10,6 +10,7 @@ Usage:
         things = repository.get_all(db, ctx.company_id, ctx.site_id)
 """
 
+import contextlib
 from dataclasses import dataclass
 
 from fastapi import Depends, Header, Request
@@ -48,16 +49,12 @@ async def get_company_ctx(
     is_global = False
 
     if x_company_id:
-        try:
+        with contextlib.suppress(ValueError):
             company_id = int(x_company_id)
-        except ValueError:
-            pass
 
     if x_site_id:
-        try:
+        with contextlib.suppress(ValueError):
             site_id = int(x_site_id)
-        except ValueError:
-            pass
 
     # Check if this is a global admin (future Phase 4 will use JWT)
     # For now, allow access without company_id for backward compatibility

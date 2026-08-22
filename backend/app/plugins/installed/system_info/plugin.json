@@ -1,0 +1,13 @@
+{
+    "id": "system_info",
+    "name": "System Information",
+    "version": "1.0.0",
+    "description": "Displays system information in the dashboard",
+    "author": "Mission Control",
+    "execution_target": "server",
+    "category": "monitoring",
+    "min_core_version": "3.0.0",
+    "permissions": ["read:dashboard"],
+    "dependencies": [],
+    "capabilities": ["dashboard_widget"]
+}

@@ -96,6 +96,11 @@ class PluginUpdater:
 
     def rollback(self, plugin_id: str) -> dict[str, Any]:
         """Rollback a plugin to its previous version."""
+        plugin = marketplace_registry.get(plugin_id)
+        if not plugin:
+            return {"success": False, "error": f"Plugin {plugin_id} not found"}
+        if not plugin.previous_version:
+            return {"success": False, "error": "No previous version available for rollback"}
         return plugin_installer.rollback(plugin_id)
 
     def get_changelog(self, plugin_id: str) -> dict[str, Any]:

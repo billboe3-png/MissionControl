@@ -6,6 +6,7 @@ import logging
 import platform
 import socket
 import time
+from pathlib import Path
 from typing import Any
 
 from agent import __version__
@@ -33,21 +34,15 @@ class MissionControlAgent:
             api_key=config.api_key,
             verify_ssl=config.verify_ssl,
         )
-        self.heartbeat_manager = HeartbeatManager(
-            self.client, config
-        )
-        self.registration_manager = RegistrationManager(
-            self.client, config
-        )
+        self.heartbeat_manager = HeartbeatManager(self.client, config)
+        self.registration_manager = RegistrationManager(self.client, config)
         self.inventory_collector = InventoryCollector()
-        self.command_executor = CommandExecutor(
-            timeout=config.command_timeout
-        )
+        self.command_executor = CommandExecutor(timeout=config.command_timeout)
         self.command_queue = CommandQueue(
             data_dir=config.data_dir,
             max_size=config.offline_buffer_max,
         )
-        self.plugin_manager = PluginManager()
+        self.plugin_manager = PluginManager(data_dir=config.data_dir)
         self.remote_manager = RemoteManager()
         self.updater = AgentUpdater(self.client, __version__)
         self._running = False
@@ -58,9 +53,7 @@ class MissionControlAgent:
 
     async def start(self) -> None:
         """Start the agent."""
-        logger.info(
-            "Mission Control Agent v%s starting", __version__
-        )
+        logger.info("Mission Control Agent v%s starting", __version__)
         logger.info(
             "Server: %s | SSL: %s",
             self.config.server_url,
@@ -124,31 +117,50 @@ class MissionControlAgent:
                 ", ".join(discovered),
             )
             await self.plugin_manager.initialize_plugins(
-                {"agent_id": self._agent_id}
+                {
+                    "agent_id": self._agent_id,
+                    "remote_manager": self.remote_manager,
+                }
             )
+
+        # Ensure every initialized plugin has the latest remote_manager
+        for plugin in self.plugin_manager._plugins.values():
+            if hasattr(plugin, "_context"):
+                plugin._context["remote_manager"] = self.remote_manager
+
+    def _update_plugin_integration_context(self, response: dict[str, Any]) -> None:
+        """Push integration profiles, remote targets, and remote manager into
+        initialized plugins.
+        """
+        profiles = response.get("integration_profiles") or []
+        remote_targets = response.get("remote_targets") or []
+        for plugin in self.plugin_manager._plugins.values():
+            if hasattr(plugin, "_context"):
+                plugin._context["integration_profiles"] = profiles
+                plugin._context["remote_targets"] = remote_targets
+                plugin._context["remote_manager"] = self.remote_manager
+            if hasattr(plugin, "reinitialize"):
+                plugin.reinitialize()
 
     async def _heartbeat_loop(self) -> None:
         """Main heartbeat loop."""
         while self._running:
             try:
-                health_metrics = (
-                    self.inventory_collector.collect_health_metrics()
-                )
-                active_plugins = (
-                    self.plugin_manager.get_active_plugins()
-                )
+                health_metrics = self.inventory_collector.collect_health_metrics()
+                active_plugins = self.plugin_manager.get_active_plugins()
 
                 response = await self.heartbeat_manager.send_heartbeat(
                     agent_id=self._agent_id,
                     health=self._determine_health(health_metrics),
                     cpu_percent=health_metrics.get("cpu_percent"),
-                    memory_percent=health_metrics.get(
-                        "memory_percent"
-                    ),
+                    memory_percent=health_metrics.get("memory_percent"),
                     disk_percent=health_metrics.get("disk_percent"),
                     agent_version=__version__,
                     active_plugins=active_plugins,
                 )
+
+                await self._process_pending_plugins(response)
+                self._update_plugin_integration_context(response)
 
                 remote_targets = response.get("remote_targets")
                 if remote_targets:
@@ -178,17 +190,13 @@ class MissionControlAgent:
         """Periodic inventory collection loop."""
         while self._running:
             try:
-                await asyncio.sleep(
-                    self.config.inventory_interval
-                )
+                await asyncio.sleep(self.config.inventory_interval)
 
                 if not self._running:
                     break
 
                 inventory = self.inventory_collector.collect()
-                plugin_inventory = (
-                    await self.plugin_manager.collect_all_inventory()
-                )
+                plugin_inventory = await self.plugin_manager.collect_all_inventory()
                 if plugin_inventory:
                     inventory["plugins"] = plugin_inventory
 
@@ -220,9 +228,7 @@ class MissionControlAgent:
                             result.get("command_id"),
                         )
             except Exception as e:
-                logger.debug(
-                    "Result reporting failed (will retry): %s", e
-                )
+                logger.debug("Result reporting failed (will retry): %s", e)
 
             await asyncio.sleep(5)
 
@@ -249,26 +255,46 @@ class MissionControlAgent:
     async def _execute_command(self, cmd: dict) -> None:
         """Execute a single command from the server."""
         command_id = cmd.get("id")
+        command_type = cmd.get("command_type", "execute")
         logger.info(
             "Executing command %d: %s",
             command_id,
-            cmd.get("command_type"),
+            command_type,
         )
 
         try:
-            command_type = cmd.get("command_type", "execute")
-
             if command_type == "remote_execute":
                 target_id = cmd.get("target_id")
                 command_text = cmd.get("command", "")
-                if target_id is None and command_text.startswith("{"):
+                namespace = None
+                op = None
+                params: dict = {}
+                if command_text.startswith("{"):
                     try:
                         payload = json.loads(command_text)
-                        target_id = payload.get("target_id")
-                        command_text = payload.get("command", "")
+                        namespace = payload.get("namespace")
+                        op = payload.get("op")
+                        params = payload.get("params") or {}
+                        if target_id is None:
+                            target_id = payload.get("target_id")
+                        if namespace is None:
+                            command_text = payload.get("command", "")
                     except (json.JSONDecodeError, AttributeError):
                         pass
-                if target_id is None:
+                if namespace == "veeam":
+                    plugin_result = await self.plugin_manager.execute_plugin_command(
+                        "veeam", op or "", params
+                    )
+                    ok = bool(plugin_result.get("success", False))
+                    result = {
+                        "success": ok,
+                        "stdout": json.dumps(plugin_result),
+                        "stderr": plugin_result.get("error")
+                        or plugin_result.get("stderr")
+                        or "",
+                        "exit_code": 0 if ok else 1,
+                    }
+                elif target_id is None:
                     result = {
                         "success": False,
                         "stdout": "",
@@ -281,6 +307,17 @@ class MissionControlAgent:
                         command=command_text,
                         timeout=cmd.get("timeout", self.config.command_timeout),
                     )
+            elif command_type == "inventory":
+                result = await self.command_executor.execute(
+                    command=cmd.get("command", ""),
+                    command_type=command_type,
+                    timeout=cmd.get("timeout", self.config.command_timeout),
+                    file_path=cmd.get("file_path"),
+                    file_name=cmd.get("file_name"),
+                    file_content_b64=cmd.get("file_content_b64"),
+                )
+            elif command_type == "integration_test":
+                result = await self._execute_integration_test(cmd)
             else:
                 result = await self.command_executor.execute(
                     command=cmd.get("command", ""),
@@ -301,9 +338,7 @@ class MissionControlAgent:
             }
 
             if result.get("file_content_b64"):
-                report["file_content_b64"] = result[
-                    "file_content_b64"
-                ]
+                report["file_content_b64"] = result["file_content_b64"]
 
             try:
                 await self.client.post(
@@ -312,14 +347,10 @@ class MissionControlAgent:
                 )
             except Exception:
                 self.command_queue.queue_result(report)
-                logger.info(
-                    "Result buffered for command %d", command_id
-                )
+                logger.info("Result buffered for command %d", command_id)
 
         except Exception as e:
-            logger.error(
-                "Command %d execution failed: %s", command_id, e
-            )
+            logger.error("Command %d execution failed: %s", command_id, e)
             error_report = {
                 "command_id": command_id,
                 "success": False,
@@ -333,6 +364,27 @@ class MissionControlAgent:
                 )
             except Exception:
                 self.command_queue.queue_result(error_report)
+
+    async def _execute_integration_test(self, cmd: dict) -> dict:
+        integration_type = cmd.get("command") or cmd.get("integration_type")
+        profile = cmd.get("integration_profile")
+        if isinstance(profile, str):
+            try:
+                profile = json.loads(profile)
+            except Exception:
+                profile = {}
+        args = cmd.get("args") or profile or {}
+        plugin_name = (integration_type or "").strip().lower()
+        if plugin_name == "official_docker":
+            plugin_name = "docker"
+        try:
+            executed = await self.plugin_manager.execute_plugin_command(
+                plugin_name, "test_connection", args
+            )
+            return executed
+        except Exception as exc:
+            logger.error("Integration test failed: %s", exc, exc_info=True)
+            return {"success": False, "error": str(exc)}
 
     def _determine_health(self, metrics: dict) -> str:
         """Determine agent health from metrics."""
@@ -356,3 +408,44 @@ class MissionControlAgent:
             return ip
         except Exception:
             return "127.0.0.1"
+
+    async def _process_pending_plugins(self, heartbeat_response: dict) -> None:
+        """Sync missing plugins from the server and initialize any newly
+        enabled ones."""
+        pending = heartbeat_response.get("pending_plugins") or []
+        if not pending:
+            return
+
+        logger.info("Pending plugins from server: %s", ", ".join(pending))
+        for plugin_name in pending:
+            try:
+                plugin_data = await self.client.get(
+                    f"/api/v1/agents/{self._agent_id}/plugins/{plugin_name}"
+                )
+            except Exception as exc:
+                logger.warning("Plugin sync failed for %s: %s", plugin_name, exc)
+                continue
+
+            content = plugin_data.get("content")
+            file_name = plugin_data.get("file_name")
+            if not content or not file_name:
+                logger.warning("Plugin sync missing content for %s", plugin_name)
+                continue
+
+            target = (
+                Path(self.config.data_dir or Path(__file__).resolve().parent)
+                / "plugins"
+                / file_name
+            )
+            try:
+                target.parent.mkdir(parents=True, exist_ok=True)
+                if target.exists() and target.read_text(encoding="utf-8") == content:
+                    logger.debug("Plugin already installed, skipping: %s", target)
+                else:
+                    target.write_text(content, encoding="utf-8")
+                    logger.info("Installed plugin file: %s", target)
+            except Exception as exc:
+                logger.warning("Failed to install plugin %s: %s", plugin_name, exc)
+
+        # Re-run discovery after plugin files are installed.
+        await self._discover_plugins()

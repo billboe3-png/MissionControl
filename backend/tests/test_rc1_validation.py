@@ -128,8 +128,9 @@ class TestCertification:
         from app.rc1.certification import generate_rc1_report
 
         result = generate_rc1_report(str(tmp_path))
-        md_path = [p for p in result["reports"] if p.endswith(".md")][0]
-        content = open(md_path, encoding="utf-8").read()
+        md_path = next(p for p in result["reports"] if p.endswith(".md"))
+        with open(md_path, encoding="utf-8") as f:
+            content = f.read()
         assert "RC1 Certification Report" in content
         assert "Summary" in content
 
@@ -137,8 +138,9 @@ class TestCertification:
         from app.rc1.certification import generate_rc1_report
 
         result = generate_rc1_report(str(tmp_path))
-        txt_path = [p for p in result["reports"] if p.endswith(".txt")][0]
-        content = open(txt_path, encoding="utf-8").read()
+        txt_path = next(p for p in result["reports"] if p.endswith(".txt"))
+        with open(txt_path, encoding="utf-8") as f:
+            content = f.read()
         assert "CERTIFICATION SUMMARY" in content
 
 

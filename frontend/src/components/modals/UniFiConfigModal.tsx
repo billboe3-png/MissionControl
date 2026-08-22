@@ -4,6 +4,7 @@ import {
     integrationsApi,
     IntegrationProfile,
 } from "../../services/integrations";
+import AgentSelector from "../common/AgentSelector";
 
 const CLOUD_URL = "https://api.ui.com";
 
@@ -37,6 +38,7 @@ export default function UniFiConfigModal({
     );
     const [verifySsl, setVerifySsl] = useState(profile?.verify_ssl ?? true);
     const [timeout, setTimeout_] = useState(String(profile?.timeout ?? 30));
+    const [agentId, setAgentId] = useState<number | null>(profile?.agent_id ?? null);
     const [loading, setLoading] = useState(false);
 
     const isEditing = profile !== null;
@@ -64,23 +66,22 @@ export default function UniFiConfigModal({
 
         try {
             const base_url: string = connectionType === "cloud" ? CLOUD_URL : url.trim();
+            const payload: Record<string, unknown> = {
+                name,
+                password: apiKey,
+                base_url,
+                verify_ssl: verifySsl,
+                timeout: parseInt(timeout, 10) || 30,
+                agent_id: agentId || null,
+            };
+
             if (isEditing) {
-                await integrationsApi.update(profile.id, {
-                    name,
-                    password: apiKey || undefined,
-                    base_url,
-                    verify_ssl: verifySsl,
-                    timeout: parseInt(timeout, 10) || 30,
-                });
+                await integrationsApi.update(profile!.id, payload);
             } else {
                 await integrationsApi.create({
-                    name,
                     integration_type: "unifi",
-                    password: apiKey,
-                    base_url,
-                    verify_ssl: verifySsl,
-                    timeout: parseInt(timeout, 10) || 30,
-                });
+                    ...payload,
+                } as Parameters<typeof integrationsApi.create>[0]);
             }
             onSave();
         } catch (err) {
@@ -111,6 +112,8 @@ export default function UniFiConfigModal({
                             autoFocus
                         />
                     </div>
+
+                    <AgentSelector value={agentId} onChange={setAgentId} />
 
                     <div className="form-group">
                         <label htmlFor="uf-type">Connection Type</label>

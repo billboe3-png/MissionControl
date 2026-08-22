@@ -4,7 +4,7 @@ Mission Control Resume ORM Model
 
 from datetime import UTC, datetime
 
-from sqlalchemy import Boolean, DateTime, Integer, String
+from sqlalchemy import Boolean, DateTime, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.database import Base
@@ -55,6 +55,26 @@ class Resume(Base):
         default=lambda: datetime.now(UTC),
     )
 
+    context: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
+    )
+    started_at: Mapped[datetime | None] = mapped_column(
+        DateTime,
+        nullable=True,
+    )
+    paused_at: Mapped[datetime | None] = mapped_column(
+        DateTime,
+        nullable=True,
+    )
+    resumed_at: Mapped[datetime | None] = mapped_column(
+        DateTime,
+        nullable=True,
+    )
+    target_page: Mapped[str | None] = mapped_column(
+        String(200),
+        nullable=True,
+    )
     updated_at: Mapped[datetime] = mapped_column(
         DateTime,
         default=lambda: datetime.now(UTC),

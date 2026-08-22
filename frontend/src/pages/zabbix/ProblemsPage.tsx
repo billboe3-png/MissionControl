@@ -5,6 +5,7 @@ import StatusBadge from "../../components/common/StatusBadge";
 import DataTable, { Column } from "../../components/common/DataTable";
 import ProblemSeverityCard from "../../components/zabbix/ProblemSeverityCard";
 import { zabbixApi, ZabbixProblem, ZabbixProblemsResponse } from "../../services/zabbix";
+import { formatDateTime } from "../../utils/dateFormat";
 
 const SEVERITIES = [
     { key: "not_classified", label: "Not classified", color: "#6c757d" },

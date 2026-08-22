@@ -3,6 +3,7 @@ Mission Control Auth Dependency
 
 FastAPI dependency that extracts and validates the current user from the
 Authorization header.
+
 Sprint 2.9 - Multi-Tenant & Multi-Site Platform.
 """
 

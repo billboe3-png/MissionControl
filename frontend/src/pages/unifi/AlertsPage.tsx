@@ -3,6 +3,7 @@ import PageHeader from "../../components/common/PageHeader";
 import StatusBadge from "../../components/common/StatusBadge";
 import DataTable, { Column } from "../../components/common/DataTable";
 import { unifiPluginApi, UniFiAlert } from "../../services/unifiPlugin";
+import { formatDateTime } from "../../utils/dateFormat";
 
 function severityType(sev: string): "healthy" | "warning" | "error" | "info" | "neutral" {
     switch (sev.toLowerCase()) {
@@ -21,7 +22,7 @@ function severityType(sev: string): "healthy" | "warning" | "error" | "info" | "
 function fmtTs(ts: string | null): string {
     if (!ts) return "—";
     try {
-        return new Date(ts).toLocaleString();
+        return formatDateTime(ts);
     } catch {
         return ts;
     }

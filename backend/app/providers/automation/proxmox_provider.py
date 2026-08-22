@@ -51,7 +51,7 @@ class ProxmoxAutomationProvider(AutomationProvider):
 
             hostname = context.target_host or "localhost"
 
-            result = await provider.execute_command(
+            result = await provider.execute_command(  # noqa: S604 - shell selects transport protocol, not subprocess shell=True
                 hostname=hostname,
                 port=22,
                 username="",
@@ -110,7 +110,7 @@ class ProxmoxAutomationProvider(AutomationProvider):
     async def rollback_step(
         self, context: ExecutionContext, rollback_command: str
     ) -> StepResult:
-        rollback_ctx = ExecutionContext(
+        rollback_ctx = ExecutionContext(  # noqa: S604 - shell field on request model, not subprocess shell=True
             playbook_id=context.playbook_id,
             execution_id=context.execution_id,
             step_id=context.step_id,
