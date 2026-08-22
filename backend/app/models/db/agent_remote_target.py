@@ -90,6 +90,12 @@ class AgentRemoteTarget(Base):
         nullable=True,
     )
 
+    target_plugins: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
+        comment="Comma-separated plugin identifiers enabled for this remote target.",
+    )
+
     last_collected_at: Mapped[datetime | None] = mapped_column(
         DateTime,
         nullable=True,
