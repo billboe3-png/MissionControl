@@ -195,3 +195,25 @@ def compute_sha256(path: Path) -> str:
         for chunk in iter(lambda: f.read(1024 * 1024), b""):
             h.update(chunk)
     return h.hexdigest()
+
+
+def extract_text_from_file(path: Path) -> str:
+    suffix = path.suffix.lower()
+    if suffix == ".pdf":
+        try:
+            from pypdf import PdfReader
+            reader = PdfReader(str(path))
+            return "\n".join(page.extract_text() or "" for page in reader.pages)
+        except Exception:
+            return ""
+    if suffix == ".docx":
+        try:
+            import docx
+            document = docx.Document(str(path))
+            return "\n".join(paragraph.text for paragraph in document.paragraphs if paragraph.text)
+        except Exception:
+            return ""
+    try:
+        return path.read_text(errors="ignore")
+    except Exception:
+        return ""

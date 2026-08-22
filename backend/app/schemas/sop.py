@@ -212,6 +212,8 @@ class SOPListResponse(BaseModel):
 
 
 class SOPImportRequest(BaseModel):
+    file_path: str = Field(..., min_length=1, max_length=1024)
+    source_name: str = Field(..., min_length=1, max_length=500)
     title: str = Field(..., min_length=1, max_length=500)
     description: str | None = None
     company_id: int | None = None

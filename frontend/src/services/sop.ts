@@ -12,7 +12,18 @@ export interface SOP {
   current_version: string | null;
   tags: string | null;
   purpose: string | null;
+  scope: string | null;
+  audience: string | null;
+  responsibilities: string | null;
+  prerequisites: string | null;
   procedure: string | null;
+  validation: string | null;
+  troubleshooting: string | null;
+  escalation: string | null;
+  rollback: string | null;
+  safety_requirements: string | null;
+  references: string | null;
+  related_sops: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -32,6 +43,15 @@ export interface SOPCreateInput {
   tags?: string;
   purpose?: string;
   procedure?: string;
+  scope?: string;
+  audience?: string;
+  responsibilities?: string;
+  prerequisites?: string;
+  validation?: string;
+  troubleshooting?: string;
+  escalation?: string;
+  rollback?: string;
+  references?: string;
 }
 
 export interface SOPUpdateInput {
@@ -40,6 +60,15 @@ export interface SOPUpdateInput {
   tags?: string;
   purpose?: string;
   procedure?: string;
+  scope?: string;
+  audience?: string;
+  responsibilities?: string;
+  prerequisites?: string;
+  validation?: string;
+  troubleshooting?: string;
+  escalation?: string;
+  rollback?: string;
+  references?: string;
   change_reason?: string;
 }
 
@@ -48,7 +77,9 @@ export interface SOPVersionResponse {
   sop_id: number;
   version: string;
   status: string;
-  title: string;
+  title?: string;
+  created_by?: string;
+  change_reason?: string;
   created_at: string;
 }
 
@@ -115,7 +146,7 @@ export const sopApi = {
     return apiClient<SOP>(API, { method: "POST", json: data });
   },
 
-  async update(id: number, data: SOPUpdateInput): Promise<SOP> {
+  async update(id: number, data: SOPUpdateInput, changeReason?: string): Promise<SOP> {
     return apiClient<SOP>(`${API}/${id}`, { method: "PUT", json: data });
   },
 
@@ -124,7 +155,7 @@ export const sopApi = {
   },
 
   async submit(id: number): Promise<SOP> {
-    return apiClient<SOP>(`${API}/${id}/submit`, { method: "POST" });
+    return apiClient<SOP>(`${API}/${id}/submit`, { method: "POST", json: {} });
   },
 
   async approve(id: number, comments?: string): Promise<SOP> {

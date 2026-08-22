@@ -76,6 +76,8 @@ import ProjectDetailPage from "./pages/projects/ProjectDetailPage";
 import TasksPage from "./pages/tasks/TasksPage";
 import ResumesPage from "./pages/resume/ResumesPage";
 import SOPLibraryPage from "./pages/sop/SOPDocumentsPage";
+import SOPReaderPage from "./pages/sop/SOPReaderPage";
+import SOPEditorPage from "./pages/sop/SOPEditorPage";
 import CompanyDetailPage from "./pages/companies/CompanyDetailPage";
 import CompanyWorkspacePage from "./pages/companies/CompanyWorkspacePage";
 import TimelinePage from "./pages/remote/TimelinePage";
@@ -154,6 +156,8 @@ export default function App() {
                             <Route path="/tasks" element={<TasksPage />} />
                             <Route path="/resume" element={<ResumesPage />} />
                             <Route path="/sop" element={<SOPLibraryPage />} />
+                            <Route path="/sop/:id" element={<SOPReaderPage />} />
+                            <Route path="/sop/:id/edit" element={<SOPEditorPage />} />
                             <Route path="/companies" element={<CompaniesPage />} />
                             <Route path="/companies/:id" element={<CompanyDetailPage />} />
 
