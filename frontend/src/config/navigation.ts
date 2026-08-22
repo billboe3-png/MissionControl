@@ -14,6 +14,7 @@ export const navigation: NavGroup[] = [
             { label: "Resume", path: "/resume", icon: "📝" },
             { label: "Projects", path: "/projects", icon: "📁" },
             { label: "Tasks", path: "/tasks", icon: "✅" },
+            { label: "SOPs", path: "/sop", icon: "📄" },
         ],
         defaultOpen: true,
     },
