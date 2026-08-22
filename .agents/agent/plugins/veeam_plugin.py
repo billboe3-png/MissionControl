@@ -384,7 +384,7 @@ class VeeamPlugin(AgentPlugin):
         )
         if jobs is None:
             logger.info(
-                "Veeam REST /jobs failed, trying local PowerShell fallback"
+                "Veeam REST /jobs failed, trying local PowerShell fallback "
                 "on agent host"
             )
             jobs = await self._run_collector("jobs") or []
