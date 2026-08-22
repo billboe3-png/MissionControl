@@ -3,7 +3,6 @@ Mission Control SOP AI Helpers
 """
 from app.ai.ai_provider import get_ai_provider
 
-
 SYSTEM_PROMPT = (
     "You are Mission Control SOP reviewer and operations assistant. "
     "Always distinguish between source content, AI recommendations, and uncertainty."

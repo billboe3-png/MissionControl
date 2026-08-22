@@ -27,12 +27,13 @@ from .project import Project
 from .remote_host import RemoteHost
 from .resume import Resume
 from .scheduled_command import ScheduledCommand
-from .sop import SOP, SOPApproval, SOPAuditEvent, SOPCategory, SOPVersion, SOPSource
 from .site import Site
+from .sop import SOP, SOPApproval, SOPAuditEvent, SOPCategory, SOPSource, SOPVersion
 from .task import Task
 from .user import User
 
 __all__ = [
+    "SOP",
     "Agent",
     "AgentCommand",
     "AgentRegistrationToken",
@@ -57,13 +58,12 @@ __all__ = [
     "Project",
     "RemoteHost",
     "Resume",
-    "ScheduledCommand",
-    "SOP",
     "SOPApproval",
     "SOPAuditEvent",
     "SOPCategory",
-    "SOPVersion",
     "SOPSource",
+    "SOPVersion",
+    "ScheduledCommand",
     "Site",
     "Task",
     "User",

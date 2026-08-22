@@ -40,8 +40,8 @@ async def sync_all() -> None:
                 session = SessionLocal()
                 cache_manager.mark_sync(session, server.id, "error", str(exc))
                 session.close()
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.warning("Mark sync error state failed: %s", exc)
 
 
 async def _sync_server(server: MikroTikServer) -> None:
