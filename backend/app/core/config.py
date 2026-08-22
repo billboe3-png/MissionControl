@@ -58,6 +58,17 @@ class Settings(BaseSettings):
             ) from exc
         return v
 
+
+    # ------------------------------------------------------------------
+    # Edge Agent Bundle
+    # ------------------------------------------------------------------
+
+    edge_agent_root: str = Field(
+        default="/project/.agents",
+        alias="MC_EDGE_AGENT_ROOT",
+        description="Root directory for edge agent bundle storage",
+    )
+
     # ------------------------------------------------------------------
     # PostgreSQL
     # ------------------------------------------------------------------

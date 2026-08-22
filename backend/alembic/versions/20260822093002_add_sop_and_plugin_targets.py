@@ -133,12 +133,10 @@ def upgrade() -> None:
         sa.Column('timestamp', sa.DateTime(), server_default=sa.text('now()'), index=True),
     )
     op.add_column('agents', sa.Column('enabled_plugins', sa.Text(), nullable=True))
-    op.add_column('agent_remote_targets', sa.Column('target_plugins', sa.Text(), nullable=True))
 
 
 def downgrade() -> None:
     op.drop_column('agents', 'enabled_plugins')
-    op.drop_column('agent_remote_targets', 'target_plugins')
     op.drop_table('sop_audit_events')
     op.drop_table('sop_approvals')
     op.drop_table('sop_sources')

@@ -274,6 +274,7 @@ class AgentService:
                     else None
                 ),
                 "tags": t.tags,
+                "target_plugins": t.target_plugins,
             }
             result.append(target_dict)
 

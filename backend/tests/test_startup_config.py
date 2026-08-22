@@ -176,7 +176,7 @@ class TestSettingsValidation:
     def test_settings_other_defaults_work(self):
         """Test that other settings have correct defaults alongside key."""
         key = Fernet.generate_key().decode()
-        with patch.dict(os.environ, {"MISSIONCONTROL_SECRET_KEY": key}):
+        with patch.dict(os.environ, {"MISSIONCONTROL_SECRET_KEY": key, "ENVIRONMENT": "development"}, clear=True):
             get_settings.cache_clear()
             settings = get_settings()
         assert settings.project_name == "Mission Control"
