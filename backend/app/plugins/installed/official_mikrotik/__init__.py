@@ -9,7 +9,6 @@ from typing import Any
 from sqlalchemy import select
 
 from app.db.database import SessionLocal
-from app.events import Event, EventType, event_bus
 from app.plugins.installed.official_mikrotik.cache import cache_manager
 from app.plugins.installed.official_mikrotik.models import MikroTikServer
 from app.plugins.installed.official_mikrotik.routes import router
@@ -94,7 +93,7 @@ class MikroTikPlugin(ServerPluginSDK):
                             cache_manager.mark_sync(session, server.id, "error", str(exc))
                             session.close()
                         except Exception:
-                            pass
+                            logger.warning("Failed to mark sync error for server %s", server.id)
             except asyncio.CancelledError:
                 break
             except Exception:

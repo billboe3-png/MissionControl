@@ -3,13 +3,11 @@ MikroTik WebFig Proxy
 """
 import base64
 import logging
-from typing import Any
 
 import httpx
 from fastapi import Request
 from fastapi.responses import Response
 
-from app.plugins.installed.official_mikrotik.cache import cache_manager
 from app.plugins.installed.official_mikrotik.models import MikroTikServer
 
 logger = logging.getLogger("plugin.mikrotik.proxy")

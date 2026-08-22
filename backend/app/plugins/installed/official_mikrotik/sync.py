@@ -2,10 +2,7 @@
 MikroTik Sync Module
 """
 import asyncio
-import contextlib
 import logging
-from datetime import UTC, datetime
-from typing import Any
 
 from sqlalchemy import select
 
@@ -13,7 +10,6 @@ from app.db.database import SessionLocal
 from app.plugins.installed.official_mikrotik.cache import cache_manager
 from app.plugins.installed.official_mikrotik.models import MikroTikServer
 from app.plugins.installed.official_mikrotik.ssh_client import MikroTikSSHClient
-from app.plugins.server import ServerPluginSDK
 
 logger = logging.getLogger("plugin.mikrotik.sync")
 

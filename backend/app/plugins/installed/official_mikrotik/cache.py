@@ -5,10 +5,9 @@ import logging
 from datetime import UTC, datetime
 from typing import Any
 
-from sqlalchemy import delete, func, select
+from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
-from app.db.database import SessionLocal
 from app.plugins.installed.official_mikrotik.models import (
     MikroTikDhcpLease,
     MikroTikFirewallRule,

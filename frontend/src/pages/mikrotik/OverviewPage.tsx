@@ -56,7 +56,7 @@ export default function MikroTikOverviewPage() {
                     {server.api_enabled && server.api_port ? ` | API: ${server.api_port}` : ""}
                   </div>
                 </div>
-                <span className="status-badge status-disabled">{server.status}</span>
+                <span className="status-badge status-disabled">{server.status || "unknown"}</span>
               </div>
               <div className="card-body">
                 <div className="grid gap-2">

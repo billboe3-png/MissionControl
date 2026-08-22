@@ -4,7 +4,6 @@ MikroTik Telnet Client
 import asyncio
 import contextlib
 import logging
-from typing import Any
 
 logger = logging.getLogger("plugin.mikrotik.telnet")
 
@@ -28,7 +27,7 @@ class MikroTikTelnetClient:
             reader, writer = await asyncio.wait_for(
                 asyncio.open_connection(self.host, self.port), timeout=self.timeout
             )
-        except (OSError, asyncio.TimeoutError) as exc:
+        except (TimeoutError, OSError) as exc:
             raise RuntimeError(f"Telnet connect failed: {exc}") from exc
 
         try:

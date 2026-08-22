@@ -3,7 +3,6 @@ MikroTik SSH Client
 """
 import asyncio
 import logging
-from typing import Any
 
 logger = logging.getLogger("plugin.mikrotik.ssh")
 
@@ -31,15 +30,14 @@ class MikroTikSSHClient:
             username=self.username,
             password=self.password,
             known_hosts=None,
-        ) as conn:
-            async with conn.create_process() as proc:
-                proc.stdin.write(command + "\n")
-                await proc.stdin.drain()
-                proc.stdin.write_eof()
-                stdout, _ = await asyncio.wait_for(
-                    proc.communicate(), timeout=self.timeout
-                )
-                return stdout
+        ) as conn, conn.create_process() as proc:
+            proc.stdin.write(command + "\n")
+            await proc.stdin.drain()
+            proc.stdin.write_eof()
+            stdout, _ = await asyncio.wait_for(
+                proc.communicate(), timeout=self.timeout
+            )
+            return stdout
 
     async def execute_structured(self, command: str) -> list[dict[str, str]]:
         """Execute a command and parse RouterOS key=value output."""
