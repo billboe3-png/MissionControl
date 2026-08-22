@@ -37,3 +37,7 @@ nginx/ssl/*.crt
 # Frontend demo libraries
 frontend/dist/demo/lib/*
 frontend/public/demo/lib/*
+
+# Local debug scripts
+backend/debug/
+debug/
