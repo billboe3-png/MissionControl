@@ -40,8 +40,8 @@ def get_sop_service() -> SOPService:
 async def list_sops(
     company_id: int | None = None,
     site_id: int | None = None,
-    category_id: int | None = None,
-    status_filter: str | None = None,
+    status: str | None = None,
+    q: str | None = None,
     db: Session = Depends(get_db),
     service: SOPService = Depends(get_sop_service),
 ) -> SOPListResponse:
@@ -49,8 +49,8 @@ async def list_sops(
         db,
         company_id=company_id,
         site_id=site_id,
-        category_id=category_id,
-        status_filter=status_filter,
+        status=status,
+        q=q,
     )
 
 
