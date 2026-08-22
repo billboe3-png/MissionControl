@@ -7,6 +7,7 @@ import logging
 from typing import Any
 
 from sqlalchemy import select
+from sqlalchemy.exc import ProgrammingError
 
 from app.db.database import SessionLocal
 from app.plugins.installed.official_mikrotik.cache import cache_manager
@@ -16,6 +17,8 @@ from app.plugins.installed.official_mikrotik.ssh_client import MikroTikSSHClient
 from app.plugins.server import ServerPluginSDK
 
 logger = logging.getLogger("plugin.mikrotik")
+
+MIKROTIK_TABLE_MISSING = 'relation "mikrotik_servers" does not exist'
 
 
 class MikroTikPlugin(ServerPluginSDK):
@@ -44,11 +47,18 @@ class MikroTikPlugin(ServerPluginSDK):
             try:
                 session = SessionLocal()
                 try:
-                    servers = list(
-                        session.execute(
-                            select(MikroTikServer).where(MikroTikServer.enabled.is_(True))
-                        ).scalars().all()
-                    )
+                    try:
+                        servers = list(
+                            session.execute(
+                                select(MikroTikServer).where(MikroTikServer.enabled.is_(True))
+                            ).scalars().all()
+                        )
+                    except ProgrammingError as exc:
+                        if MIKROTIK_TABLE_MISSING in str(exc):
+                            logger.debug("MikroTik table not present; skipping background sync")
+                            servers = []
+                        else:
+                            raise
                 finally:
                     session.close()
 
