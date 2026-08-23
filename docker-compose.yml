@@ -144,6 +144,7 @@ services:
 
   nginx:
     image: nginx:1.27-alpine
+    shm_size: '128m'
 
     depends_on:
       backend:
@@ -159,6 +160,8 @@ services:
       - ./nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
       - /var/www/letsencrypt:/var/www/letsencrypt:ro
       - /etc/letsencrypt:/etc/letsencrypt:ro
+
+    ipc: host
 
     healthcheck:
       test:
