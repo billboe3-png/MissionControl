@@ -1613,6 +1613,78 @@ select.form-input {
     gap: 12px;
 }
 
+.topbar-help {
+    position: relative;
+}
+
+.topbar-help-toggle {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--text);
+    font-weight: 700;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    font-size: 0.85rem;
+    line-height: 1;
+}
+
+.topbar-help-toggle:hover {
+    border-color: var(--primary);
+    color: var(--primary);
+}
+
+.topbar-help-menu {
+    position: absolute;
+    right: 0;
+    top: 36px;
+    width: 260px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.25);
+    padding: 10px;
+    z-index: 1000;
+}
+
+.topbar-help-title {
+    font-size: 0.8rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--text-muted);
+    padding: 4px 6px 8px;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 6px;
+}
+
+.topbar-help-item {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 8px 6px;
+    border-radius: 6px;
+    font-size: 0.82rem;
+}
+
+.topbar-help-item strong {
+    color: var(--text);
+}
+
+.topbar-help-item span {
+    color: var(--text-muted);
+    font-size: 0.78rem;
+}
+
+.topbar-help-item:hover {
+    background: var(--background);
+}
+
 .topbar-search {
     background: var(--background);
     border: 1px solid var(--border);

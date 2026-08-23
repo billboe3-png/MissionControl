@@ -7,14 +7,18 @@ import {
     integrationsApi,
     IntegrationProfile,
 } from "../../services/integrations";
+import type { Agent, AgentListResponse } from "../../services/agents";
+import { agentsApi } from "../../services/agents";
 import ZabbixConfigModal from "../../components/modals/ZabbixConfigModal";
 import ADConfigModal from "../../components/modals/ADConfigModal";
 import M365ConfigModal from "../../components/modals/M365ConfigModal";
 import HypervConfigModal from "../../components/modals/HypervConfigModal";
 import ProxmoxConfigModal from "../../components/modals/ProxmoxConfigModal";
 import VeeamConfigModal from "../../components/modals/VeeamConfigModal";
+import UniFiConfigModal from "../../components/modals/UniFiConfigModal";
+import { formatDateTime } from "../../utils/dateFormat";
 
-type ConfigModalType = "zabbix" | "active_directory" | "microsoft_365" | "hyperv" | "proxmox" | "veeam" | null;
+type ConfigModalType = "zabbix" | "active_directory" | "microsoft_365" | "hyperv" | "proxmox" | "veeam" | "unifi" | null;
 
 const INTEGRATION_DEFS: {
     type: ConfigModalType;
@@ -58,10 +62,18 @@ const INTEGRATION_DEFS: {
         icon: "💾",
         description: "Veeam B&R — backup jobs, repositories, sessions, restore points and server health.",
     },
+    {
+        type: "unifi",
+        label: "UniFi Network",
+        icon: "📶",
+        description: "Ubiquiti UniFi Site Manager — sites, devices, clients, wireless and alerts.",
+    },
 ];
 
 export default function IntegrationsPage() {
     const [profiles, setProfiles] = useState<IntegrationProfile[]>([]);
+    const [agents, setAgents] = useState<Agent[]>([]);
+    const [selectedAgentId, setSelectedAgentId] = useState<number | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [modalType, setModalType] = useState<ConfigModalType>(null);
@@ -76,8 +88,12 @@ export default function IntegrationsPage() {
 
     const load = async () => {
         try {
-            const items = await integrationsApi.list();
+            const [items, agentList] = await Promise.all([
+                integrationsApi.list(),
+                agentsApi.list(),
+            ]);
             setProfiles(items);
+            setAgents(agentList.items ?? []);
             // Auto-expand types that have profiles
             const types = new Set(items.map((p) => p.integration_type));
             setExpandedTypes((prev) => {
@@ -96,8 +112,11 @@ export default function IntegrationsPage() {
         load();
     }, []);
 
-    const getProfiles = (type: string) =>
-        profiles.filter((p) => p.integration_type === type);
+    const getProfiles = (type: string) => {
+        const base = profiles.filter((p) => p.integration_type === type);
+        if (!selectedAgentId) return base;
+        return base.filter((p) => p.agent_id === selectedAgentId);
+      };
 
     const toggleExpand = (type: string) => {
         setExpandedTypes((prev) => {
@@ -173,6 +192,23 @@ export default function IntegrationsPage() {
             <PageHeader
                 title="Integrations"
                 subtitle="Manage external platform connections"
+                actions={
+                    <select
+                        className="form-input"
+                        value={selectedAgentId ?? ""}
+                        onChange={(e) => {
+                            const val = e.target.value;
+                            setSelectedAgentId(val ? Number(val) : null);
+                        }}
+                    >
+                        <option value="">All agents / Global</option>
+                        {agents.map((a) => (
+                            <option key={a.id} value={a.id}>
+                                #{a.id} — {a.name}
+                            </option>
+                        ))}
+                    </select>
+                }
             />
 
             {error && (
@@ -262,6 +298,7 @@ export default function IntegrationsPage() {
                                                         <div className="integration-row-info">
                                                             <strong>{profile.name}</strong>
                                                             <div className="integration-row-meta">
+                                                                {profile.agent_id ? <span>Agent #{profile.agent_id}</span> : <span>Global</span>}
                                                                 {profile.username && <span>{profile.username}</span>}
                                                                 {profile.base_url && (
                                                                     <span className="integration-meta-url">{profile.base_url}</span>
@@ -270,7 +307,7 @@ export default function IntegrationsPage() {
                                                                     <span>SSH: {profile.ssh_host}</span>
                                                                 )}
                                                                 {profile.last_test && (
-                                                                    <span>Last tested: {new Date(profile.last_test).toLocaleString()}</span>
+                                                                    <span>Last tested: {formatDateTime(profile.last_test)}</span>
                                                                 )}
                                                             </div>
                                                         </div>
@@ -371,6 +408,14 @@ export default function IntegrationsPage() {
             )}
             {modalType === "veeam" && (
                 <VeeamConfigModal
+                    profile={editingProfile}
+                    onSave={handleModalSave}
+                    onCancel={() => { setModalType(null); setEditingProfile(null); }}
+                    onError={(msg) => setError(msg)}
+                />
+            )}
+            {modalType === "unifi" && (
+                <UniFiConfigModal
                     profile={editingProfile}
                     onSave={handleModalSave}
                     onCancel={() => { setModalType(null); setEditingProfile(null); }}

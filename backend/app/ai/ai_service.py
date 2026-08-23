@@ -8,6 +8,7 @@ and formats responses.
 AI NEVER executes infrastructure changes.
 
 Sprint 2.6.0 - AI Operations Engine.
+Sprint 3.11.0 - AI Operations Assistant.
 """
 
 import logging

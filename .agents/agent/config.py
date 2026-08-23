@@ -1,5 +1,6 @@
 """Mission Control Agent Configuration."""
 
+import sys
 from pathlib import Path
 
 import yaml
@@ -8,6 +9,7 @@ from pydantic_settings import BaseSettings
 
 DEFAULT_CONFIG_DIR = Path.home() / ".config" / "mission-control-agent"
 DEFAULT_DATA_DIR = Path.home() / ".local" / "share" / "mission-control-agent"
+_FALLBACK_ROOT = Path("C:/MissionControlAgent")
 
 
 class AgentSettings(BaseSettings):
@@ -124,14 +126,25 @@ def load_config(config_path: str | Path | None = None) -> AgentSettings:
         default_path = DEFAULT_CONFIG_DIR / "config.yaml"
         if default_path.exists():
             config_path = default_path
+        else:
+            fallback = Path(__file__).resolve().parent.parent / "config.yaml"
+            if fallback.exists():
+                config_path = fallback
+            elif _FALLBACK_ROOT.exists():
+                alt = _FALLBACK_ROOT / "config.yaml"
+                if alt.exists():
+                    config_path = alt
 
     if config_path and Path(config_path).exists():
         with open(config_path) as f:
             file_config = yaml.safe_load(f) or {}
-        settings_kwargs = {
-            k: v
-            for k, v in file_config.items()
-            if v is not None
-        }
+        settings_kwargs = {k: v for k, v in file_config.items() if v is not None}
+
+    if "log_file" not in settings_kwargs and sys.platform.startswith("win"):
+            settings_kwargs["log_file"] = str(_FALLBACK_ROOT / "logs" / "agent.log")
+
+    # SYSTEM scheduled task fix: force data_dir into a writable, known location
+    if "data_dir" not in settings_kwargs:
+        settings_kwargs["data_dir"] = _FALLBACK_ROOT / "data"
 
     return AgentSettings(**settings_kwargs)

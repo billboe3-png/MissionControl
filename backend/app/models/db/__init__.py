@@ -28,10 +28,12 @@ from .remote_host import RemoteHost
 from .resume import Resume
 from .scheduled_command import ScheduledCommand
 from .site import Site
+from .sop import SOP, SOPApproval, SOPAuditEvent, SOPCategory, SOPSource, SOPVersion
 from .task import Task
 from .user import User
 
 __all__ = [
+    "SOP",
     "Agent",
     "AgentCommand",
     "AgentRegistrationToken",
@@ -47,15 +49,20 @@ __all__ = [
     "IntegrationProfile",
     "Note",
     "ParkingLot",
-    "Plugin",
     "Playbook",
     "PlaybookExecution",
     "PlaybookSchedule",
     "PlaybookStep",
     "PlaybookVariable",
+    "Plugin",
     "Project",
     "RemoteHost",
     "Resume",
+    "SOPApproval",
+    "SOPAuditEvent",
+    "SOPCategory",
+    "SOPSource",
+    "SOPVersion",
     "ScheduledCommand",
     "Site",
     "Task",

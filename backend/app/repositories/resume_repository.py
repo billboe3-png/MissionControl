@@ -4,6 +4,8 @@ Mission Control Resume Repository
 All database access for Resume entities.
 """
 
+from datetime import UTC, datetime
+
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
@@ -86,6 +88,9 @@ class ResumeRepository:
             title=resume.title.strip(),
             description=resume.description,
             available=resume.available,
+            context=getattr(resume, "context", None),
+            target_page=getattr(resume, "target_page", None),
+            started_at=datetime.now(UTC) if getattr(resume, "available", False) else None,
         )
         db.add(entity)
         db.commit()
@@ -124,6 +129,8 @@ class ResumeRepository:
                 Resume.id != resume_id,
             ).update({"available": False})
 
+        if updates.get("available") is True and not entity.started_at:
+            entity.started_at = datetime.now(UTC)
         for field, value in updates.items():
             setattr(entity, field, value)
 

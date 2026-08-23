@@ -71,9 +71,51 @@ class EventType(StrEnum):
     PLAYBOOK_EXECUTED = "playbook.executed"
     APPROVAL_REQUESTED = "approval.requested"
 
+    # Monitoring
+    MONITORING_HOST_DOWN = "monitoring.host_down"
+    MONITORING_HOST_RECOVERED = "monitoring.host_recovered"
+    MONITORING_PROBLEM_CREATED = "monitoring.problem_created"
+    MONITORING_PROBLEM_RESOLVED = "monitoring.problem_resolved"
+    MONITORING_SYNC_COMPLETED = "monitoring.sync_completed"
+    MONITORING_SYNC_FAILED = "monitoring.sync_failed"
+
     # Infrastructure
     BACKUP_SUCCEEDED = "backup.succeeded"
     BACKUP_FAILED = "backup.failed"
+    BACKUP_WARNING = "backup.warning"
+    BACKUP_JOB_STARTED = "backup.job_started"
+    BACKUP_JOB_COMPLETED = "backup.job_completed"
+    BACKUP_REPOSITORY_FULL = "backup.repository_full"
+    BACKUP_REPOSITORY_OFFLINE = "backup.repository_offline"
+    BACKUP_REPOSITORY_WARNING = "backup.repository_warning"
+    BACKUP_LICENSE_EXPIRING = "backup.license_expiring"
+    BACKUP_PROXY_OFFLINE = "backup.proxy_offline"
+    BACKUP_TAPE_FAILURE = "backup.tape_failure"
+
+    # Network
+    NETWORK_DEVICE_OFFLINE = "network.device_offline"
+    NETWORK_DEVICE_ONLINE = "network.device_online"
+    NETWORK_GATEWAY_DOWN = "network.gateway_down"
+    NETWORK_WAN_DOWN = "network.wan_down"
+    NETWORK_AP_DOWN = "network.ap_down"
+    NETWORK_SWITCH_DOWN = "network.switch_down"
+    NETWORK_HIGH_CPU = "network.high_cpu"
+    NETWORK_HIGH_MEMORY = "network.high_memory"
+    NETWORK_FIRMWARE_AVAILABLE = "network.firmware_available"
+    NETWORK_CLIENT_ROGUE = "network.client_rogue"
+
+    # Docker / Containers
+    CONTAINER_STARTED = "container.started"
+    CONTAINER_STOPPED = "container.stopped"
+    CONTAINER_RESTARTED = "container.restarted"
+    CONTAINER_UNHEALTHY = "container.unhealthy"
+    CONTAINER_REMOVED = "container.removed"
+    IMAGE_UPDATED = "image.updated"
+    IMAGE_UNUSED = "image.unused"
+    VOLUME_FULL = "volume.full"
+    HOST_OFFLINE = "host.offline"
+    DOCKER_ENGINE_DOWN = "docker.engine_down"
+
     ALERT_CREATED = "alert.created"
     ALERT_RESOLVED = "alert.resolved"
 
@@ -81,6 +123,18 @@ class EventType(StrEnum):
     INTEGRATION_CONNECTED = "integration.connected"
     INTEGRATION_DISCONNECTED = "integration.disconnected"
     INTEGRATION_ERROR = "integration.error"
+
+    # SOP
+    SOP_CREATED = "sop.created"
+    SOP_UPDATED = "sop.updated"
+    SOP_SUBMITTED = "sop.submitted"
+    SOP_APPROVED = "sop.approved"
+    SOP_REJECTED = "sop.rejected"
+    SOP_PUBLISHED = "sop.published"
+    SOP_ARCHIVED = "sop.archived"
+    SOP_REVIEW_DUE = "sop.review_due"
+    SOP_IMPORTED = "sop.imported"
+    SOP_AI_GENERATED = "sop.ai_generated"
 
     # System
     SYSTEM_STARTUP = "system.startup"

@@ -24,6 +24,7 @@ logs/
 Thumbs.db
 .DS_Store
 
+
 # SSL keys/certs - generate at deploy time
 nginx/ssl/*.key
 nginx/ssl/*.crt
@@ -40,15 +41,3 @@ frontend/public/demo/lib/*
 # Local debug scripts
 backend/debug/
 debug/
-
-# Agent artifacts / build output
-.agents/*.zip
-.agents/*.version
-.agents/corhqrobertb-reinstall.zip
-.agents/reinstall-tmp/
-
-# Operational data files in repo root
-note.json
-parking.json
-parking-update.json
-put-dup.json

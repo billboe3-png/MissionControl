@@ -1,0 +1,24 @@
+"""merge heads - zabbix, docker, and git plugin branches
+
+Revision ID: merge_heads_rc1
+Revises: a1b2c3d4e5f7, d4e5f6a7b8c0, g1t2r3e4p5o6
+Create Date: 2026-07-27
+
+"""
+
+from collections.abc import Sequence
+
+# revision identifiers, used by Alembic.
+revision: str = "merge_heads_rc1"
+down_revision: str | Sequence[str] | None = ("a1b2c3d4e5f7", "d4e5f6a7b8c0", "g1t2r3e4p5o6")
+branch_labels: str | Sequence[str] | None = None
+depends_on: str | Sequence[str] | None = None
+
+
+def upgrade() -> None:
+    """Merge the two heads into one."""
+    pass
+
+
+def downgrade() -> None:
+    pass

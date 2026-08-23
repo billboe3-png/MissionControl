@@ -34,7 +34,7 @@ class AgentPlugin(ABC):
         """Execute a plugin-specific command."""
         ...
 
-    async def shutdown(self) -> None:
+    async def shutdown(self) -> None:  # noqa: B027
         """Clean up plugin resources."""
         pass
 
@@ -51,56 +51,74 @@ class AgentPlugin(ABC):
 class PluginManager:
     """Manages loading and lifecycle of agent plugins."""
 
-    def __init__(self):
+    def __init__(self, data_dir: Path | None = None):
         self._plugins: dict[str, AgentPlugin] = {}
         self._initialized: dict[str, bool] = {}
+        self._data_dir = data_dir
 
     async def discover_plugins(self) -> list[str]:
         """Discover available plugins from the plugins directory."""
         plugins_dir = Path(__file__).parent / "plugins"
         discovered = []
 
-        if not plugins_dir.exists():
-            return discovered
+        # Prefer the local install plugins dir so user/agent updates win
+        # over any SYSTEM site-packages copy.
+        local_plugins_dir = Path.cwd() / "agent" / "plugins"
+        search_dirs = []
+        if local_plugins_dir.exists() and local_plugins_dir != plugins_dir:
+            search_dirs.append(local_plugins_dir)
+        search_dirs.append(plugins_dir)
+        if self._data_dir:
+            data_plugins = self._data_dir / "plugins"
+            if data_plugins.exists() and data_plugins not in search_dirs:
+                search_dirs.append(data_plugins)
+        builtin_data_dir = (
+            Path(__file__).resolve().parent.parent / ".agents" / "agent" / "plugins"
+        )
+        if builtin_data_dir.exists() and builtin_data_dir not in search_dirs:
+            search_dirs.append(builtin_data_dir)
 
-        for py_file in plugins_dir.glob("*_plugin.py"):
-            module_name = py_file.stem
-            try:
-                spec = importlib.util.spec_from_file_location(
-                    f"agent.plugins.{module_name}", py_file
-                )
-                if spec and spec.loader:
-                    module = importlib.util.module_from_spec(spec)
-                    spec.loader.exec_module(module)
+        for scan_dir in search_dirs:
+            if not scan_dir.exists():
+                continue
+            for py_file in scan_dir.glob("*_plugin.py"):
+                module_name = py_file.stem
+                try:
+                    spec = importlib.util.spec_from_file_location(
+                        f"agent.plugins.{module_name}", py_file
+                    )
+                    if spec and spec.loader:
+                        module = importlib.util.module_from_spec(spec)
+                        spec.loader.exec_module(module)
 
-                    for attr_name in dir(module):
-                        attr = getattr(module, attr_name)
-                        if (
-                            isinstance(attr, type)
-                            and issubclass(attr, AgentPlugin)
-                            and attr is not AgentPlugin
-                        ):
-                            plugin = attr()
-                            if plugin.is_compatible():
-                                self._plugins[plugin.name] = plugin
-                                discovered.append(plugin.name)
-                                logger.info(
-                                    "Discovered plugin: %s v%s",
-                                    plugin.name,
-                                    plugin.version,
-                                )
-            except Exception as e:
-                logger.error(
-                    "Failed to load plugin %s: %s",
-                    module_name,
-                    e,
-                )
+                        for attr_name in dir(module):
+                            attr = getattr(module, attr_name)
+                            if (
+                                isinstance(attr, type)
+                                and issubclass(attr, AgentPlugin)
+                                and attr is not AgentPlugin
+                            ):
+                                plugin = attr()
+                                if plugin.is_compatible():
+                                    if plugin.name in self._plugins:
+                                        continue
+                                    self._plugins[plugin.name] = plugin
+                                    discovered.append(plugin.name)
+                                    logger.info(
+                                        "Discovered plugin: %s v%s",
+                                        plugin.name,
+                                        plugin.version,
+                                    )
+                except Exception as e:
+                    logger.error(
+                        "Failed to load plugin %s: %s",
+                        module_name,
+                        e,
+                    )
 
         return discovered
 
-    async def initialize_plugins(
-        self, context: dict[str, Any]
-    ) -> dict[str, bool]:
+    async def initialize_plugins(self, context: dict[str, Any]) -> dict[str, bool]:
         """Initialize all discovered plugins."""
         results = {}
         for name, plugin in self._plugins.items():
@@ -111,13 +129,9 @@ class PluginManager:
                 if success:
                     logger.info("Plugin %s initialized", name)
                 else:
-                    logger.warning(
-                        "Plugin %s failed to initialize", name
-                    )
+                    logger.warning("Plugin %s failed to initialize", name)
             except Exception as e:
-                logger.error(
-                    "Plugin %s initialization error: %s", name, e
-                )
+                logger.error("Plugin %s initialization error: %s", name, e)
                 self._initialized[name] = False
                 results[name] = False
         return results
@@ -131,9 +145,7 @@ class PluginManager:
                     data = await plugin.collect_inventory()
                     inventory[name] = data
                 except Exception as e:
-                    logger.error(
-                        "Plugin %s inventory failed: %s", name, e
-                    )
+                    logger.error("Plugin %s inventory failed: %s", name, e)
                     inventory[name] = {"error": str(e)}
         return inventory
 
@@ -154,13 +166,19 @@ class PluginManager:
             }
         return await plugin.execute_command(command, args)
 
+    async def execute(self, plugin_name: str) -> dict[str, Any]:
+        """Run collect_inventory for a discovered plugin."""
+        plugin = self._plugins.get(plugin_name)
+        if plugin is None:
+            return {"error": f"Plugin {plugin_name} not found"}
+        try:
+            return await plugin.collect_inventory()
+        except Exception as e:
+            return {"error": str(e)}
+
     def get_active_plugins(self) -> str:
         """Get comma-separated list of active plugins."""
-        active = [
-            name
-            for name, init in self._initialized.items()
-            if init
-        ]
+        active = [name for name, init in self._initialized.items() if init]
         return ",".join(active)
 
     async def shutdown_all(self) -> None:
@@ -170,9 +188,7 @@ class PluginManager:
                 await plugin.shutdown()
                 logger.info("Plugin %s shut down", name)
             except Exception as e:
-                logger.error(
-                    "Plugin %s shutdown error: %s", name, e
-                )
+                logger.error("Plugin %s shutdown error: %s", name, e)
         self._plugins.clear()
         self._initialized.clear()
 

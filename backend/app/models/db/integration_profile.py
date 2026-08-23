@@ -47,6 +47,13 @@ class IntegrationProfile(Base):
         index=True,
     )
 
+    agent_id: Mapped[int | None] = mapped_column(
+        Integer,
+        ForeignKey("agents.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+
     name: Mapped[str] = mapped_column(
         String(200),
         nullable=False,

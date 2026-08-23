@@ -7,5 +7,14 @@ line-length = 88
 target-version = "py312"
 
 [tool.ruff.lint]
-select = ["E", "F", "I", "UP", "B"]
-extend-ignore = ["E501", "B008"]
+select = ["E", "F", "I", "UP", "B", "S", "SIM", "C4", "RUF"]
+# S507 (Paramiko host-key policy) is intentionally ignored: bandit flags ANY
+# set_missing_host_key_policy(...) call, including the secure RejectPolicy()
+# we now use by default. The insecure AutoAddPolicy() opt-in is gated behind
+# the SSH_AUTO_ADD_HOST_KEYS setting instead. The rest of the S rules (S110,
+# S311, S608, ...) remain active and valuable.
+extend-ignore = ["E501", "B008", "S507"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**/*.py" = ["S101", "PLR2004", "S106", "S105", "S108", "S604", "S110", "SIM105"]
+"scripts/**/*.py" = ["S101", "BLE001", "PLW1510", "SIM115", "TRY004", "RUF059"]

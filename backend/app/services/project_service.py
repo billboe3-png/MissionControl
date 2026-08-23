@@ -125,20 +125,33 @@ class ProjectService:
                 detail="Project not found",
             )
 
+    async def close(self, db: Session, project_id: int) -> ProjectResponse:
+        """Close a project by marking it inactive."""
+        logger.info("Closing project id=%s", project_id)
+
+        project = self._repository.get_by_id(db, project_id)
+        if project is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Project not found",
+            )
+
+        project.active = False
+        db.commit()
+        db.refresh(project)
+        return ProjectResponse.model_validate(project)
+
     @staticmethod
     def _serialize_project(project: Project) -> dict:
-        """
-        Map a Project ORM instance to the dashboard item shape.
-
-        Status is derived from the stored active flag. Priority is not
-        persisted in the current schema and is returned as null.
-        """
+        task_count = len(project.tasks)
         return {
             "id": str(project.id),
             "name": project.name,
             "description": project.description,
             "status": "active" if project.active else "inactive",
             "priority": None,
+            "task_count": task_count,
+            "note_count": len(project.notes),
             "created_at": project.created_at.isoformat(),
             "updated_at": project.updated_at.isoformat(),
         }

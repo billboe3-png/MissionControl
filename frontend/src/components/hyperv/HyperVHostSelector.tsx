@@ -48,7 +48,7 @@ interface HyperVHostSelectorProps {
 }
 
 export default function HyperVHostSelector({ hosts, selectedHostId, onChange }: HyperVHostSelectorProps) {
-    if (hosts.length <= 1) return null;
+    if (!hosts.length) return null;
 
     return (
         <div className="hyperv-host-selector">

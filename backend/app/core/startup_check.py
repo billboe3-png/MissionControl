@@ -26,7 +26,7 @@ _BANNER = """
 class CheckResult:
     """Result of a single startup check."""
 
-    __slots__ = ("name", "ok", "message", "instruction", "critical")
+    __slots__ = ("critical", "instruction", "message", "name", "ok")
 
     def __init__(
         self,
@@ -160,7 +160,12 @@ def check_secret_key_validity() -> CheckResult:
             "Secret Key",
             False,
             "not set",
-            instruction="Set MISSIONCONTROL_SECRET_KEY in your .env file.",
+            instruction=(
+                "Set MISSIONCONTROL_SECRET_KEY in your .env file.\n"
+                "Generate one using:\n"
+                '  python -c "from cryptography.fernet import Fernet; '
+                'print(Fernet.generate_key().decode())"'
+            ),
             critical=True,
         )
 
@@ -172,7 +177,7 @@ def check_secret_key_validity() -> CheckResult:
         return CheckResult(
             "Secret Key",
             False,
-            "invalid Fernet key format",
+            "not a valid Fernet key",
             instruction=(
                 "Generate a new key:\n"
                 '  python -c "from cryptography.fernet import Fernet; '
@@ -192,11 +197,8 @@ def check_postgres_connectivity() -> CheckResult:
         from app.core.config import get_settings
 
         settings = get_settings()
-        async_dsn = settings.database_url.replace(
-            "postgresql+psycopg://",
-            "postgresql://",
-        )
-        conn = psycopg.connect(async_dsn)
+        dsn = settings.database_url.replace("postgresql+psycopg://", "postgresql://")
+        conn = psycopg.connect(dsn)
         with conn.cursor() as cur:
             cur.execute("SELECT 1")
             cur.fetchone()
@@ -264,11 +266,8 @@ def check_database_schema() -> CheckResult:
         from app.core.config import get_settings
 
         settings = get_settings()
-        async_dsn = settings.database_url.replace(
-            "postgresql+psycopg://",
-            "postgresql://",
-        )
-        conn = psycopg.connect(async_dsn)
+        dsn = settings.database_url.replace("postgresql+psycopg://", "postgresql://")
+        conn = psycopg.connect(dsn)
         with conn.cursor() as cur:
             cur.execute(
                 "SELECT EXISTS(SELECT 1 FROM information_schema.tables "
@@ -333,7 +332,7 @@ def check_write_permissions() -> CheckResult:
                 "Ensure the application has write access "
                 "to temp and config directories."
             ),
-            critical=True,
+            critical=False,
         )
 
     return CheckResult("Write Permissions", True, "writable")

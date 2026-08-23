@@ -2,79 +2,71 @@ import { useEffect, useState } from "react";
 import PageHeader from "../../components/common/PageHeader";
 import StatusBadge from "../../components/common/StatusBadge";
 import { api } from "../../services/api";
-import { DashboardResponse } from "../../types/dashboard";
 
-export default function HealthPage() {
-    const [data, setData] = useState<DashboardResponse | null>(null);
-    const [error, setError] = useState<string | null>(null);
+const DISPLAY_NAMES: Record<string, string> = {
+  postgres: "PostgreSQL",
+  redis: "Redis",
+  event_bus: "Event Bus",
+  dashboard: "Dashboard Aggregator",
+  scheduler: "Scheduler",
+  automation: "Automation Engine",
+  plugins: "Plugin Loader",
+  heartbeat_service: "Heartbeat Service",
+  agent_state_engine: "Fleet State Engine",
+  ai: "AI Service",
+};
 
-    useEffect(() => {
-        api
-            .getDashboard()
-            .then(setData)
-            .catch((e) => setError(e.message));
-    }, []);
-
-    if (error) return <div className="error-banner">{error}</div>;
-    if (!data) return <div className="loading-bar" />;
-
-    const checks = [
-        {
-            label: "Backend",
-            status: data.health.backend.status === "healthy" ? ("healthy" as const) : ("error" as const),
-        },
-        {
-            label: "Database",
-            status: data.health.database.status === "healthy" ? ("healthy" as const) : ("error" as const),
-        },
-        {
-            label: "Redis",
-            status: data.health.redis.status === "healthy"
-                ? ("healthy" as const)
-                : data.health.redis.status === "unavailable"
-                  ? ("neutral" as const)
-                  : ("error" as const),
-        },
-        {
-            label: "Docker",
-            status: data.docker.container_count > 0 ? ("healthy" as const) : ("neutral" as const),
-        },
-        {
-            label: "Git",
-            status: gitStatus(data),
-        },
-        {
-            label: "Projects",
-            status: data.projects.count > 0 ? ("healthy" as const) : ("neutral" as const),
-        },
-        {
-            label: "Resume",
-            status: data.resume.available ? ("info" as const) : ("neutral" as const),
-        },
-    ];
-
-    return (
-        <>
-            <PageHeader
-                title="Health"
-                subtitle="System health checks"
-            />
-            <div className="health-checks">
-                {checks.map((check) => (
-                    <div key={check.label} className="health-check-item">
-                        <span className="health-check-label">{check.label}</span>
-                        <StatusBadge
-                            status={check.status}
-                            label={check.status}
-                        />
-                    </div>
-                ))}
-            </div>
-        </>
-    );
+interface SubsystemCheck {
+  component: string;
+  status: string;
+  latency_ms: number;
+  last_check: string;
+  details?: string;
 }
 
-function gitStatus(data: DashboardResponse): "healthy" | "warning" | "neutral" {
-    if (!data.git.available) return "neutral";
-    return data.git.working_tree_clean ? "healthy" : "warning";
+export default function HealthPage() {
+  const [subsystems, setSubsystems] = useState<Record<string, SubsystemCheck>>({});
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const data = await api.getSubsystems();
+        setSubsystems(data.subsystems ?? {});
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "Failed to load");
+      }
+    };
+    load();
+    const id = setInterval(load, 30000);
+    return () => clearInterval(id);
+  }, []);
+
+  if (error) return <div className="error-banner">{error}</div>;
+
+  const entries = Object.entries(subsystems).filter(([k]) => k !== "disk_space" && k !== "agents");
+
+  return (
+    <>
+      <PageHeader title="Health" subtitle="Live system health checks" />
+      <div className="health-checks">
+        {entries.map(([key, check]) => (
+          <div key={key} className="health-check-item">
+            <span className="health-check-label">{DISPLAY_NAMES[key] ?? key}</span>
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <span className="health-check-latency">{check.latency_ms.toFixed(1)}ms</span>
+              <StatusBadge
+                status={
+                  check.status === "ok" ? "healthy" :
+                  check.status === "warning" ? "warning" :
+                  "error"
+                }
+                label={check.status}
+              />
+            </div>
+          </div>
+        ))}
+      </div>
+    </>
+  );
 }

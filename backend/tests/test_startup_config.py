@@ -39,53 +39,46 @@ class TestValidateSecretKey:
 
     def test_missing_key_exits(self):
         """Test that a missing key triggers sys.exit(1)."""
-        with patch.dict(os.environ, {}, clear=True):
-            with pytest.raises(SystemExit, match="1"):
-                validate_secret_key()
+        with patch.dict(os.environ, {}, clear=True), pytest.raises(SystemExit, match="1"):
+            validate_secret_key()
 
     def test_empty_key_exits(self):
         """Test that an empty string key triggers sys.exit(1)."""
-        with patch.dict(os.environ, {"MISSIONCONTROL_SECRET_KEY": ""}):
-            with pytest.raises(SystemExit, match="1"):
-                validate_secret_key()
+        with patch.dict(os.environ, {"MISSIONCONTROL_SECRET_KEY": ""}), pytest.raises(SystemExit, match="1"):
+            validate_secret_key()
 
     def test_whitespace_only_key_exits(self):
         """Test that whitespace-only key triggers sys.exit(1)."""
         with patch.dict(
             os.environ, {"MISSIONCONTROL_SECRET_KEY": "   "}
-        ):
-            with pytest.raises(SystemExit, match="1"):
-                validate_secret_key()
+        ), pytest.raises(SystemExit, match="1"):
+            validate_secret_key()
 
     def test_invalid_key_exits(self):
         """Test that an invalid Fernet key triggers sys.exit(1)."""
         with patch.dict(
             os.environ, {"MISSIONCONTROL_SECRET_KEY": "not-a-valid-key"}
-        ):
-            with pytest.raises(SystemExit, match="1"):
-                validate_secret_key()
+        ), pytest.raises(SystemExit, match="1"):
+            validate_secret_key()
 
     def test_too_short_key_exits(self):
         """Test that a truncated key triggers sys.exit(1)."""
         with patch.dict(
             os.environ, {"MISSIONCONTROL_SECRET_KEY": "abc123"}
-        ):
-            with pytest.raises(SystemExit, match="1"):
-                validate_secret_key()
+        ), pytest.raises(SystemExit, match="1"):
+            validate_secret_key()
 
     def test_error_message_mentions_key_name(self, capsys):
         """Test that the error output mentions MISSIONCONTROL_SECRET_KEY."""
-        with patch.dict(os.environ, {}, clear=True):
-            with pytest.raises(SystemExit):
-                validate_secret_key()
+        with patch.dict(os.environ, {}, clear=True), pytest.raises(SystemExit):
+            validate_secret_key()
         captured = capsys.readouterr()
         assert "MISSIONCONTROL_SECRET_KEY" in captured.err
 
     def test_error_message_mentions_fernet(self, capsys):
         """Test that the error output mentions Fernet key generation."""
-        with patch.dict(os.environ, {}, clear=True):
-            with pytest.raises(SystemExit):
-                validate_secret_key()
+        with patch.dict(os.environ, {}, clear=True), pytest.raises(SystemExit):
+            validate_secret_key()
         captured = capsys.readouterr()
         assert "Fernet" in captured.err
 
@@ -93,9 +86,8 @@ class TestValidateSecretKey:
         """Test that invalid key error mentions Fernet key generation."""
         with patch.dict(
             os.environ, {"MISSIONCONTROL_SECRET_KEY": "bad-key-value"}
-        ):
-            with pytest.raises(SystemExit):
-                validate_secret_key()
+        ), pytest.raises(SystemExit):
+            validate_secret_key()
         captured = capsys.readouterr()
         assert "not a valid Fernet key" in captured.err
 
@@ -118,9 +110,8 @@ class TestValidateAll:
 
     def test_missing_key_exits(self):
         """Test that validate_all exits when key is missing."""
-        with patch.dict(os.environ, {}, clear=True):
-            with pytest.raises(SystemExit, match="1"):
-                validate_all()
+        with patch.dict(os.environ, {}, clear=True), pytest.raises(SystemExit, match="1"):
+            validate_all()
 
 
 # ------------------------------------------------------------------ #
@@ -185,7 +176,7 @@ class TestSettingsValidation:
     def test_settings_other_defaults_work(self):
         """Test that other settings have correct defaults alongside key."""
         key = Fernet.generate_key().decode()
-        with patch.dict(os.environ, {"MISSIONCONTROL_SECRET_KEY": key}):
+        with patch.dict(os.environ, {"MISSIONCONTROL_SECRET_KEY": key, "ENVIRONMENT": "development"}, clear=True):
             get_settings.cache_clear()
             settings = get_settings()
         assert settings.project_name == "Mission Control"

@@ -88,9 +88,11 @@ class NoteService:
 
         updates = data.model_dump(exclude_unset=True)
 
-        if "project_id" in updates:
-            if ProjectRepository().get_by_id(db, updates["project_id"]) is None:
-                raise HTTPException(
+        if (
+            "project_id" in updates
+            and ProjectRepository().get_by_id(db, updates["project_id"]) is None
+        ):
+            raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,
                     detail="Project not found",
                 )
@@ -104,12 +106,11 @@ class NoteService:
             and updates["project_id"] != existing.project_id
         ):
             combination_changes = True
-        if "title" in updates and updates["title"] is not None:
-            if (
-                updates["title"].strip().lower()
-                != existing.title.strip().lower()
-            ):
-                combination_changes = True
+        if "title" in updates and updates["title"] is not None and (
+            updates["title"].strip().lower()
+            != existing.title.strip().lower()
+        ):
+            combination_changes = True
 
         if combination_changes:
             duplicate = self._repository.get_duplicate(

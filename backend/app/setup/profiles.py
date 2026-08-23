@@ -143,11 +143,10 @@ class DeploymentProfile:
                 "ensure certificates are configured"
             )
 
-        if profile.get("ha_ready"):
-            if db.get("pool_size", 0) < 10:
-                issues.append(
-                    "HA mode enabled but database pool_size < 10"
-                )
+        if profile.get("ha_ready") and db.get("pool_size", 0) < 10:
+            issues.append(
+                "HA mode enabled but database pool_size < 10"
+            )
 
         if profile.get("max_agents", 0) > 5000:
             issues.append("max_agents > 5000 may degrade performance")

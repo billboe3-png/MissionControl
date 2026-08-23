@@ -9,9 +9,11 @@ import ActivityWidget from "../components/dashboard/ActivityWidget";
 import { api } from "../services/api";
 import { DashboardResponse } from "../types/dashboard";
 
+import { formatDateTime } from "../utils/dateFormat";
+
 function formatTimestamp(d: Date | null) {
     if (!d) return "—";
-    return d.toLocaleTimeString();
+    return formatDateTime(d.toISOString());
 }
 
 export default function DashboardPage() {
@@ -128,15 +130,15 @@ export default function DashboardPage() {
                                 <span className="sov-label">Git</span>
                                 <StatusBadge
                                     status={
-                                        data.git.available
-                                            ? data.git.working_tree_clean
+                                        data.git?.available
+                                            ? data.git?.working_tree_clean
                                                 ? "healthy"
                                                 : "warning"
                                             : "neutral"
                                     }
                                     label={
-                                        data.git.available
-                                            ? data.git.current_branch ?? "unknown"
+                                        data.git?.available
+                                            ? data.git?.current_branch ?? "unknown"
                                             : "unavailable"
                                     }
                                 />

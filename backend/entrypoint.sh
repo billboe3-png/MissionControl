@@ -180,20 +180,21 @@ done
 
 
 # ---------------------------------------------------------------
-# Validate configuration
-# ---------------------------------------------------------------
-echo ""
-echo "Validating configuration..."
-python -c "from app.core.startup_check import validate_all; validate_all()"
-
-# ---------------------------------------------------------------
 # Apply database migrations
 # ---------------------------------------------------------------
+echo ""
 echo "Applying database migrations..."
 if ! alembic upgrade head; then
     echo "Migration issue detected, stamping head..."
     alembic stamp head
 fi
+
+# ---------------------------------------------------------------
+# Validate configuration
+# ---------------------------------------------------------------
+echo ""
+echo "Validating configuration..."
+python -c "from app.core.startup_check import validate_all; validate_all()"
 
 # ---------------------------------------------------------------
 # Run database seed

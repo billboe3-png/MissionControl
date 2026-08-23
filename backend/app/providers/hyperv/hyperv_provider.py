@@ -9,8 +9,11 @@ import asyncio
 import base64
 import json
 import logging
+import tempfile
 
+import requests
 import winrm
+from winrm.exceptions import InvalidCredentialsError
 
 from .base_provider import HyperVProvider
 
@@ -58,8 +61,36 @@ async def _run_powershell_winrm(
         }
     except TimeoutError:
         return {"success": False, "stdout": "", "stderr": "Command timed out", "exit_code": -1}
+    except InvalidCredentialsError:
+        friendly = f"WinRM authentication to '{host}:{port}' failed. Check the username/password for the integration profile (HTTP 401)."
+        logger.warning("WinRM auth failed for %s:%s", host, port)
+        return {"success": False, "stdout": "", "stderr": friendly, "exit_code": -1}
+    except requests.exceptions.HTTPError as e:
+        status = getattr(getattr(e, "response", None), "status_code", "unknown")
+        friendly = f"WinRM HTTP error {status} from '{host}:{port}'. Check the endpoint and credentials."
+        logger.warning("WinRM HTTP error for %s:%s: %s", host, port, status)
+        return {"success": False, "stdout": "", "stderr": friendly, "exit_code": -1}
+    except AttributeError as e:
+        # pywinrm <ver> can raise AttributeError ("'Response' object has no
+        # attribute 'stderr'") while formatting an auth/transport failure;
+        # treat it as an unreachable/auth problem rather than a crash.
+        if "stderr" in str(e).lower():
+            friendly = f"WinRM connection to '{host}:{port}' failed (authentication or transport error). Check the credentials and that WinRM is enabled."
+        else:
+            friendly = str(e)
+        logger.warning("WinRM connection to %s:%s failed: %s", host, port, friendly)
+        return {"success": False, "stdout": "", "stderr": friendly, "exit_code": -1}
     except Exception as e:
-        return {"success": False, "stdout": "", "stderr": str(e), "exit_code": -1}
+        msg = str(e)
+        low = msg.lower()
+        if "nameresolutionerror" in low or "failed to resolve" in low or "getaddrinfo" in low:
+            friendly = f"Host '{host}' could not be resolved (DNS). Use a reachable hostname, IP, or FQDN in the integration profile."
+        elif "max retries" in low or "connection" in low or "timed out" in low:
+            friendly = f"Could not connect to '{host}:{port}' (WinRM). Check the host is online, WinRM is enabled, and the port is reachable."
+        else:
+            friendly = msg
+        logger.warning("WinRM connection to %s:%s failed: %s", host, port, friendly)
+        return {"success": False, "stdout": "", "stderr": friendly, "exit_code": -1}
 
 
 async def _run_powershell_ssh(
@@ -89,7 +120,7 @@ async def _run_powershell_ssh(
             *cmd,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
-            env={"HOME": "/tmp", "PATH": "/usr/local/bin:/usr/bin:/bin"},
+            env={"HOME": tempfile.gettempdir(), "PATH": "/usr/local/bin:/usr/bin:/bin"},
         )
         stdout, stderr = await asyncio.wait_for(
             proc.communicate(), timeout=timeout
@@ -265,32 +296,40 @@ class HyperVPowerShellProvider(HyperVProvider):
         return {"connected": True, "item": data}
 
     async def start_vm(self, vm_id: str) -> dict:
-        result = await self._exec(f"Start-VM -Id '{vm_id}' -PassThru | Select-Object Name,State | ConvertTo-Json")
+        result = await self._exec(f"Get-VM -Id '{vm_id}' | Start-VM -PassThru | Select-Object Name,State | ConvertTo-Json")
         if not result["success"]:
             return {"success": False, "error": result["stderr"]}
         return {"success": True, "message": "VM started"}
 
-    async def stop_vm(self, vm_id: str, force: bool = False) -> dict:
+    async def stop_vm(self, vm_id: str, force: bool = True) -> dict:
+        # Dispatch the stop as a background job so the WinRM call returns
+        # immediately; the VM reaches Off state on its own and the UI reflects
+        # it on the next refresh. Avoids the call hanging while the guest
+        # shuts down (which made the Stop button appear to do nothing).
         flag = "-Force" if force else ""
-        result = await self._exec(f"Stop-VM -Id '{vm_id}' {flag} -PassThru | Select-Object Name,State | ConvertTo-Json")
+        result = await self._exec(f"Get-VM -Id '{vm_id}' | Stop-VM {flag} -AsJob | Out-Null")
         if not result["success"]:
             return {"success": False, "error": result["stderr"]}
-        return {"success": True, "message": "VM stopped"}
+        return {"success": True, "message": "VM stop requested"}
 
     async def restart_vm(self, vm_id: str) -> dict:
-        result = await self._exec(f"Restart-VM -Id '{vm_id}' -PassThru | Select-Object Name,State | ConvertTo-Json")
+        # Dispatch the restart as a background job so the WinRM call returns
+        # immediately (Restart-VM otherwise waits for graceful shutdown and
+        # can hang). The VM restarts on its own and the UI reflects it on the
+        # next refresh.
+        result = await self._exec(f"Get-VM -Id '{vm_id}' | Restart-VM -Force -AsJob | Out-Null")
         if not result["success"]:
             return {"success": False, "error": result["stderr"]}
-        return {"success": True, "message": "VM restarted"}
+        return {"success": True, "message": "VM restart requested"}
 
     async def pause_vm(self, vm_id: str) -> dict:
-        result = await self._exec(f"Suspend-VM -Id '{vm_id}' -PassThru | Select-Object Name,State | ConvertTo-Json")
+        result = await self._exec(f"Get-VM -Id '{vm_id}' | Suspend-VM -PassThru | Select-Object Name,State | ConvertTo-Json")
         if not result["success"]:
             return {"success": False, "error": result["stderr"]}
         return {"success": True, "message": "VM paused"}
 
     async def resume_vm(self, vm_id: str) -> dict:
-        result = await self._exec(f"Resume-VM -Id '{vm_id}' -PassThru | Select-Object Name,State | ConvertTo-Json")
+        result = await self._exec(f"Get-VM -Id '{vm_id}' | Resume-VM -PassThru | Select-Object Name,State | ConvertTo-Json")
         if not result["success"]:
             return {"success": False, "error": result["stderr"]}
         return {"success": True, "message": "VM resumed"}

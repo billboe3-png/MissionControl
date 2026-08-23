@@ -27,6 +27,14 @@ from app.models.db.credential_profile import CredentialProfile
 from app.models.db.project import Project
 from app.models.db.remote_host import RemoteHost
 
+# Import plugin models so their tables are included in Base.metadata.create_all()
+# These models are normally imported during app startup (plugin loading), but tests
+# need them registered before create_all() is called.
+from app.plugins.installed.git.models import GitRepository  # noqa: F401
+from app.plugins.installed.official_docker.models import DockerHost  # noqa: F401
+from app.plugins.installed.official_mikrotik.models import MikroTikServer  # noqa: F401
+from app.plugins.installed.official_veeam.models import VeeamBackupServer  # noqa: F401
+
 
 class _FakeUser:
     """Minimal user object for test auth bypass."""
@@ -151,6 +159,25 @@ def mock_docker(monkeypatch):
     monkeypatch.setattr(
         "app.providers.remote_provider.RemoteProvider.get_remote_data",
         fake_remote_data,
+    )
+
+    def fake_docker_summary(_session):
+        return {
+            "available": True,
+            "host_count": 1,
+            "container_count": 2,
+            "running": 2,
+            "stopped": 0,
+            "unhealthy": 0,
+            "containers": [
+                {"id": "abc", "name": "test"},
+                {"id": "def", "name": "web"},
+            ],
+        }
+
+    monkeypatch.setattr(
+        "app.plugins.installed.official_docker.cache.cache_manager.get_summary",
+        fake_docker_summary,
     )
 
 

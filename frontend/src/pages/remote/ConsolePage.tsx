@@ -6,6 +6,8 @@ import "@xterm/xterm/css/xterm.css";
 import PageHeader from "../../components/common/PageHeader";
 import { useToast } from "../../contexts/ToastContext";
 import { hostsApi, HostData } from "../../services/remote";
+import { agentsApi, Agent } from "../../services/agents";
+import { getStoredToken } from "../../services/auth";
 
 export default function ConsolePage() {
     const { showToast } = useToast();
@@ -14,6 +16,9 @@ export default function ConsolePage() {
     const [selectedHostId, setSelectedHostId] = useState<number | "">(
         () => Number(searchParams.get("host_id")) || "",
     );
+    const [agents, setAgents] = useState<Agent[]>([]);
+    const [viaAgent, setViaAgent] = useState(true);
+    const [selectedAgentId, setSelectedAgentId] = useState<number | "">("");
     const [connected, setConnected] = useState(false);
     const [connecting, setConnecting] = useState(false);
     const termRef = useRef<HTMLDivElement>(null);
@@ -23,8 +28,15 @@ export default function ConsolePage() {
 
     useEffect(() => {
         hostsApi.list().then((d) => setHosts(d.items)).catch(() => {});
+        agentsApi
+            .list()
+            .then((d) => setAgents(d.items.filter((a) => a.status === "online" && a.enabled)))
+            .catch(() => {});
     }, []);
 
+    // Create the terminal once and wire keyboard input to the *current* socket
+    // via wsRef. Registering onData here (not inside handleConnect) avoids
+    // stale-closure / duplicate-listener bugs that broke interactive input.
     useEffect(() => {
         if (!termRef.current) return;
         const term = new Terminal({
@@ -42,10 +54,31 @@ export default function ConsolePage() {
         term.loadAddon(fit);
         term.open(termRef.current);
         fit.fit();
+        term.focus();
         termInstance.current = term;
         fitAddon.current = fit;
 
-        const onResize = () => fit.fit();
+        const onData = (data: string) => {
+            const ws = wsRef.current;
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({ type: "input", data }));
+            }
+        };
+        term.onData(onData);
+
+        const onResize = () => {
+            fit.fit();
+            const ws = wsRef.current;
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(
+                    JSON.stringify({
+                        type: "resize",
+                        width: term.cols,
+                        height: term.rows,
+                    }),
+                );
+            }
+        };
         window.addEventListener("resize", onResize);
 
         return () => {
@@ -57,19 +90,27 @@ export default function ConsolePage() {
 
     const handleConnect = useCallback(() => {
         if (!selectedHostId || connected) return;
+        if (viaAgent && !selectedAgentId) return;
 
         setConnecting(true);
         const term = termInstance.current;
         if (!term) return;
 
         term.clear();
-        term.writeln("Connecting...");
+        term.writeln(
+            viaAgent ? "Connecting via agent..." : "Connecting...",
+        );
 
         const proto = window.location.protocol === "https:" ? "wss:" : "ws:";
-        const host = hosts.find((h) => h.id === selectedHostId);
-        const ws = new WebSocket(
-            `${proto}//${window.location.host}/api/v1/remote/console?host_id=${selectedHostId}`,
-        );
+        const token = getStoredToken();
+        let url = `${proto}//${window.location.host}/api/v1/remote/console?host_id=${selectedHostId}`;
+        if (viaAgent) {
+            url = `${proto}//${window.location.host}/api/v1/remote/console-agent?host_id=${selectedHostId}&agent_id=${selectedAgentId}`;
+        }
+        if (token) {
+            url += `&token=${encodeURIComponent(token)}`;
+        }
+        const ws = new WebSocket(url);
         wsRef.current = ws;
 
         ws.onopen = () => {};
@@ -83,11 +124,13 @@ export default function ConsolePage() {
                 term.focus();
                 if (fitAddon.current) fitAddon.current.fit();
                 if (ws.readyState === WebSocket.OPEN) {
-                    ws.send(JSON.stringify({
-                        type: "resize",
-                        width: term.cols,
-                        height: term.rows,
-                    }));
+                    ws.send(
+                        JSON.stringify({
+                            type: "resize",
+                            width: term.cols,
+                            height: term.rows,
+                        }),
+                    );
                 }
             } else if (msg.type === "output") {
                 term.write(msg.data);
@@ -114,27 +157,7 @@ export default function ConsolePage() {
             setConnecting(false);
             setConnected(false);
         };
-
-        term.onData((data) => {
-            if (ws.readyState === WebSocket.OPEN) {
-                ws.send(JSON.stringify({ type: "input", data }));
-            }
-        });
-
-        const resizeHandler = () => {
-            if (fitAddon.current) fitAddon.current.fit();
-            if (ws.readyState === WebSocket.OPEN) {
-                ws.send(
-                    JSON.stringify({
-                        type: "resize",
-                        width: term.cols,
-                        height: term.rows,
-                    }),
-                );
-            }
-        };
-        window.addEventListener("resize", resizeHandler);
-    }, [selectedHostId, connected, hosts]);
+    }, [selectedHostId, connected, viaAgent, selectedAgentId]);
 
     const handleDisconnect = useCallback(() => {
         wsRef.current?.close();
@@ -146,6 +169,8 @@ export default function ConsolePage() {
             wsRef.current?.close();
         };
     }, []);
+
+    const focusTerminal = () => termInstance.current?.focus();
 
     return (
         <>
@@ -177,7 +202,7 @@ export default function ConsolePage() {
                         <button
                             className="btn btn-primary"
                             onClick={handleConnect}
-                            disabled={connecting || !selectedHostId}
+                            disabled={connecting || !selectedHostId || (viaAgent && !selectedAgentId)}
                         >
                             {connecting ? "Connecting…" : "Connect"}
                         </button>
@@ -190,8 +215,44 @@ export default function ConsolePage() {
                         </button>
                     )}
                 </div>
+                <div className="form-row">
+                    <label className="form-label">Connection</label>
+                    <select
+                        className="form-select"
+                        value={viaAgent ? "agent" : "direct"}
+                        onChange={(e) => {
+                            setViaAgent(e.target.value === "agent");
+                            if (connected) handleDisconnect();
+                        }}
+                        disabled={connected}
+                    >
+                        <option value="direct">Direct (server → host)</option>
+                        <option value="agent">Via agent relay</option>
+                    </select>
+                    {viaAgent && (
+                        <select
+                            className="form-select"
+                            value={selectedAgentId}
+                            onChange={(e) => {
+                                setSelectedAgentId(Number(e.target.value) || "");
+                                if (connected) handleDisconnect();
+                            }}
+                            disabled={connected}
+                        >
+                            <option value="">Select an agent…</option>
+                            {agents.map((a) => (
+                                <option key={a.id} value={a.id}>
+                                    {a.name} ({a.hostname})
+                                </option>
+                            ))}
+                        </select>
+                    )}
+                </div>
             </div>
-            <div className="console-terminal-wrapper">
+            <div
+                className="console-terminal-wrapper"
+                onClick={focusTerminal}
+            >
                 <div ref={termRef} className="console-terminal" />
             </div>
         </>

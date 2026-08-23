@@ -53,29 +53,51 @@ class AgentClient:
         for attempt in range(self.max_retries):
             try:
                 client = await self._get_client()
+                logger.debug(
+                    "HTTP %s %s headers=%s api_key_present=%s",
+                    method.upper(),
+                    path,
+                    {
+                        k: ("***" if k.lower() == "x-agent-api-key" else v)
+                        for k, v in client.headers.items()
+                    },
+                    bool(self.api_key),
+                )
                 response = await getattr(client, method)(path, **kwargs)
+                if response.status_code == 422:
+                    logger.warning(
+                        "422 response body from %s %s: %s",
+                        method.upper(),
+                        path,
+                        response.text[:400],
+                    )
                 response.raise_for_status()
                 return response.json()
             except httpx.HTTPStatusError as e:
                 if e.response.status_code < 500:
                     raise
                 last_error = e
-                delay = min(2 ** attempt, 30)
+                delay = min(2**attempt, 30)
                 logger.warning(
-                    "Server error %d on %s %s (attempt %d/%d), "
-                    "retrying in %ds",
-                    e.response.status_code, method, path,
-                    attempt + 1, self.max_retries, delay,
+                    "Server error %d on %s %s (attempt %d/%d), retrying in %ds",
+                    e.response.status_code,
+                    method,
+                    path,
+                    attempt + 1,
+                    self.max_retries,
+                    delay,
                 )
                 await asyncio.sleep(delay)
             except (httpx.ConnectError, httpx.ConnectTimeout) as e:
                 last_error = e
-                delay = min(2 ** attempt, 30)
+                delay = min(2**attempt, 30)
                 logger.warning(
-                    "Connection failed on %s %s (attempt %d/%d), "
-                    "retrying in %ds",
-                    method, path,
-                    attempt + 1, self.max_retries, delay,
+                    "Connection failed on %s %s (attempt %d/%d), retrying in %ds",
+                    method,
+                    path,
+                    attempt + 1,
+                    self.max_retries,
+                    delay,
                 )
                 self._client = None
                 await asyncio.sleep(delay)
@@ -85,17 +107,13 @@ class AgentClient:
         self, path: str, data: dict[str, Any] | None = None
     ) -> dict[str, Any]:
         """Send a POST request."""
-        return await self._request_with_retry(
-            "post", path, json=data or {}
-        )
+        return await self._request_with_retry("post", path, json=data or {})
 
     async def get(
         self, path: str, params: dict[str, Any] | None = None
     ) -> dict[str, Any]:
         """Send a GET request."""
-        return await self._request_with_retry(
-            "get", path, params=params
-        )
+        return await self._request_with_retry("get", path, params=params)
 
     async def upload_file(
         self, path: str, file_path: str, file_name: str
@@ -108,9 +126,7 @@ class AgentClient:
         response.raise_for_status()
         return response.json()
 
-    async def download_file(
-        self, path: str, save_path: str
-    ) -> str:
+    async def download_file(self, path: str, save_path: str) -> str:
         """Download a file from the server."""
         client = await self._get_client()
         response = await client.get(path)

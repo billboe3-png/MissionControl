@@ -34,7 +34,7 @@ class PluginStatus(StrEnum):
 class PluginManifest(BaseModel):
     """Plugin manifest schema — validated from plugin.json."""
 
-    id: str = Field(..., min_length=1, max_length=100, pattern=r"^[a-z0-9][a-z0-9\-]*$")
+    id: str = Field(..., min_length=1, max_length=100, pattern=r"^[a-z0-9][a-z0-9_\-]*$")
     version: str = Field(..., min_length=1, max_length=50)
     name: str = Field(..., min_length=1, max_length=200)
     description: str | None = Field(None, max_length=2000)
@@ -55,7 +55,7 @@ class PluginManifest(BaseModel):
 class PluginCreate(BaseModel):
     """Request body for registering a plugin."""
 
-    slug: str = Field(..., min_length=1, max_length=100, pattern=r"^[a-z0-9][a-z0-9\-]*$")
+    slug: str = Field(..., min_length=1, max_length=100, pattern=r"^[a-z0-9][a-z0-9_\-]*$")
     name: str = Field(..., min_length=1, max_length=200)
     version: str = Field(..., min_length=1, max_length=50)
     description: str | None = None

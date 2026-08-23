@@ -3,6 +3,7 @@ import PageHeader from "../../components/common/PageHeader";
 import EmptyState from "../../components/common/EmptyState";
 import StatusBadge from "../../components/common/StatusBadge";
 import { useToast } from "../../contexts/ToastContext";
+import { formatDateTime } from "../../utils/dateFormat";
 import {
     automationApi,
     EventTriggerData,
@@ -72,7 +73,7 @@ export default function TriggersPage() {
                                 </div>
                                 <div className="text-muted" style={{ fontSize: "0.8rem" }}>
                                     Triggered {item.trigger_count} times
-                                    {item.last_triggered ? ` · Last: ${new Date(item.last_triggered).toLocaleString()}` : ""}
+                                    {item.last_triggered ? ` · Last: ${formatDateTime(item.last_triggered)}` : ""}
                                 </div>
                             </div>
                             <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>

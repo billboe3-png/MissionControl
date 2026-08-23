@@ -8,6 +8,7 @@ export interface IntegrationProfile {
     integration_type: string;
     description: string | null;
     enabled: boolean;
+    agent_id: number | null;
     base_url: string | null;
     username: string | null;
     tenant_id: string | null;
@@ -36,6 +37,7 @@ export interface IntegrationProfileCreate {
     integration_type: string;
     description?: string;
     enabled?: boolean;
+    agent_id?: number | null;
     base_url?: string;
     username?: string;
     password?: string;

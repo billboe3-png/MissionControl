@@ -10,6 +10,18 @@ from .connectors.base import RemoteConnector
 logger = logging.getLogger("mc-agent")
 
 
+def _parse_plugins(raw: Any) -> set[str] | None:
+    """Return the set of plugin keys for a target.
+
+    Returns None when the target has no plugin selection (collect everything).
+    """
+    if not raw:
+        return None
+    if isinstance(raw, list):
+        return {str(p).strip() for p in raw if str(p).strip()}
+    return {p.strip() for p in str(raw).split(",") if p.strip()}
+
+
 def _create_connector(target: dict[str, Any]) -> RemoteConnector | None:
     """Factory: create the right connector based on protocol."""
     protocol = target.get("protocol", "psremoting")
@@ -46,7 +58,7 @@ class RemoteManager:
             if tid not in new_ids:
                 connector = self._connectors.pop(tid, None)
                 if connector:
-                    asyncio.create_task(connector.disconnect())
+                    self._tasks.append(asyncio.create_task(connector.disconnect()))
                 del self._targets[tid]
 
         for target in targets:
@@ -62,7 +74,7 @@ class RemoteManager:
                     or old.get("protocol") != target.get("protocol")
                 ):
                     old_conn = self._connectors.pop(tid)
-                    asyncio.create_task(old_conn.disconnect())
+                    self._tasks.append(asyncio.create_task(old_conn.disconnect()))
                     connector = _create_connector(target)
                     if connector:
                         self._connectors[tid] = connector
@@ -101,10 +113,24 @@ class RemoteManager:
                     return
 
                 system = await connector.collect_system_inventory()
-                hyperv = await connector.collect_hyperv_inventory()
-                proxmox = await connector.collect_proxmox_inventory()
-                veeam = await connector.collect_veeam_inventory()
                 services = await connector.collect_services()
+
+                plugins = _parse_plugins(target.get("target_plugins"))
+                hyperv = (
+                    await connector.collect_hyperv_inventory()
+                    if plugins is None or "hyperv" in plugins
+                    else None
+                )
+                proxmox = (
+                    await connector.collect_proxmox_inventory()
+                    if plugins is None or "proxmox" in plugins
+                    else None
+                )
+                veeam = (
+                    await connector.collect_veeam_inventory()
+                    if plugins is None or "veeam" in plugins
+                    else None
+                )
 
                 inventory: dict[str, Any] = {
                     "system": system,

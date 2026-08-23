@@ -101,14 +101,25 @@ async def create_remote_target(
         "enabled": payload.enabled,
         "tags": payload.tags,
         "notes": payload.notes,
+        "target_plugins": payload.target_plugins,
     }
 
-    if payload.password:
+    if payload.password is not None and payload.password != "":
         kwargs["password_encrypted"] = cipher.encrypt(payload.password)
-    if payload.ssh_key:
+    if payload.ssh_key is not None and payload.ssh_key != "":
         kwargs["ssh_key_encrypted"] = cipher.encrypt(payload.ssh_key)
 
+    if not kwargs.get("password_encrypted") and not kwargs.get("ssh_key_encrypted"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Password or SSH key is required",
+        )
+
     target = AgentRemoteTargetRepository.create(db, agent_id=agent_id, **kwargs)
+
+    from app.plugins.installed.official_veeam.bridge import sync_target_to_server
+
+    sync_target_to_server(db, target)
     return RemoteTargetResponse.model_validate(target)
 
 
@@ -150,21 +161,29 @@ async def update_remote_target(
 
     if "password" in update_data:
         pwd = update_data.pop("password")
-        if pwd is not None:
+        if pwd:
             update_data["password_encrypted"] = cipher.encrypt(pwd)
-        else:
+        elif "password_encrypted" not in update_data:
             update_data["password_encrypted"] = None
 
     if "ssh_key" in update_data:
         key = update_data.pop("ssh_key")
-        if key is not None:
+        if key:
             update_data["ssh_key_encrypted"] = cipher.encrypt(key)
-        else:
+        elif "ssh_key_encrypted" not in update_data:
             update_data["ssh_key_encrypted"] = None
+
+    if "target_plugins" in update_data and update_data["target_plugins"] is None:
+        target.target_plugins = None
+        update_data.pop("target_plugins")
 
     updated = AgentRemoteTargetRepository.update(db, target_id, **update_data)
     if updated is None:
         raise HTTPException(status_code=404, detail="Target not found")
+
+    from app.plugins.installed.official_veeam.bridge import sync_target_to_server
+
+    sync_target_to_server(db, updated)
     return RemoteTargetResponse.model_validate(updated)
 
 
@@ -182,6 +201,10 @@ async def delete_remote_target(
     target = AgentRemoteTargetRepository.get_by_id(db, target_id)
     if target is None or target.agent_id != agent_id:
         raise HTTPException(status_code=404, detail="Target not found")
+
+    from app.plugins.installed.official_veeam.bridge import remove_target_server
+
+    remove_target_server(db, target_id)
     AgentRemoteTargetRepository.delete(db, target_id)
 
 

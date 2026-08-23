@@ -488,7 +488,7 @@ class MockProxmoxProvider(ProxmoxProvider):
             }
         return {
             "connected": True,
-            "latency_ms": random.randint(3, 15),
+            "latency_ms": random.randint(3, 15),  # noqa: S311 - mock latency jitter (non-crypto)
             "message": "Connected to Proxmox VE cluster (mock)",
             "version": "8.2.4",
             "hostname": "pve-cluster01",
@@ -664,7 +664,7 @@ class MockProxmoxProvider(ProxmoxProvider):
                     "success": True,
                     "message": f"Snapshot '{snap_name}' created",
                     "snapshot": {
-                        "id": f"snap/{random.randint(1000000,9999999)}",
+                        "id": f"snap/{random.randint(1000000,9999999)}",  # noqa: S311 - mock snapshot id (non-crypto)
                         "name": snap_name,
                         "vm_name": vm["name"],
                         "vm_id": vm_id,

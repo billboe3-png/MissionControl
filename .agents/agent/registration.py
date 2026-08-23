@@ -41,8 +41,8 @@ class RegistrationManager:
             fingerprint["cpu"] = "unknown"
 
         try:
-            import subprocess
             import os
+            import subprocess
 
             system = platform.system()
             if system == "Linux":
@@ -76,7 +76,7 @@ class RegistrationManager:
                         timeout=10,
                         stderr=subprocess.DEVNULL,
                     ).decode(errors="replace")
-                    lines = [l.strip() for l in out.strip().split("\n") if l.strip() and l.strip().upper() not in ("SERIALNUMBER", "MANUFACTURER", "PRODUCT")]
+                    lines = [l.strip() for l in out.strip().split("\n") if l.strip() and l.strip().upper() not in ("SERIALNUMBER", "MANUFACTURER", "PRODUCT")]  # noqa: E741
                     if len(lines) >= 3:
                         fingerprint["board_serial"] = lines[0]
                         fingerprint["board_vendor"] = lines[1]
@@ -90,7 +90,7 @@ class RegistrationManager:
                         timeout=10,
                         stderr=subprocess.DEVNULL,
                     ).decode(errors="replace")
-                    lines = [l.strip() for l in out.strip().split("\n") if l.strip() and l.strip().upper() not in ("SERIALNUMBER", "MODEL", "MANUFACTURER")]
+                    lines = [l.strip() for l in out.strip().split("\n") if l.strip() and l.strip().upper() not in ("SERIALNUMBER", "MODEL", "MANUFACTURER")]  # noqa: E741
                     if len(lines) >= 3:
                         fingerprint["disk_serial"] = lines[0]
                         fingerprint["disk_model"] = lines[1]
@@ -141,7 +141,7 @@ class RegistrationManager:
         except Exception:
             pass
 
-        try:
+        try:  # noqa: SIM105
             fingerprint["python_build"] = platform.python_build()
         except Exception:
             pass

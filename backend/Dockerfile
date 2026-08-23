@@ -17,7 +17,9 @@ RUN pip install --no-cache-dir --upgrade pip && \
 
 COPY . .
 
-RUN chmod +x entrypoint.sh
+RUN mkdir -p /app/app/logs /app/app/data /app/logs /app/data && \
+    chown -R app:root /app && \
+    chmod +x entrypoint.sh
 
 EXPOSE 8000
 

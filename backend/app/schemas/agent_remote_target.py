@@ -18,6 +18,7 @@ class RemoteTargetCreate(BaseModel):
     enabled: bool = True
     tags: str | None = None
     notes: str | None = None
+    target_plugins: str | None = None
 
 
 class RemoteTargetUpdate(BaseModel):
@@ -31,6 +32,7 @@ class RemoteTargetUpdate(BaseModel):
     enabled: bool | None = None
     tags: str | None = None
     notes: str | None = None
+    target_plugins: str | None = None
 
 
 class RemoteTargetResponse(BaseModel):
@@ -49,6 +51,8 @@ class RemoteTargetResponse(BaseModel):
     last_error: str | None = None
     created_at: datetime
     updated_at: datetime
+
+    target_plugins: str | None = None
 
     model_config = {"from_attributes": True}
 

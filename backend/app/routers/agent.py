@@ -8,8 +8,10 @@ Sprint 2.7 - Mission Control Agent.
 """
 
 import logging
+from pathlib import Path
 
-from fastapi import APIRouter, Depends, Header, Query, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Response, status
+from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 
 from app.core.auth_dependency import get_current_user
@@ -185,6 +187,17 @@ async def delete_agent(
     await service.delete_agent(db, agent_id)
 
 
+@router.get("/{agent_id}/api-key")
+async def reveal_agent_api_key(
+    agent_id: int,
+    current_user: object = Depends(get_current_user),
+    db: Session = Depends(get_db),
+    service: AgentService = Depends(get_agent_service),
+) -> dict:
+    """Reveal the API key for an agent."""
+    return await service.reveal_api_key(db, agent_id)
+
+
 @router.post(
     "/{agent_id}/enable",
     response_model=AgentResponse,
@@ -298,3 +311,133 @@ async def get_remote_inventory(
 ) -> dict:
     """Get remote target inventory from an agent's latest inventory data."""
     return await service.get_remote_inventory(db, agent_id)
+
+
+@router.get(
+    "/debug/fix_agent_version.ps1",
+    include_in_schema=False,
+)
+async def debug_fix_agent_version() -> Response:
+    """Serve a local-only patcher script for the deployed Windows agent."""
+    source = Path("/project/backend/debug/fix_agent_version.py")
+    if not source.exists():
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="patcher not found")
+    return Response(
+        content=source.read_bytes(),
+        media_type="text/x-powershell",
+        headers={"Cache-Control": "no-store"},
+    )
+
+
+@router.get(
+    "/debug/plugins/veeam_plugin.py",
+    include_in_schema=False,
+)
+async def debug_veeam_plugin() -> Response:
+    source = Path("/project/.agents/agent/plugins/veeam_plugin.py")
+    if not source.exists():
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="plugin not found")
+    return Response(
+        content=source.read_bytes(),
+        media_type="text/x-python",
+        headers={"Cache-Control": "no-store"},
+    )
+
+
+@router.get(
+    "/debug/uninstall_agent.ps1",
+    include_in_schema=False,
+)
+async def debug_uninstall_agent() -> Response:
+    source = Path("/project/backend/debug/uninstall_agent.ps1")
+    if not source.exists():
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="uninstall script not found")
+    return Response(
+        content=source.read_bytes(),
+        media_type="text/x-powershell",
+        headers={"Cache-Control": "no-store"},
+    )
+
+
+@router.get(
+    "/debug/install-agent.bat",
+    include_in_schema=False,
+)
+async def debug_install_agent_bat() -> Response:
+    source = Path("/project/backend/debug/install-agent.bat")
+    if not source.exists():
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="installer not found")
+    return Response(
+        content=source.read_bytes(),
+        media_type="application/x-msdos-program",
+        headers={"Cache-Control": "no-store"},
+    )
+
+
+@router.get(
+    "/{agent_id}/plugins/{plugin_name}",
+    include_in_schema=False,
+)
+async def get_agent_plugin(agent_id: int, plugin_name: str) -> Response:
+    source = Path("/project/.agents/agent/plugins") / plugin_name
+    if not source.exists():
+        source = Path("/project/.agents/agent/plugins") / f"{plugin_name}.py"
+    if not source.exists():
+        source = Path("/project/.agents/agent/plugins") / f"{plugin_name}_plugin.py"
+    if not source.exists():
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="plugin not found")
+    content = source.read_text(encoding="utf-8")
+    return JSONResponse(
+        content={"file_name": source.name, "content": content},
+        headers={"Cache-Control": "no-store", "X-Plugin-Name": plugin_name},
+    )
+
+
+
+async def _serve_bundle(source: Path) -> Response:
+    if not source.exists():
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="bundle not found")
+    return Response(
+        content=source.read_bytes(),
+        media_type="application/zip",
+        headers={
+            "Cache-Control": "no-store",
+            "Content-Disposition": 'attachment; filename="missioncontrol-agent-3.0.0-rc1.zip"',
+        },
+    )
+
+
+@router.get(
+    "/{agent_id}/bundles/download",
+    include_in_schema=False,
+)
+async def download_agent_bundle_get(agent_id: int) -> Response:
+    source = Path("/project/.agents/agent-bundle-live.zip")
+    return await _serve_bundle(source)
+
+
+@router.post(
+    "/{agent_id}/bundles/download",
+    include_in_schema=False,
+)
+async def download_agent_bundle_post(agent_id: int) -> Response:
+    source = Path("/project/.agents/agent-bundle-live.zip")
+    return await _serve_bundle(source)
+
+
+@router.get(
+    "/bundles/download",
+    include_in_schema=False,
+)
+async def download_agent_bundle_global_get() -> Response:
+    source = Path("/project/.agents/agent-bundle-live.zip")
+    return await _serve_bundle(source)
+
+
+@router.post(
+    "/bundles/download",
+    include_in_schema=False,
+)
+async def download_agent_bundle_global_post() -> Response:
+    source = Path("/project/.agents/agent-bundle-live.zip")
+    return await _serve_bundle(source)

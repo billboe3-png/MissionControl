@@ -16,6 +16,7 @@ Features:
 - Never raises exceptions to caller
 """
 
+import contextlib
 import logging
 import time
 
@@ -118,7 +119,7 @@ class LDAPActiveDirectoryProvider(ActiveDirectoryProvider):
         """Discover default naming context from server if base_dn is empty."""
         try:
             if server.info and server.info.naming_contexts:
-                dn = str(list(server.info.naming_contexts)[0])
+                dn = str(next(iter(server.info.naming_contexts)))
                 self._config = {**self._config, "base_dn": dn}
                 logger.info("AD LDAP: discovered base_dn=%s", dn)
         except Exception as e:
@@ -127,10 +128,8 @@ class LDAPActiveDirectoryProvider(ActiveDirectoryProvider):
     def _disconnect(self) -> None:
         """Close LDAP connection."""
         if self._connection is not None:
-            try:
+            with contextlib.suppress(Exception):
                 self._connection.unbind()
-            except Exception:
-                pass
             self._connection = None
 
     def _search(
@@ -486,10 +485,7 @@ class LDAPActiveDirectoryProvider(ActiveDirectoryProvider):
                 return {"success": False, "error": "Could not read userAccountControl"}
 
             current_uac = int(self._connection.entries[0].userAccountControl)
-            if disabled:
-                new_uac = current_uac | 0x2
-            else:
-                new_uac = current_uac & ~0x2
+            new_uac = current_uac | 2 if disabled else current_uac & ~2
 
             self._connection.modify(
                 dn,

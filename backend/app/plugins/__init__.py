@@ -8,4 +8,4 @@ from app.plugins.agent import AgentPluginSDK
 from app.plugins.base import PluginSDK
 from app.plugins.server import ServerPluginSDK
 
-__all__ = ["PluginSDK", "ServerPluginSDK", "AgentPluginSDK"]
+__all__ = ["AgentPluginSDK", "PluginSDK", "ServerPluginSDK"]

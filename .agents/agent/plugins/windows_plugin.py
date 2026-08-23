@@ -14,7 +14,7 @@ class WindowsPlugin(AgentPlugin):
     """Windows-specific inventory and management plugin."""
 
     name = "windows"
-    version = "1.0.0"
+    version = "3.0.0-rc1"
     description = "Windows system management plugin"
     platform_required = "windows"
 
@@ -23,9 +23,7 @@ class WindowsPlugin(AgentPlugin):
 
     async def initialize(self, context: dict[str, Any]) -> bool:
         self._context = context
-        logger.info(
-            "Windows plugin initialized for %s", platform.node()
-        )
+        logger.info("Windows plugin initialized for %s", platform.node())
         return True
 
     async def collect_inventory(self) -> dict[str, Any]:
@@ -61,13 +59,9 @@ class WindowsPlugin(AgentPlugin):
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.DEVNULL,
             )
-            stdout, _ = await asyncio.wait_for(
-                proc.communicate(), timeout=30
-            )
+            stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=30)
             return [
-                h.strip()
-                for h in stdout.decode().strip().split("\n")
-                if h.strip()
+                h.strip() for h in stdout.decode().strip().split("\n") if h.strip()
             ][:50]
         except Exception:
             return []
@@ -84,9 +78,7 @@ class WindowsPlugin(AgentPlugin):
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.DEVNULL,
             )
-            stdout, _ = await asyncio.wait_for(
-                proc.communicate(), timeout=30
-            )
+            stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=30)
             import json
 
             data = json.loads(stdout.decode() or "[]")
@@ -115,9 +107,7 @@ class WindowsPlugin(AgentPlugin):
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.DEVNULL,
             )
-            stdout, _ = await asyncio.wait_for(
-                proc.communicate(), timeout=30
-            )
+            stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=30)
             import json
 
             data = json.loads(stdout.decode() or "[]")
@@ -133,9 +123,7 @@ class WindowsPlugin(AgentPlugin):
         except Exception:
             return []
 
-    async def _get_service_status(
-        self, args: dict[str, Any]
-    ) -> dict[str, Any]:
+    async def _get_service_status(self, args: dict[str, Any]) -> dict[str, Any]:
         service = args.get("service", "")
         proc = await asyncio.create_subprocess_exec(
             "powershell",
@@ -146,9 +134,7 @@ class WindowsPlugin(AgentPlugin):
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
-        stdout, stderr = await asyncio.wait_for(
-            proc.communicate(), timeout=30
-        )
+        stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=30)
         return {
             "success": proc.returncode == 0,
             "stdout": stdout.decode(errors="replace"),
@@ -156,9 +142,7 @@ class WindowsPlugin(AgentPlugin):
             "exit_code": proc.returncode,
         }
 
-    async def _restart_service(
-        self, args: dict[str, Any]
-    ) -> dict[str, Any]:
+    async def _restart_service(self, args: dict[str, Any]) -> dict[str, Any]:
         service = args.get("service", "")
         proc = await asyncio.create_subprocess_exec(
             "powershell",
@@ -167,9 +151,7 @@ class WindowsPlugin(AgentPlugin):
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
-        stdout, stderr = await asyncio.wait_for(
-            proc.communicate(), timeout=60
-        )
+        stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=60)
         return {
             "success": proc.returncode == 0,
             "stdout": stdout.decode(errors="replace"),
@@ -177,9 +159,7 @@ class WindowsPlugin(AgentPlugin):
             "exit_code": proc.returncode,
         }
 
-    async def _get_event_log(
-        self, args: dict[str, Any]
-    ) -> dict[str, Any]:
+    async def _get_event_log(self, args: dict[str, Any]) -> dict[str, Any]:
         log_name = args.get("log_name", "System")
         entries = args.get("entries", "50")
         proc = await asyncio.create_subprocess_exec(
@@ -192,9 +172,7 @@ class WindowsPlugin(AgentPlugin):
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
-        stdout, stderr = await asyncio.wait_for(
-            proc.communicate(), timeout=30
-        )
+        stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=30)
         return {
             "success": proc.returncode == 0,
             "stdout": stdout.decode(errors="replace"),

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import PageHeader from "../../components/common/PageHeader";
 import StatusBadge from "../../components/common/StatusBadge";
 import DataTable, { Column } from "../../components/common/DataTable";
+import LoadingButton from "../../components/common/LoadingButton";
 import {
     identityApi,
     ADSummary,
@@ -40,6 +41,7 @@ export default function ActiveDirectoryPage() {
     const [modal, setModal] = useState<ModalState>(null);
     const [actionResult, setActionResult] = useState<ADActionResponse | null>(null);
     const [userSearch, setUserSearch] = useState("");
+    const [busyAction, setBusyAction] = useState<string | null>(null);
 
     const pid = selectedDomainId;
 
@@ -142,16 +144,23 @@ export default function ActiveDirectoryPage() {
                     >
                         Reset PW
                     </button>
-                    <button
+                    <LoadingButton
                         className="btn btn-sm btn-warning"
+                        loading={busyAction === `unlock:${row.sam_account_name}`}
                         onClick={async () => {
-                            const res = await identityApi.unlockAccount(row.sam_account_name, pid);
-                            setActionResult(res);
+                            const key = `unlock:${row.sam_account_name}`;
+                            setBusyAction(key);
+                            try {
+                                const res = await identityApi.unlockAccount(row.sam_account_name, pid);
+                                setActionResult(res);
+                            } finally {
+                                setBusyAction(null);
+                            }
                         }}
                         title="Unlock Account"
                     >
                         Unlock
-                    </button>
+                    </LoadingButton>
                     {row.enabled ? (
                         <button
                             className="btn btn-sm btn-warning"
@@ -161,17 +170,24 @@ export default function ActiveDirectoryPage() {
                             Disable
                         </button>
                     ) : (
-                        <button
+                        <LoadingButton
                             className="btn btn-sm btn-success"
+                            loading={busyAction === `enable:${row.sam_account_name}`}
                             onClick={async () => {
-                                const res = await identityApi.enableAccount(row.sam_account_name, pid);
-                                setActionResult(res);
-                                if (res.success) reloadUsers();
+                                const key = `enable:${row.sam_account_name}`;
+                                setBusyAction(key);
+                                try {
+                                    const res = await identityApi.enableAccount(row.sam_account_name, pid);
+                                    setActionResult(res);
+                                    if (res.success) reloadUsers();
+                                } finally {
+                                    setBusyAction(null);
+                                }
                             }}
                             title="Enable Account"
                         >
                             Enable
-                        </button>
+                        </LoadingButton>
                     )}
                     <button
                         className="btn btn-sm btn-secondary"
@@ -310,10 +326,22 @@ export default function ActiveDirectoryPage() {
                 </>
             )}
             {tab === "groups" && (
-                <DataTable columns={groupColumns} data={groups} emptyMessage="No groups found" />
+                <DataTable
+                    columns={groupColumns}
+                    data={[...groups].sort((a, b) =>
+                        (a.name ?? "").localeCompare(b.name ?? ""),
+                    )}
+                    emptyMessage="No groups found"
+                />
             )}
             {tab === "devices" && (
-                <DataTable columns={deviceColumns} data={devices} emptyMessage="No devices found" />
+                <DataTable
+                    columns={deviceColumns}
+                    data={[...devices].sort((a, b) =>
+                        (a.name ?? "").localeCompare(b.name ?? ""),
+                    )}
+                    emptyMessage="No devices found"
+                />
             )}
             {tab === "health" && health && (
                 <div className="ad-overview">
@@ -457,6 +485,7 @@ function PasswordResetModal({
                         onClick={handleSubmit}
                         disabled={submitting}
                     >
+                        {submitting && <span className="spinner" />}
                         {submitting ? "Resetting..." : "Reset Password"}
                     </button>
                 </div>
@@ -537,6 +566,7 @@ function RenameUserModal({
                         onClick={handleSubmit}
                         disabled={submitting || !displayName.trim()}
                     >
+                        {submitting && <span className="spinner" />}
                         {submitting ? "Saving..." : "Save"}
                     </button>
                 </div>
@@ -560,6 +590,7 @@ function GroupMembershipModal({
     const [loading, setLoading] = useState(true);
     const [result, setResult] = useState<ADActionResponse | null>(null);
     const [groupSearch, setGroupSearch] = useState("");
+    const [busyGroup, setBusyGroup] = useState<string | null>(null);
 
     useEffect(() => {
         identityApi.getUserGroups(user.sam_account_name, profileId).then((r) => {
@@ -574,18 +605,28 @@ function GroupMembershipModal({
     );
 
     const handleAdd = async (groupName: string) => {
-        const res = await identityApi.addToGroup(user.sam_account_name, groupName, profileId);
-        setResult(res);
-        if (res.success) {
-            setUserGroups([...userGroups, { name: groupName, dn: "" }]);
+        setBusyGroup(`add:${groupName}`);
+        try {
+            const res = await identityApi.addToGroup(user.sam_account_name, groupName, profileId);
+            setResult(res);
+            if (res.success) {
+                setUserGroups([...userGroups, { name: groupName, dn: "" }]);
+            }
+        } finally {
+            setBusyGroup(null);
         }
     };
 
     const handleRemove = async (groupName: string) => {
-        const res = await identityApi.removeFromGroup(user.sam_account_name, groupName, profileId);
-        setResult(res);
-        if (res.success) {
-            setUserGroups(userGroups.filter((g) => g.name !== groupName));
+        setBusyGroup(`remove:${groupName}`);
+        try {
+            const res = await identityApi.removeFromGroup(user.sam_account_name, groupName, profileId);
+            setResult(res);
+            if (res.success) {
+                setUserGroups(userGroups.filter((g) => g.name !== groupName));
+            }
+        } finally {
+            setBusyGroup(null);
         }
     };
 
@@ -614,12 +655,13 @@ function GroupMembershipModal({
                                     {userGroups.map((g) => (
                                         <li key={g.name}>
                                             <span>{g.name}</span>
-                                            <button
+                                            <LoadingButton
                                                 className="btn btn-sm btn-danger"
+                                                loading={busyGroup === `remove:${g.name}`}
                                                 onClick={() => handleRemove(g.name)}
                                             >
                                                 Remove
-                                            </button>
+                                            </LoadingButton>
                                         </li>
                                     ))}
                                 </ul>
@@ -638,12 +680,13 @@ function GroupMembershipModal({
                                 {availableGroups.slice(0, 50).map((g) => (
                                     <li key={g.name}>
                                         <span>{g.name}</span>
-                                        <button
+                                        <LoadingButton
                                             className="btn btn-sm btn-primary"
+                                            loading={busyGroup === `add:${g.name}`}
                                             onClick={() => handleAdd(g.name)}
                                         >
                                             Add
-                                        </button>
+                                        </LoadingButton>
                                     </li>
                                 ))}
                                 {availableGroups.length === 0 && (
@@ -673,23 +716,48 @@ function ConfirmModal({
     message: string;
     confirmLabel: string;
     confirmClass: string;
-    onConfirm: () => void;
+    onConfirm: () => void | Promise<void>;
     onCancel: () => void;
 }) {
+    const [busy, setBusy] = useState(false);
+
+    const handleConfirm = async () => {
+        if (busy) return;
+        setBusy(true);
+        try {
+            await onConfirm();
+        } finally {
+            setBusy(false);
+        }
+    };
+
     return (
-        <div className="modal-overlay" onClick={onCancel}>
+        <div className="modal-overlay" onClick={busy ? undefined : onCancel}>
             <div className="modal modal-sm" onClick={(e) => e.stopPropagation()}>
                 <div className="modal-header">
                     <h3>{title}</h3>
-                    <button className="modal-close" onClick={onCancel}>×</button>
+                    <button className="modal-close" onClick={onCancel} disabled={busy}>×</button>
                 </div>
                 <div className="modal-body">
                     <p>{message}</p>
+                    {busy && (
+                        <p className="text-warning">
+                            Waiting for the agent to apply the change — this can
+                            take up to 30 seconds…
+                        </p>
+                    )}
                 </div>
                 <div className="modal-footer">
-                    <button className="btn btn-secondary" onClick={onCancel}>Cancel</button>
-                    <button className={`btn ${confirmClass}`} onClick={onConfirm}>
-                        {confirmLabel}
+                    <button className="btn btn-secondary" onClick={onCancel} disabled={busy}>
+                        Cancel
+                    </button>
+                    <button
+                        className={`btn ${confirmClass}`}
+                        onClick={handleConfirm}
+                        disabled={busy}
+                    >
+                        {busy && <span className="spinner" />}
+                        {busy ? "Working…" : confirmLabel}
                     </button>
                 </div>
             </div>

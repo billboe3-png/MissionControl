@@ -7,7 +7,7 @@
 # deploy new Mission Control instances in seconds.
 #
 # Usage:
-#   sudo ./build-template.sh [--version 3.0.0] [--storage local] [--branch main]
+#   sudo ./build-template.sh [--version 3.0.0-rc1] [--storage local] [--branch main]
 #
 # Requirements:
 #   - Run on a Debian/Ubuntu host or Proxmox VE node
@@ -23,7 +23,7 @@ set -euo pipefail
 # ---------------------------------------------------------------------------
 # Configuration
 # ---------------------------------------------------------------------------
-MC_VERSION="${MC_VERSION:-3.0.0}"
+MC_VERSION="${MC_VERSION:-3.0.0-rc1}"
 MC_BRANCH="${MC_BRANCH:-main}"
 STORAGE="${STORAGE:-local}"
 BUILD_DIR="/tmp/mc-lxc-build"

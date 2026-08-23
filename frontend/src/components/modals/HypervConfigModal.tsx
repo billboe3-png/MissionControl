@@ -4,6 +4,7 @@ import {
     integrationsApi,
     IntegrationProfile,
 } from "../../services/integrations";
+import AgentSelector from "../common/AgentSelector";
 
 interface HypervConfigModalProps {
     profile: IntegrationProfile | null;
@@ -25,6 +26,7 @@ export default function HypervConfigModal({
     const [transport, setTransport] = useState(profile?.domain ?? "winrm");
     const [timeout, setTimeout_] = useState(String(profile?.timeout ?? 30));
     const [verifySsl, setVerifySsl] = useState(profile?.verify_ssl ?? true);
+    const [agentId, setAgentId] = useState<number | null>(profile?.agent_id ?? null);
     const [loading, setLoading] = useState(false);
 
     const isEditing = profile !== null;
@@ -34,27 +36,24 @@ export default function HypervConfigModal({
         setLoading(true);
 
         try {
+            const payload: Record<string, unknown> = {
+                name,
+                base_url: baseUrl,
+                username,
+                domain: transport,
+                timeout: parseInt(timeout, 10) || 30,
+                verify_ssl: verifySsl,
+                agent_id: agentId,
+            };
+            if (password) payload.password = password;
+
             if (isEditing) {
-                await integrationsApi.update(profile.id, {
-                    name,
-                    base_url: baseUrl,
-                    username,
-                    password: password || undefined,
-                    domain: transport,
-                    timeout: parseInt(timeout, 10) || 30,
-                    verify_ssl: verifySsl,
-                });
+                await integrationsApi.update(profile!.id, payload);
             } else {
                 await integrationsApi.create({
-                    name,
+                    ...payload,
                     integration_type: "hyperv",
-                    base_url: baseUrl,
-                    username,
-                    password,
-                    domain: transport,
-                    timeout: parseInt(timeout, 10) || 30,
-                    verify_ssl: verifySsl,
-                });
+                } as Parameters<typeof integrationsApi.create>[0]);
             }
             onSave();
         } catch (err) {
@@ -85,6 +84,8 @@ export default function HypervConfigModal({
                             autoFocus
                         />
                     </div>
+
+                    <AgentSelector value={agentId} onChange={setAgentId} />
 
                     <div className="form-group">
                         <label htmlFor="hv-url">Hyper-V Host / Cluster</label>

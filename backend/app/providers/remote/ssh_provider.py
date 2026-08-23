@@ -15,6 +15,7 @@ Features:
 - Secure logging (never logs passwords, keys, or output)
 """
 
+import contextlib
 import io
 import logging
 import time
@@ -88,7 +89,16 @@ class SSHProvider(RemoteBaseProvider):
             connect_timeout = _get_timeouts()["connect"]
 
         client = paramiko.SSHClient()
-        client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        # Secure by default: reject unknown hosts (mitigates MITM). Only
+        # auto-accept when the operator has explicitly opted in via
+        # SSH_AUTO_ADD_HOST_KEYS for trusted single-purpose hosts.
+        from app.core.config import get_settings
+
+        if get_settings().ssh_auto_add_host_keys:
+            client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        else:
+            client.load_system_host_keys()
+            client.set_missing_host_key_policy(paramiko.RejectPolicy())
 
         pkey = None
         if ssh_key:
@@ -125,12 +135,10 @@ class SSHProvider(RemoteBaseProvider):
 
         if key in self._clients:
             existing = self._clients[key]
-            try:
+            with contextlib.suppress(Exception):
                 transport = existing.get_transport()
                 if transport and transport.is_active():
                     return existing
-            except Exception:
-                pass
 
             self._close_client(existing)
             del self._clients[key]
@@ -143,10 +151,8 @@ class SSHProvider(RemoteBaseProvider):
 
     def _close_client(self, client: paramiko.SSHClient) -> None:
         """Safely close an SSH client."""
-        try:
+        with contextlib.suppress(Exception):
             client.close()
-        except Exception:
-            pass
 
     def _remove_client(
         self, hostname: str, port: int, username: str
@@ -632,7 +638,7 @@ class SSHProvider(RemoteBaseProvider):
             )
 
         try:
-            _, stdout, stderr = client.exec_command(
+            _, stdout, _stderr = client.exec_command(
                 "echo MissionControl",
                 timeout=timeouts["command"],
             )
@@ -790,11 +796,14 @@ class SSHProvider(RemoteBaseProvider):
                     if chan.recv_ready():
                         data = chan.recv(4096).decode("utf-8", errors="replace")
 
-                        if not sudo_handled and password:
-                            if "[sudo] password" in data.lower():
-                                sudo_handled = True
-                                chan.send(password + "\n")
-                                continue
+                        if (
+                            not sudo_handled
+                            and password
+                            and "[sudo] password" in data.lower()
+                        ):
+                            sudo_handled = True
+                            chan.send(password + "\n")
+                            continue
 
                         q.put(("stdout", data))
 
@@ -812,11 +821,9 @@ class SSHProvider(RemoteBaseProvider):
                     time.sleep(0.1)
 
                 if cancel_event.is_set():
-                    try:
+                    with contextlib.suppress(Exception):
                         chan.send_exit_status(130)
                         chan.close()
-                    except Exception:
-                        pass
                     q.put(("exit", 130))
                     return
 
