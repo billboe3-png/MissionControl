@@ -1,0 +1,23 @@
+{
+    "id": "hyperv",
+    "name": "Hyper-V Virtualization",
+    "version": "1.0.0",
+    "description": "Hyper-V virtualization plugin — VM inventory sync, checkpoint management, health monitoring, and dashboard widgets. Wraps the existing Hyper-V PowerShell/WinRM provider with cached data and plugin-scoped REST API.",
+    "author": "Mission Control",
+    "execution_target": "server",
+    "category": "virtualization",
+    "min_core_version": "3.0.0",
+    "permissions": [
+        "read:dashboard",
+        "read:integrations",
+        "manage:integrations"
+    ],
+    "dependencies": [],
+    "capabilities": [
+        "dashboard_widget",
+        "provider",
+        "background_sync",
+        "routes",
+        "navigation"
+    ]
+}

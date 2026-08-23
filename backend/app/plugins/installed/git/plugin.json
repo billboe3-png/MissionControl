@@ -1,0 +1,23 @@
+{
+    "id": "git",
+    "name": "Git Repository Integration",
+    "version": "1.0.0",
+    "description": "Git repository monitoring plugin — repository status, branch tracking, commit history, and dashboard widgets. Monitors local and remote Git repositories via the git CLI.",
+    "author": "Mission Control",
+    "execution_target": "server",
+    "category": "source_control",
+    "min_core_version": "3.0.0",
+    "permissions": [
+        "read:dashboard",
+        "read:integrations",
+        "manage:integrations"
+    ],
+    "dependencies": [],
+    "capabilities": [
+        "dashboard_widget",
+        "provider",
+        "background_sync",
+        "routes",
+        "navigation"
+    ]
+}

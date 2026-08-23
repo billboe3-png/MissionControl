@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import os
 import time
@@ -9,15 +10,18 @@ from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from app.core.config import get_settings
+from app.core.error_handlers import register_error_handlers
 from app.core.logging_config import (
     clear_context,
     generate_request_id,
     set_request_id,
     setup_logging,
 )
-from app.core.error_handlers import register_error_handlers
 
 _TESTING = os.getenv("TESTING", "0") == "1"
+
+# Holds background task references so they are not garbage collected.
+_background_tasks: set[asyncio.Task] = set()
 
 
 class RateLimitMiddleware(BaseHTTPMiddleware):
@@ -25,14 +29,16 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
 
     def __init__(
         self,
-        app,  # noqa: B008
+        app,
         default_limit: int = 60,
         auth_limit: int = 5,
+        authenticated_limit: int = 600,
         window: int = 60,
     ):
         super().__init__(app)
         self.default_limit = default_limit
         self.auth_limit = auth_limit
+        self.authenticated_limit = authenticated_limit
         self.window = window
         self._requests: dict[str, list[float]] = defaultdict(list)
         self._last_cleanup = time.time()
@@ -53,6 +59,25 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         for k in stale:
             del self._requests[k]
 
+    def _auth_identity(self, request: Request) -> str | None:
+        """Return a bucket key for the authenticated user (JWT 'sub').
+
+        Authenticated traffic is keyed per-user instead of per-IP: behind a
+        reverse proxy every request shares the proxy IP, so a per-IP bucket
+        would lock out ALL users once aggregate traffic exceeds the limit.
+        """
+        header = request.headers.get("authorization", "")
+        if not header.lower().startswith("bearer "):
+            return None
+        token = header.split(" ", 1)[1].strip()
+        try:
+            from app.services.auth_service import decode_access_token
+
+            sub = decode_access_token(token).get("sub")
+            return f"user:{sub}" if sub else None
+        except Exception:
+            return None
+
     async def dispatch(self, request: Request, call_next):
         if _TESTING:
             return await call_next(request)
@@ -72,10 +97,27 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         now = time.time()
         cutoff = now - self.window
 
-        limit = self.auth_limit if path == "/api/v1/auth/login" else self.default_limit
+        # Login is rate-limited per client + account (not just per IP). Behind
+        # the nginx reverse proxy every request appears to come from the proxy
+        # IP, so a plain per-IP bucket would lock out ALL users after a handful
+        # of attempts. Keying on the target email keeps each account's budget
+        # isolated and prevents one client from blocking everyone.
+        if path == "/api/v1/auth/login":
+            key = f"{ip}|login|{await self._login_identity(request)}"
+            limit = self.auth_limit
+        else:
+            # Authenticated traffic is bucketed per user so a shared proxy IP
+            # cannot exhaust one global budget for every logged-in user.
+            user_key = self._auth_identity(request)
+            if user_key is not None:
+                key = user_key
+                limit = self.authenticated_limit
+            else:
+                key = ip
+                limit = self.default_limit
 
-        self._requests[ip] = [t for t in self._requests[ip] if t > cutoff]
-        timestamps = self._requests[ip]
+        self._requests[key] = [t for t in self._requests.get(key, []) if t > cutoff]
+        timestamps = self._requests[key]
 
         remaining = max(0, limit - len(timestamps))
 
@@ -96,8 +138,26 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         response.headers["X-RateLimit-Remaining"] = str(remaining - 1)
         return response
 
+    async def _login_identity(self, request: Request) -> str:
+        """Best-effort extraction of the login identifier for rate-limit keying.
+
+        Awaits (and caches) the request body so the downstream route can still
+        parse it. Falls back to an empty string if not parseable.
+        """
+        try:
+            body = await request.body()
+            import json as _json
+
+            data = _json.loads(body)
+            ident = data.get("email") or data.get("username") or ""
+            return str(ident).strip().lower()
+        except Exception:
+            return ""
+
 setup_logging(level="INFO")
 logger = logging.getLogger("missioncontrol")
+import importlib as _importlib  # noqa: E402
+
 from app.routers import (  # noqa: E402
     agent,
     agent_remote_target,
@@ -107,10 +167,12 @@ from app.routers import (  # noqa: E402
     automation,
     company,
     dashboard,
+    edge,
     health,
     hyperv,
     identity,
     integration,
+    marketplace,
     notes,
     parking_lot,
     plugin,
@@ -121,10 +183,12 @@ from app.routers import (  # noqa: E402
     setup,
     site,
     tasks,
-    veeam,
     version,
     zabbix,
 )
+
+sop = _importlib.import_module("app.sop.router")
+
 
 try:
     settings = get_settings()
@@ -146,7 +210,7 @@ except Exception as exc:
 
 app = FastAPI(
     title=settings.project_name,
-    version="3.0.0",
+    version="3.0.0-rc1",
     docs_url="/api/docs",
     redoc_url="/api/redoc",
     openapi_url="/api/openapi.json",
@@ -162,7 +226,7 @@ async def request_logging_middleware(request: Request, call_next):
     elapsed_ms = round((time.perf_counter() - start) * 1000, 1)
     response.headers["X-Request-ID"] = request_id
     logger.info(
-        "%s %s %s %s %sms",
+        "%s %s %s %sms",
         request.method,
         request.url.path,
         response.status_code,
@@ -172,7 +236,13 @@ async def request_logging_middleware(request: Request, call_next):
     return response
 
 
-app.add_middleware(RateLimitMiddleware)
+app.add_middleware(
+    RateLimitMiddleware,
+    default_limit=settings.rate_limit_per_minute,
+    auth_limit=settings.rate_limit_auth_per_minute,
+    authenticated_limit=settings.rate_limit_authenticated_per_minute,
+    window=60,
+)
 
 app.add_middleware(
     CORSMiddleware,
@@ -203,10 +273,10 @@ app.include_router(integration.router, prefix="/api/v1")
 app.include_router(zabbix.router, prefix="/api/v1")
 app.include_router(hyperv.router, prefix="/api/v1")
 app.include_router(proxmox.router, prefix="/api/v1")
-app.include_router(veeam.router, prefix="/api/v1")
 app.include_router(site.router, prefix="/api/v1")
 app.include_router(ai.router, prefix="/api/v1")
 app.include_router(agent.router, prefix="/api/v1")
+app.include_router(edge.router, prefix="/api/v1")
 app.include_router(agent_remote_target.router, prefix="/api/v1")
 app.include_router(automation.router, prefix="/api/v1")
 app.include_router(company.router, prefix="/api/v1")
@@ -214,6 +284,8 @@ app.include_router(setup.router, prefix="/api/v1")
 app.include_router(auth.router, prefix="/api/v1")
 app.include_router(agent_token.router, prefix="/api/v1")
 app.include_router(plugin.router, prefix="/api/v1")
+app.include_router(marketplace.router, prefix="/api/v1")
+app.include_router(sop.router, prefix="/api/v1")
 
 
 @app.get("/api/v1")
@@ -224,23 +296,23 @@ async def api_root() -> dict[str, str]:
     return {
         "name": settings.project_name,
         "status": "online",
-        "version": "3.0.0",
+        "version": "3.0.0-rc1",
     }
 
 
 @app.on_event("startup")
 async def _startup_banner():
-    """Run startup validation and print status banner."""
+    """Run startup validation, load plugins, and print status banner."""
     from app.db.database import SessionLocal
     from app.services.setup_service import is_setup_required
 
     print("")
-    print("  Mission Control v3.0.0")
-    print("  ─────────────────────────────────────")
+    print("  Mission Control v3.0.0-rc1")
+    print("  ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ")
 
     # Run comprehensive startup validation
     try:
-        from app.core.startup_check import run_all_checks, print_startup_report
+        from app.core.startup_check import print_startup_report, run_all_checks
 
         results = run_all_checks()
         print_startup_report(results)
@@ -267,4 +339,88 @@ async def _startup_banner():
             db.close()
     except Exception:
         print("  Setup Required: UNKNOWN (database not reachable)")
+
+    # Load and start server plugins
+    try:
+        from app.plugins.registry import plugin_registry
+
+        load_results = await plugin_registry.discover_and_load()
+        loaded = [s for s, r in load_results.items() if r == "loaded"]
+        if loaded:
+            logger.info("Plugins discovered: %s", ", ".join(loaded))
+            await plugin_registry.setup_all()
+            await plugin_registry.start_all()
+            route_count = await plugin_registry.register_routes(app)
+            logger.info(
+                "Plugins started: %d, routes registered: %d",
+                len(loaded),
+                route_count,
+            )
+            print(f"  Plugins: {len(loaded)} loaded, {route_count} routes")
+
+            # Auto-register built-in plugins in marketplace registry
+            try:
+                from app.marketplace.registry import (
+                    InstalledPlugin,
+                    PluginHealth,
+                    PluginStatus,
+                    marketplace_registry,
+                )
+                for slug in loaded:
+                    if not marketplace_registry.get(slug):
+                        from app.services.plugin_marketplace_service import (
+                            plugin_marketplace_service,
+                        )
+                        info = plugin_marketplace_service.get_plugin_info(slug)
+                        installed = InstalledPlugin(
+                            plugin_id=slug,
+                            name=info["name"] if info else slug,
+                            version=info["version"] if info else "1.0.0",
+                            status=PluginStatus.ENABLED,
+                            health=PluginHealth.UNKNOWN,
+                            enabled=True,
+                        )
+                        marketplace_registry.register(installed)
+            except Exception as exc:
+                logger.debug("Marketplace auto-registration failed: %s", exc)
+        else:
+            print("  Plugins: none discovered")
+    except Exception as exc:
+        logger.warning("Plugin loading skipped: %s", exc)
+        print("  Plugins: skipped (error)")
+
+    # Mark stale agents offline on a fixed interval
+    try:
+        from app.services.agent_service import AgentService
+
+        agent_service = AgentService()
+
+        async def _stale_sweeper():
+            while True:
+                try:
+                    db = SessionLocal()
+                    try:
+                        await agent_service.mark_stale_agents_offline(db)
+                    finally:
+                        db.close()
+                except Exception as exc:
+                    logger.warning("Stale agent sweep failed: %s", exc)
+                await asyncio.sleep(60)
+
+        _background_tasks.add(asyncio.create_task(_stale_sweeper()))
+        logger.info("Stale-agent sweeper started")
+    except Exception as exc:
+        logger.warning("Stale-agent sweaper failed to start: %s", exc)
+
     print("")
+
+
+@app.on_event("shutdown")
+async def _shutdown_plugins():
+    """Gracefully stop all running plugins."""
+    try:
+        from app.plugins.registry import plugin_registry
+
+        await plugin_registry.stop_all()
+    except Exception as exc:
+        logger.warning("Plugin shutdown error: %s", exc)

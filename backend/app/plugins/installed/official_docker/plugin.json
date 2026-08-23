@@ -1,0 +1,19 @@
+{
+  "id": "official_docker",
+  "name": "Docker & Container Monitoring",
+  "description": "Monitor Docker hosts, containers, images, volumes, networks, and Compose stacks.",
+  "version": "1.0.0",
+  "author": "Mission Control",
+  "category": "containers",
+  "execution_target": "server",
+  "capabilities": [
+    "dashboard_widget",
+    "navigation",
+    "settings",
+    "health_check",
+    "background_sync",
+    "event_bus"
+  ],
+  "dependencies": [],
+  "entry_point": "app.plugins.installed.official_docker"
+}

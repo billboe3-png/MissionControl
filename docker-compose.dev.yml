@@ -1,8 +1,0 @@
-services:
-  backend:
-    env_file:
-      - .env.dev
-
-  postgres:
-    env_file:
-      - .env.dev

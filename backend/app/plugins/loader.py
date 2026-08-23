@@ -88,8 +88,8 @@ class PluginLoader:
                 f"Manifest slug mismatch: expected '{slug}', got '{manifest.id}'"
             )
 
-        # Dynamically import the plugin module
-        module_name = f"app.plugins.installed.{slug}"
+        # Dynamically import the plugin module (convert hyphens to underscores)
+        module_name = f"app.plugins.installed.{slug.replace('-', '_')}"
         try:
             module = importlib.import_module(module_name)
         except ImportError as exc:

@@ -1,0 +1,13 @@
+{
+    "id": "official_unifi",
+    "name": "UniFi Site Manager",
+    "version": "1.0.0",
+    "description": "UniFi Site Manager and local controller integration: sites, devices, clients, wireless networks, alerts, and network health monitoring",
+    "author": "Mission Control",
+    "execution_target": "server",
+    "category": "networking",
+    "min_core_version": "3.0.0",
+    "permissions": ["read:dashboard", "read:network"],
+    "dependencies": [],
+    "capabilities": ["dashboard_widget", "rest_api", "navigation", "settings", "background_sync"]
+}
