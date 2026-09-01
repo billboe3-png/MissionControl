@@ -795,7 +795,8 @@ class VeeamPlugin(AgentPlugin):
             return await self._db_detect(target_id)
         if command == "veeam:db:query":
             out = await self._run_db_query_via_relay(
-                str(args.get("sql", "")), target_id=target_id
+                str(args.get("sql", "")), target_id=target_id,
+                db_type=args.get("db_type", "auto"),
             )
             if out is None:
                 return {
@@ -855,8 +856,23 @@ class VeeamPlugin(AgentPlugin):
     # ------------------------------------------------------------------
 
     _PSQL = r"C:\Program Files\PostgreSQL\15\bin\psql.exe"
+    _SQLCMD_CANDIDATES = (
+        r"C:\Program Files\Microsoft SQL Server\Client SDK\ODBC"
+        r"\170\Tools\Binn\SQLCMD.EXE",
+        r"C:\Program Files\Microsoft SQL Server\Client SDK\ODBC"
+        r"\130\Tools\Binn\SQLCMD.EXE",
+    )
+    _SQL_INSTANCE = "localhost\\VEEAMSQL2016"
     _DB_NAME = "VeeamBackup"
     _DB_USER = "postgres"
+
+    @staticmethod
+    def _resolve_sqlcmd_path(existing: list[str]) -> str | None:
+        """Return the first configured SQLCMD path that is present on the host."""
+        for candidate in VeeamPlugin._SQLCMD_CANDIDATES:
+            if candidate in existing:
+                return candidate
+        return None
     _WHERE_FILTER = """\
 AND js.job_name NOT LIKE '%Resynchronize%'
 AND js.job_name NOT LIKE '%Host Discovery%'
@@ -878,20 +894,46 @@ AND js.job_name NOT LIKE '%Malware Detection%'"""
 
     async def _run_db_query_via_relay(
         self, sql: str, target_id: int | None = None, timeout: int = 120,
+        db_type: str = "auto",
     ) -> str | None:
-        """Run a SQL query against the Veeam PostgreSQL DB via SSH relay."""
+        """Run a SQL query against the Veeam DB via SSH relay.
+
+        ``db_type`` selects the client: ``postgresql`` (psql, on the Veeam
+        host's local PostgreSQL), ``mssql`` (SQLCMD against the named
+        ``VEEAMSQL2016`` instance), or ``auto`` to probe which binary the host
+        has. Output is pipe-delimited so the result splits identically in
+        ``_parse_psql_rows``.
+        """
         if not sql:
             return None
-        ps_script = (
-            "$sql = @'\n" + sql + "\n'@\n"
-            "$sqlPath = 'C:\\temp\\mc_query.sql'\n"
-            "New-Item -ItemType Directory -Force -Path 'C:\\temp' | Out-Null\n"
-            "[System.IO.File]::WriteAllText($sqlPath, $sql, "
-            "[System.Text.Encoding]::UTF8)\n"
-            "& '" + self._PSQL + "' -h 127.0.0.1 -U "
-            + self._DB_USER + " -d " + self._DB_NAME
-            + " -t -A -f $sqlPath 2>&1 | Out-String\n"
-        )
+        if db_type == "auto":
+            db_type = await self._resolved_db_type(target_id)
+        sqlcmd = None
+        if db_type == "mssql":
+            detected = await self._sqlcmd_paths(target_id)
+            sqlcmd = self._resolve_sqlcmd_path(detected)
+        if db_type == "mssql" and sqlcmd:
+            ps_script = (
+                "$sql = @'\n" + sql + "\n'@\n"
+                "$sqlPath = 'C:\\temp\\mc_query.sql'\n"
+                "New-Item -ItemType Directory -Force -Path 'C:\\temp' | Out-Null\n"
+                "[System.IO.File]::WriteAllText($sqlPath, $sql, "
+                "[System.Text.Encoding]::UTF8)\n"
+                "& '" + sqlcmd + "' -S '" + self._SQL_INSTANCE
+                + "' -d " + self._DB_NAME
+                + " -i $sqlPath -s '|' -h -1 -W 2>&1 | Out-String\n"
+            )
+        else:
+            ps_script = (
+                "$sql = @'\n" + sql + "\n'@\n"
+                "$sqlPath = 'C:\\temp\\mc_query.sql'\n"
+                "New-Item -ItemType Directory -Force -Path 'C:\\temp' | Out-Null\n"
+                "[System.IO.File]::WriteAllText($sqlPath, $sql, "
+                "[System.Text.Encoding]::UTF8)\n"
+                "& '" + self._PSQL + "' -h 127.0.0.1 -U "
+                + self._DB_USER + " -d " + self._DB_NAME
+                + " -t -A -f $sqlPath 2>&1 | Out-String\n"
+            )
         result = await self._run_script_via_relay(
             ps_script, timeout=timeout, target_id=target_id
         )
@@ -903,26 +945,55 @@ AND js.job_name NOT LIKE '%Malware Detection%'"""
             return None
         return str(result.get("stdout", "") or "")
 
+    async def _sqlcmd_paths(self, target_id: int | None = None) -> list[str]:
+        """Return the SQLCMD candidate paths that exist on the host."""
+        present = []
+        for candidate in self._SQLCMD_CANDIDATES:
+            if await self._relay_path_exists(candidate, target_id):
+                present.append(candidate)
+        return present
+
+    async def _relay_path_exists(self, path: str, target_id: int | None = None) -> bool:
+        """Check whether a filesystem path exists on the relayed remote host."""
+        script = (
+            "if (Test-Path '" + path + "') { Write-Output 'PATH_FOUND' }"
+        )
+        result = await self._run_script_via_relay(
+            script, timeout=60, target_id=target_id
+        )
+        return "PATH_FOUND" in (result.get("stdout") or "")
+
+    async def _resolved_db_type(self, target_id: int | None = None) -> str:
+        """Probe (and cache) the DB client the target host supports."""
+        cache = getattr(self, "_db_type_cache", None)
+        if cache is None:
+            cache = {}
+            self._db_type_cache = cache
+        if target_id not in cache:
+            detect = await self._db_detect(target_id)
+            cache[target_id] = detect.get("db_type", "postgresql")
+        return cache[target_id]
+
     async def _db_ping(self, target_id: int | None = None) -> bool:
+        detect = await self._db_detect(target_id)
         out = await self._run_db_query_via_relay(
             "SELECT 1", target_id=target_id, timeout=60,
+            db_type=detect.get("db_type", "postgresql"),
         )
         return out is not None and "1" in out
 
     async def _db_detect(self, target_id: int | None = None) -> dict[str, Any]:
-        """Probe psql binary + PG port on the Veeam host."""
-        result = await self._run_script_via_relay(
-            "if (Test-Path '" + self._PSQL + "') { Write-Output 'PSQL_FOUND' }",
-            timeout=60, target_id=target_id,
-        )
-        psql_found = "PSQL_FOUND" in (result.get("stdout") or "")
+        """Probe psql binary + SQLCMD binary on the Veeam host."""
+        psql_found = await self._relay_path_exists(self._PSQL, target_id)
+        sqlcmd_found = bool(await self._sqlcmd_paths(target_id))
+        db_type = "postgresql" if psql_found else "mssql"
         return {
             "success": True,
-            "db_type": "postgresql" if psql_found else "mssql",
+            "db_type": db_type,
             "psql_found": psql_found,
-            "sqlcmd_found": False,
+            "sqlcmd_found": sqlcmd_found,
             "pg_port": psql_found,
-            "mssql_port": False,
+            "mssql_port": sqlcmd_found,
         }
 
     async def _db_job_stats(
