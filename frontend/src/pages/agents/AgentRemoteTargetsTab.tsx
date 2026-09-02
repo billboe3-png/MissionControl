@@ -18,6 +18,25 @@ const PROTOCOL_DEFAULTS: Record<string, number> = {
     winrm: 5985,
 };
 
+const TARGET_PLUGIN_OPTIONS = [
+    { label: "Active Directory", value: "active_directory" },
+    { label: "Docker", value: "docker" },
+    { label: "Hyper-V", value: "hyperv" },
+    { label: "Linux", value: "linux" },
+    { label: "Microsoft 365", value: "microsoft_365" },
+    { label: "MikroTik", value: "mikrotik" },
+    { label: "Veeam", value: "veeam" },
+    { label: "Windows", value: "windows" },
+    { label: "Windows Docker", value: "windows_docker" },
+    { label: "Zabbix", value: "zabbix" },
+];
+
+const selectedPlugins = (raw?: string | null): string[] =>
+    (raw || "")
+        .split(",")
+        .map((p) => p.trim())
+        .filter(Boolean);
+
 export default function AgentRemoteTargetsTab({ agentId }: Props) {
     const [targets, setTargets] = useState<RemoteTarget[]>([]);
     const [loading, setLoading] = useState(true);
@@ -58,6 +77,16 @@ export default function AgentRemoteTargetsTab({ agentId }: Props) {
         }));
     };
 
+    const handlePluginToggle = (plugin: string) => {
+        setForm((f) => {
+            const current = selectedPlugins(f.target_plugins);
+            const next = current.includes(plugin)
+                ? current.filter((p) => p !== plugin)
+                : [...current, plugin];
+            return { ...f, target_plugins: next.join(",") };
+        });
+    };
+
     const handleSave = async () => {
         if (!form.name.trim() || !form.hostname.trim() || !form.username.trim()) {
             setError("Name, hostname, and username are required");
@@ -73,7 +102,7 @@ export default function AgentRemoteTargetsTab({ agentId }: Props) {
             }
             setShowForm(false);
             setEditingTarget(null);
-            setForm({ name: "", hostname: "", protocol: "psremoting", username: "", password: "" });
+            setForm({ name: "", hostname: "", protocol: "psremoting", username: "", password: "", target_plugins: "" });
             await load();
         } catch (e) {
             setError(e instanceof Error ? e.message : "Save failed");
@@ -91,6 +120,7 @@ export default function AgentRemoteTargetsTab({ agentId }: Props) {
             port: target.port,
             username: target.username,
             password: "",
+            target_plugins: target.target_plugins || "",
         });
         setShowForm(true);
     };
@@ -138,7 +168,7 @@ export default function AgentRemoteTargetsTab({ agentId }: Props) {
                     className="btn btn-primary btn-sm"
                     onClick={() => {
                         setEditingTarget(null);
-                        setForm({ name: "", hostname: "", protocol: "psremoting", username: "", password: "" });
+                        setForm({ name: "", hostname: "", protocol: "psremoting", username: "", password: "", target_plugins: "" });
                         setShowForm(!showForm);
                     }}
                 >
@@ -231,6 +261,24 @@ export default function AgentRemoteTargetsTab({ agentId }: Props) {
                                 placeholder="e.g. hyper-v, production"
                             />
                         </div>
+                        <div className="form-row">
+                            <label>Plugins</label>
+                            <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
+                                {TARGET_PLUGIN_OPTIONS.map((p) => (
+                                    <label key={p.value} style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                                        <input
+                                            type="checkbox"
+                                            checked={selectedPlugins(form.target_plugins).includes(p.value)}
+                                            onChange={() => handlePluginToggle(p.value)}
+                                        />
+                                        <span>{p.label}</span>
+                                    </label>
+                                ))}
+                            </div>
+                            <small className="form-hint">
+                                Controls which plugins collect data through this target.
+                            </small>
+                        </div>
                     </div>
                     <div className="form-actions">
                         <LoadingButton
@@ -265,6 +313,7 @@ export default function AgentRemoteTargetsTab({ agentId }: Props) {
                                 <th>Protocol</th>
                                 <th>Port</th>
                                 <th>Username</th>
+                                <th>Plugins</th>
                                 <th>Status</th>
                                 <th>Last Collected</th>
                                 <th>Actions</th>
@@ -280,6 +329,9 @@ export default function AgentRemoteTargetsTab({ agentId }: Props) {
                                         </td>
                                         <td>{t.port}</td>
                                         <td>{t.username}</td>
+                                        <td className="muted">
+                                            {selectedPlugins(t.target_plugins).join(", ") || "—"}
+                                        </td>
                                         <td>
                                             <StatusBadge
                                                 status={

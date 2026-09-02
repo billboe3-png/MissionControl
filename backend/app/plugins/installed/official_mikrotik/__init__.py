@@ -1,24 +1,26 @@
 """
-MikroTik Plugin Implementation
+MikroTik RouterOS Plugin
+
+Manages registered RouterOS devices via SSH, Telnet, and the REST API.
+Servers are stored in mikrotik_servers with encrypted credentials; a
+background task refreshes status/facts and publishes state transitions
+onto the event bus.
 """
+
 import asyncio
 import contextlib
 import logging
 from typing import Any
 
-from sqlalchemy import select
-from sqlalchemy.exc import ProgrammingError
-
 from app.db.database import SessionLocal
-from app.plugins.installed.official_mikrotik.cache import cache_manager
-from app.plugins.installed.official_mikrotik.models import MikroTikServer
+from app.plugins.installed.official_mikrotik.config import MikroTikPluginConfig
+from app.plugins.installed.official_mikrotik.repository import MikroTikRepository
 from app.plugins.installed.official_mikrotik.routes import router
-from app.plugins.installed.official_mikrotik.ssh_client import MikroTikSSHClient
+from app.plugins.installed.official_mikrotik.config_routes import router as config_router
+from app.plugins.installed.official_mikrotik.service import mikrotik_service
 from app.plugins.server import ServerPluginSDK
 
 logger = logging.getLogger("plugin.mikrotik")
-
-MIKROTIK_TABLE_MISSING = 'relation "mikrotik_servers" does not exist'
 
 
 class MikroTikPlugin(ServerPluginSDK):
@@ -26,89 +28,52 @@ class MikroTikPlugin(ServerPluginSDK):
 
     def __init__(self, manifest: dict[str, Any], config: dict[str, Any]) -> None:
         super().__init__(manifest, config)
-        self._sync_task = None
+        self._plugin_config = MikroTikPluginConfig()
+        self._sync_task: asyncio.Task[None] | None = None
+
+    # ------------------------------------------------------------------ #
+    # Lifecycle                                                           #
+    # ------------------------------------------------------------------ #
 
     async def setup(self) -> None:
         logger.info("MikroTik plugin setup")
 
     async def start(self) -> None:
+        if not self._plugin_config.auto_sync_enabled:
+            logger.info("MikroTik background sync disabled by configuration")
+            return
         self._sync_task = asyncio.create_task(self._background_sync())
-        logger.info("MikroTik background sync started")
+        logger.info(
+            "MikroTik background sync started (interval=%ds)",
+            self._plugin_config.sync_interval_seconds,
+        )
 
     async def stop(self) -> None:
         if self._sync_task and not self._sync_task.done():
             self._sync_task.cancel()
             with contextlib.suppress(asyncio.CancelledError):
                 await self._sync_task
+        self._sync_task = None
         logger.info("MikroTik plugin stopped")
 
     async def _background_sync(self) -> None:
+        interval = self._plugin_config.sync_interval_seconds
         while True:
             try:
                 session = SessionLocal()
                 try:
-                    try:
-                        servers = list(
-                            session.execute(
-                                select(MikroTikServer).where(MikroTikServer.enabled.is_(True))
-                            ).scalars().all()
-                        )
-                    except ProgrammingError as exc:
-                        if MIKROTIK_TABLE_MISSING in str(exc):
-                            logger.debug("MikroTik table not present; skipping background sync")
-                            servers = []
-                        else:
-                            raise
+                    await mikrotik_service.sync_all(session)
                 finally:
                     session.close()
-
-                for server in servers:
-                    try:
-                        client = MikroTikSSHClient(
-                            host=server.host,
-                            username=server.username,
-                            password=server.password_encrypted or "",
-                            port=server.ssh_port,
-                        )
-                        interfaces_raw = await client.execute("/interface print detail")
-                        interfaces = MikroTikSSHClient._parse_key_value_output(interfaces_raw)
-
-                        firewall_raw = await client.execute("/ip firewall filter print detail")
-                        rules = MikroTikSSHClient._parse_key_value_output(firewall_raw)
-
-                        dhcp_raw = await client.execute("/ip dhcp-server lease print detail")
-                        leases = MikroTikSSHClient._parse_key_value_output(dhcp_raw)
-
-                        resource_raw = await client.execute("/system resource print")
-                        resource = MikroTikSSHClient._parse_key_value_output(resource_raw)
-                        info = resource[0] if resource else {}
-
-                        session = SessionLocal()
-                        try:
-                            cache_manager.replace_interfaces(session, server.id, interfaces)
-                            cache_manager.replace_firewall_rules(session, server.id, rules)
-                            cache_manager.replace_dhcp_leases(session, server.id, leases)
-                            server.version = info.get("version")
-                            server.board_name = info.get("board-name")
-                            server.cpu_load = info.get("cpu-load")
-                            server.uptime = info.get("uptime")
-                            cache_manager.mark_sync(session, server.id, "ok")
-                            session.flush()
-                        finally:
-                            session.close()
-                    except Exception as exc:
-                        logger.warning("Sync failed for MikroTik %s: %s", server.host, exc)
-                        try:
-                            session = SessionLocal()
-                            cache_manager.mark_sync(session, server.id, "error", str(exc))
-                            session.close()
-                        except Exception:
-                            logger.warning("Failed to mark sync error for server %s", server.id)
             except asyncio.CancelledError:
                 break
             except Exception:
                 logger.exception("MikroTik sync cycle failed")
-            await asyncio.sleep(300)
+            await asyncio.sleep(interval)
+
+    # ------------------------------------------------------------------ #
+    # Dashboard                                                           #
+    # ------------------------------------------------------------------ #
 
     async def get_dashboard_widgets(self) -> list[dict[str, Any]]:
         return [
@@ -121,5 +86,114 @@ class MikroTikPlugin(ServerPluginSDK):
             }
         ]
 
+    async def get_widget_data(self, widget_id: str) -> dict[str, Any]:
+        if widget_id != "mikrotik-interfaces":
+            return {}
+
+        session = SessionLocal()
+        try:
+            servers = MikroTikRepository.list_servers(session)
+            online = sum(1 for s in servers if s.status == "online")
+            return {
+                "status": "ok" if online else ("empty" if not servers else "warning"),
+                "total": len(servers),
+                "online": online,
+                "servers": [
+                    {
+                        "id": s.id,
+                        "name": s.name,
+                        "host": s.host,
+                        "status": s.status,
+                        "version": s.version,
+                        "board_name": s.board_name,
+                    }
+                    for s in servers[:10]
+                ],
+            }
+        finally:
+            session.close()
+
+    # ------------------------------------------------------------------ #
+    # Navigation                                                          #
+    # ------------------------------------------------------------------ #
+
+    async def get_navigation_items(self) -> list[dict[str, Any]]:
+        return [
+            {
+                "id": "mikrotik-overview",
+                "label": "MikroTik",
+                "icon": "network",
+                "path": "/mikrotik",
+                "group": "Infrastructure",
+                "order": 11,
+            }
+        ]
+
+    # ------------------------------------------------------------------ #
+    # REST API routes                                                     #
+    # ------------------------------------------------------------------ #
+
     def get_routes(self) -> list[dict[str, Any]]:
-        return [{"path": "/api/v1/plugins/mikrotik", "router": router}]
+        return [
+            {"path": "/api/v1/plugins/mikrotik", "router": router},
+            {"path": "/api/v1/plugins/mikrotik", "router": config_router},
+        ]
+
+    # ------------------------------------------------------------------ #
+    # Settings                                                            #
+    # ------------------------------------------------------------------ #
+
+    async def get_settings_schema(self) -> dict[str, Any]:
+        return self._plugin_config.model_json_schema()
+
+    async def get_settings(self) -> dict[str, Any]:
+        return self._plugin_config.model_dump()
+
+    async def save_settings(self, settings: dict[str, Any]) -> None:
+        previous = self._plugin_config.model_dump()
+        updated = {
+            **previous,
+            **{k: v for k, v in settings.items() if k in MikroTikPluginConfig.model_fields},
+        }
+        self._plugin_config = MikroTikPluginConfig(**updated)
+        self.config.update(updated)
+        await self.on_config_changed(previous)
+
+    async def on_config_changed(self, previous: dict[str, Any]) -> None:
+        """Restart the sync loop when scheduling settings change."""
+        settings_changed = (
+            previous.get("auto_sync_enabled") != self._plugin_config.auto_sync_enabled
+            or previous.get("sync_interval_seconds") != self._plugin_config.sync_interval_seconds
+        )
+        if not settings_changed:
+            return
+        await self.stop()
+        await self.start()
+
+    # ------------------------------------------------------------------ #
+    # Health                                                              #
+    # ------------------------------------------------------------------ #
+
+    async def health_check(self) -> dict[str, Any]:
+        session = SessionLocal()
+        try:
+            servers = MikroTikRepository.list_servers(session)
+            enabled = [s for s in servers if s.enabled]
+            online = sum(1 for s in enabled if s.status == "online")
+            if not servers:
+                return {
+                    "status": "warning",
+                    "message": "No servers configured",
+                    "version": self.version,
+                    "plugin": self.slug,
+                }
+            return {
+                "status": "ok" if online > 0 else "warning",
+                "total": len(servers),
+                "enabled": len(enabled),
+                "online": online,
+                "version": self.version,
+                "plugin": self.slug,
+            }
+        finally:
+            session.close()

@@ -1,0 +1,13 @@
+{
+    "id": "official_dlink",
+    "name": "D-Link DGS-1210 Switch",
+    "version": "1.0.0",
+    "description": "D-Link DGS-1210 Metro Ethernet Switch management via agent relay: SSH/Telnet console, Web UI proxy, MAC address table, VLAN management, interface status, and configuration.",
+    "author": "Mission Control",
+    "execution_target": "server",
+    "category": "networking",
+    "min_core_version": "3.0.0",
+    "permissions": ["read:dashboard", "read:network", "execute:remote"],
+    "dependencies": [],
+    "capabilities": ["dashboard_widget", "rest_api", "navigation", "settings", "background_sync", "remote_console"]
+}

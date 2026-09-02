@@ -1,7 +1,7 @@
 """
 Veeam Plugin API Client
 
-Wraps the plugin-native VeeamServerProvider to provide sync/async methods
+Wraps the existing VeeamRESTProvider to provide sync/async methods
 for the plugin's background sync and route handlers.
 """
 
@@ -10,24 +10,84 @@ import concurrent.futures
 import logging
 from typing import Any
 
-from app.plugins.installed.official_veeam.provider import (
-    VeeamServerProvider,
-    build_server_provider,
-)
+from app.plugins.installed.official_veeam.veeam_provider import VeeamRESTProvider
 
 logger = logging.getLogger("plugin.veeam.api")
 
 
 class VeeamApiClient:
-    """Wrapper around VeeamServerProvider for plugin use."""
+    """Wrapper around VeeamRESTProvider for plugin use."""
 
-    def __init__(self, provider: VeeamServerProvider) -> None:
-        self._provider = provider
+    def __init__(
+        self,
+        base_url: str,
+        username: str,
+        password: str,
+        verify_ssl: bool = True,
+        timeout: int = 30,
+        ssh_host: str = "",
+        ssh_port: int = 22,
+        ssh_username: str = "",
+        ssh_password: str = "",
+        data_source: str = "both",
+        db_type: str = "postgresql",
+        column_case: str = "pascal",
+        db: Any = None,
+        server_id: int | None = None,
+        agent_id: int | None = None,
+        target_id: int | None = None,
+    ) -> None:
+        self._db = db
+        self._provider = VeeamRESTProvider(
+            base_url=base_url,
+            username=username,
+            password=password,
+            timeout=timeout,
+            verify_ssl=verify_ssl,
+            ssh_host=ssh_host,
+            ssh_port=ssh_port,
+            ssh_username=ssh_username,
+            ssh_password=ssh_password,
+            data_source=data_source,
+            db_type=db_type,
+            column_case=column_case,
+            db=db,
+            server_id=server_id,
+            agent_id=agent_id,
+            target_id=target_id,
+        )
 
     @classmethod
     def from_server(cls, db: Any, server: Any) -> "VeeamApiClient":
-        """Build a client around the capability-routed provider for a server row."""
-        return cls(build_server_provider(db, server))
+        return cls.from_server_impl(db, server)
+
+    @classmethod
+    def from_server_impl(cls, db: Any, server: Any) -> "VeeamApiClient":
+        """Build a client with the actual REST provider implementation."""
+        from app.core.config import get_settings
+        from app.core.security import CredentialCipher
+
+        cipher = CredentialCipher(get_settings().missioncontrol_secret_key)
+        password = cipher.decrypt(server.encrypted_password) if server.encrypted_password else ""
+        ssh_password = cipher.decrypt(server.encrypted_ssh_password) if server.encrypted_ssh_password else ""
+        return cls(
+            base_url=server.url,
+            username=server.username,
+            password=password,
+            verify_ssl=server.verify_ssl,
+            timeout=server.timeout,
+            ssh_host=server.ssh_host or "",
+            ssh_port=server.ssh_port or 22,
+            ssh_username=server.ssh_username or "",
+            ssh_password=ssh_password,
+            data_source=server.data_source or "both",
+            db_type=server.db_type or "postgresql",
+            column_case=server.column_case or "pascal",
+            db=db,
+            server_id=server.id,
+            agent_id=server.agent_id,
+            target_id=server.target_id,
+        )
 
     async def test_connection(self) -> dict[str, Any]:
         return await self._provider.get_health()
@@ -105,6 +165,24 @@ class VeeamApiClient:
 
     def get_capacity_tier_sync(self) -> dict[str, Any]:
         return self._run_async(self.get_capacity_tier())
+
+    async def get_session_stats(self) -> dict[str, Any]:
+        return await self._provider.get_session_stats()
+
+    async def get_job_stats(self) -> dict[str, Any]:
+        return await self._provider.get_job_stats()
+
+    async def get_job_stats_daily(self, days: int = 7) -> dict[str, Any]:
+        return await self._provider.get_job_stats_daily(days)
+
+    def get_session_stats_sync(self) -> dict[str, Any]:
+        return self._run_async(self.get_session_stats())
+
+    def get_job_stats_sync(self) -> dict[str, Any]:
+        return self._run_async(self.get_job_stats())
+
+    def get_job_stats_daily_sync(self, days: int = 7) -> dict[str, Any]:
+        return self._run_async(self.get_job_stats_daily(days))
 
     def get_sessions_sync(self) -> dict[str, Any]:
         return self._run_async(self.get_sessions())

@@ -168,6 +168,9 @@ class FakeProvider:
     async def get_capacity_tier(self):
         return self._result("get_capacity_tier")
 
+    async def test_connection(self):
+        return self._result("test_connection")
+
 
 @pytest.fixture
 def veeam_client(db_session):
@@ -196,8 +199,8 @@ def veeam_server(db_session):
         name="v1",
         edition="enterprise",
         data_source="api",
-        rest_url="https://veeam.local:9419",
-        rest_username="admin",
+        url="https://veeam.local:9419",
+        username="admin",
         version="12.3",
         enabled=True,
     )
@@ -265,27 +268,25 @@ def test_with_server_delegates(veeam_client, fake_provider, method, path, canned
     assert response.json() == CANNED[canned_key]
 
 
-def test_with_server_test_mapping(veeam_client, veeam_server, monkeypatch):
-    from app.plugins.installed.official_veeam import routes as routes_module
-
-    async def fake_diagnostics(_provider):
-        return {
-            "success": True,
-            "rest": {"connected": True, "version": "12.3"},
-            "ssh": {"success": False},
-            "error": None,
-        }
-
-    monkeypatch.setattr(routes_module, "run_connection_diagnostics", fake_diagnostics)
-    response = veeam_client.get("/api/v1/plugins/veeam/test")
-    assert response.status_code == 200
-    assert response.json() == {
+def test_with_server_test_mapping(veeam_client, fake_provider, monkeypatch):
+    canned_test = {
         "connected": True,
         "version": "12.3",
         "name": "v1",
-        "server_id": veeam_server.id,
+        "server_id": fake_provider.server.id,
+        "db_available": True,
+        "rest_available": True,
+        "powershell_available": False,
         "error": None,
     }
+
+    async def fake_test_connection():
+        return canned_test
+
+    monkeypatch.setattr(fake_provider, "test_connection", fake_test_connection)
+    response = veeam_client.get("/api/v1/plugins/veeam/test")
+    assert response.status_code == 200
+    assert response.json() == canned_test
 
 
 def test_with_server_job_stats_daily_passes_days(veeam_client, fake_provider, monkeypatch):
@@ -328,3 +329,59 @@ def test_with_server_provider_error(veeam_client, fake_provider, monkeypatch):
     data = response.json()
     assert data["success"] is False
     assert data["error"] == "boom"
+
+
+
+def test_unknown_server_id_returns_404(veeam_client, veeam_server):
+    response = veeam_client.get(
+        "/api/v1/plugins/veeam/jobs", params={"server_id": 999999}
+    )
+    assert response.status_code == 404
+    assert response.json() == {"detail": "Veeam server not found"}
+
+
+def test_disabled_server_id_returns_404(veeam_client, veeam_server, db_session):
+    disabled = VeeamBackupServer(
+        name="disabled2", edition="enterprise", data_source="api",
+        url="https://veeam.local:9419", username="admin",
+        version="12.3", enabled=False,
+    )
+    db_session.add(disabled)
+    db_session.commit()
+    db_session.refresh(disabled)
+    response = veeam_client.get(
+        "/api/v1/plugins/veeam/jobs", params={"server_id": disabled.id}
+    )
+    assert response.status_code == 404
+    assert response.json() == {"detail": "Veeam server not found"}
+
+
+def test_server_id_selects_that_server(veeam_client, veeam_server, monkeypatch, db_session):
+    from app.plugins.installed.official_veeam import routes as routes_module
+
+    # create a second enabled server with a higher id than the veeam_server fixture
+    second = VeeamBackupServer(
+        name="v2", edition="enterprise", data_source="api",
+        url="https://veeam2.local:9419", username="admin",
+        version="12.3", enabled=True,
+    )
+    db_session.add(second)
+    db_session.commit()
+    db_session.refresh(second)
+
+    selected = {}
+
+    def _build(_db, _server):
+        selected["id"] = _server.id
+        selected["name"] = _server.name
+        return FakeProvider(_server, CANNED)
+
+    monkeypatch.setattr(routes_module, "build_server_provider", _build)
+
+    response = veeam_client.get(
+        "/api/v1/plugins/veeam/jobs", params={"server_id": second.id}
+    )
+    assert response.status_code == 200
+    assert selected["id"] == second.id
+    assert selected["name"] == "v2"
+    assert response.json() == CANNED["get_jobs"]
