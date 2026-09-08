@@ -96,6 +96,20 @@ class AgentRemoteTarget(Base):
         comment="Comma-separated plugin identifiers enabled for this remote target.",
     )
 
+    db_type: Mapped[str] = mapped_column(
+        String(20),
+        nullable=False,
+        default="postgresql",
+        comment="Veeam backing database: postgresql or mssql.",
+    )
+
+    column_case: Mapped[str] = mapped_column(
+        String(20),
+        nullable=False,
+        default="pascal",
+        comment="Veeam SQL column case: pascal or snake (MSSQL).",
+    )
+
     last_collected_at: Mapped[datetime | None] = mapped_column(
         DateTime,
         nullable=True,
