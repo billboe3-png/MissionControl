@@ -3,6 +3,7 @@ import { AuthProvider } from "./contexts/AuthContext";
 import { SidebarProvider } from "./contexts/SidebarContext";
 import { ToastProvider } from "./contexts/ToastContext";
 import { SiteProvider } from "./contexts/SiteContext";
+import { VeeamServerProvider } from "./contexts/VeeamServerContext";
 import AppLayout from "./layouts/AppLayout";
 import RequireAuth from "./layouts/RequireAuth";
 import RequireSetup from "./layouts/RequireSetup";
@@ -118,7 +119,8 @@ export default function App() {
                 <SidebarProvider>
                     <ToastProvider>
                         <SiteProvider>
-                            <Routes>
+                            <VeeamServerProvider>
+                <Routes>
                             <Route path="/setup" element={<SetupWizardPage />} />
                             <Route element={<RequireSetup />}>
                                 <Route path="/login" element={<LoginPage />} />
@@ -255,6 +257,7 @@ export default function App() {
                         </Route>
                         </Route>
                         </Routes>
+        </VeeamServerProvider>
                     </SiteProvider>
                     </ToastProvider>
                 </SidebarProvider>

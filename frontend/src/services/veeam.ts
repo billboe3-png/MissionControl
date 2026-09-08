@@ -235,20 +235,24 @@ export function formatBytes(bytes: number): string {
 // ── API object ──────────────────────────────────────────────
 
 export const veeamApi = {
-    async getSummary(): Promise<VeeamSummary> {
-        return apiClient<VeeamSummary>(`${API}/overview`);
+    async getSummary(serverId?: number | null): Promise<VeeamSummary> {
+        const qs = serverId != null ? `?server_id=${serverId}` : '';
+        return apiClient<VeeamSummary>(`${API}/overview${qs}`);
     },
 
-    async getHealth(): Promise<VeeamHealth> {
-        return apiClient<VeeamHealth>(`${API}/health`);
+    async getHealth(serverId?: number | null): Promise<VeeamHealth> {
+        const qs = serverId != null ? `?server_id=${serverId}` : '';
+        return apiClient<VeeamHealth>(`${API}/health${qs}`);
     },
 
-    async testConnection(): Promise<VeeamConnectionTest> {
-        return apiClient<VeeamConnectionTest>(`${API}/test`);
+    async testConnection(serverId?: number | null): Promise<VeeamConnectionTest> {
+        const qs = serverId != null ? `?server_id=${serverId}` : '';
+        return apiClient<VeeamConnectionTest>(`${API}/test${qs}`);
     },
 
-    async listJobs(): Promise<{ jobs: VeeamJob[]; totalCount: number }> {
-        const data = await apiClient<{ jobs: VeeamJob[]; count: number }>(`${API}/jobs`);
+    async listJobs(serverId?: number | null): Promise<{ jobs: VeeamJob[]; totalCount: number }> {
+        const qs = serverId != null ? `?server_id=${serverId}` : '';
+        const data = await apiClient<{ jobs: VeeamJob[]; count: number }>(`${API}/jobs${qs}`);
         return { jobs: data.jobs ?? [], totalCount: data.count ?? 0 };
     },
 
@@ -257,52 +261,64 @@ export const veeamApi = {
         return data.job;
     },
 
-    async startJob(jobId: string): Promise<VeeamJobAction> {
-        return apiClient<VeeamJobAction>(`${API}/jobs/${jobId}/start`, { method: "POST" });
+    async startJob(jobId: string, serverId?: number | null): Promise<VeeamJobAction> {
+        const qs = serverId != null ? `?server_id=${serverId}` : '';
+        return apiClient<VeeamJobAction>(`${API}/jobs/${jobId}/start${qs}`, { method: "POST" });
     },
 
-    async stopJob(jobId: string): Promise<VeeamJobAction> {
-        return apiClient<VeeamJobAction>(`${API}/jobs/${jobId}/stop`, { method: "POST" });
+    async stopJob(jobId: string, serverId?: number | null): Promise<VeeamJobAction> {
+        const qs = serverId != null ? `?server_id=${serverId}` : '';
+        return apiClient<VeeamJobAction>(`${API}/jobs/${jobId}/stop${qs}`, { method: "POST" });
     },
 
-    async listSessions(): Promise<VeeamSession[]> {
-        const data = await apiClient<{ sessions: VeeamSession[] }>(`${API}/sessions`);
+    async listSessions(serverId?: number | null): Promise<VeeamSession[]> {
+        const qs = serverId != null ? `?server_id=${serverId}` : '';
+        const data = await apiClient<{ sessions: VeeamSession[] }>(`${API}/sessions${qs}`);
         return data.sessions ?? [];
     },
 
-    async listRepositories(): Promise<VeeamRepository[]> {
-        const data = await apiClient<{ repositories: VeeamRepository[] }>(`${API}/repositories`);
+    async listRepositories(serverId?: number | null): Promise<VeeamRepository[]> {
+        const qs = serverId != null ? `?server_id=${serverId}` : '';
+        const data = await apiClient<{ repositories: VeeamRepository[] }>(`${API}/repositories${qs}`);
         return data.repositories ?? [];
     },
 
-    async listServers(): Promise<VeeamManagedServer[]> {
-        const data = await apiClient<{ servers: VeeamManagedServer[] }>(`${API}/servers`);
+    async listServers(serverId?: number | null): Promise<VeeamManagedServer[]> {
+        const qs = serverId != null ? `?server_id=${serverId}` : '';
+        const data = await apiClient<{ servers: VeeamManagedServer[] }>(`${API}/servers${qs}`);
         return data.servers ?? [];
     },
 
-    async listRestorePoints(vmId?: string): Promise<VeeamRestorePoint[]> {
-        const url = vmId ? `${API}/restore-points?vm_id=${vmId}` : `${API}/restore-points`;
+    async listRestorePoints(vmId?: string, serverId?: number | null): Promise<VeeamRestorePoint[]> {
+        const sep = vmId ? '&' : '?';
+        const sid = serverId != null ? `${sep}server_id=${serverId}` : '';
+        const url = vmId ? `${API}/restore-points?vm_id=${vmId}${sid}` : `${API}/restore-points${sid}`;
         const data = await apiClient<{ restore_points: VeeamRestorePoint[] }>(url);
         return data.restore_points ?? [];
     },
 
-    async getLicense(): Promise<VeeamLicense> {
-        return apiClient<VeeamLicense>(`${API}/license`);
+    async getLicense(serverId?: number | null): Promise<VeeamLicense> {
+        const qs = serverId != null ? `?server_id=${serverId}` : '';
+        return apiClient<VeeamLicense>(`${API}/license${qs}`);
     },
 
-    async getCapacityTier(): Promise<VeeamCapacityTier> {
-        return apiClient<VeeamCapacityTier>(`${API}/capacity-tier`);
+    async getCapacityTier(serverId?: number | null): Promise<VeeamCapacityTier> {
+        const qs = serverId != null ? `?server_id=${serverId}` : '';
+        return apiClient<VeeamCapacityTier>(`${API}/capacity-tier${qs}`);
     },
 
-    async getSessionStats(): Promise<VeeamSessionStatsResponse> {
-        return apiClient<VeeamSessionStatsResponse>(`${API}/sessions/stats`);
+    async getSessionStats(serverId?: number | null): Promise<VeeamSessionStatsResponse> {
+        const qs = serverId != null ? `?server_id=${serverId}` : '';
+        return apiClient<VeeamSessionStatsResponse>(`${API}/sessions/stats${qs}`);
     },
 
-    async getJobStats(): Promise<VeeamJobStatsResponse> {
-        return apiClient<VeeamJobStatsResponse>(`${API}/jobs/stats`);
+    async getJobStats(serverId?: number | null): Promise<VeeamJobStatsResponse> {
+        const qs = serverId != null ? `?server_id=${serverId}` : '';
+        return apiClient<VeeamJobStatsResponse>(`${API}/jobs/stats${qs}`);
     },
 
-    async getJobStatsDaily(days: number = 7): Promise<VeeamJobStatsDailyResponse> {
-        return apiClient<VeeamJobStatsDailyResponse>(`${API}/jobs/stats/daily?days=${days}`);
+    async getJobStatsDaily(days: number = 7, serverId?: number | null): Promise<VeeamJobStatsDailyResponse> {
+        const sid = serverId != null ? `&server_id=${serverId}` : '';
+        return apiClient<VeeamJobStatsDailyResponse>(`${API}/jobs/stats/daily?days=${days}${sid}`);
     },
 };

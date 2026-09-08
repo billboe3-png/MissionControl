@@ -237,9 +237,10 @@ async def _serve(
 @router.get("/overview")
 async def get_overview(
     refresh: bool = Query(False),
+    server_id: int | None = Query(None, description="Veeam server config id"),
     db: Session = Depends(get_db),
 ) -> dict[str, Any]:
-    server = _first_server(db)
+    server = _resolve_server(db, server_id)
     if server is None:
         return _failed("overview", _NO_SERVER)
     try:
@@ -250,8 +251,11 @@ async def get_overview(
 
 
 @router.get("/health")
-async def get_health(db: Session = Depends(get_db)) -> dict[str, Any]:
-    server = _first_server(db)
+async def get_health(
+    server_id: int | None = Query(None, description="Veeam server config id"),
+    db: Session = Depends(get_db),
+) -> dict[str, Any]:
+    server = _resolve_server(db, server_id)
     if server is None:
         return _failed("health", _NO_SERVER)
     try:
@@ -262,8 +266,11 @@ async def get_health(db: Session = Depends(get_db)) -> dict[str, Any]:
 
 
 @router.get("/test")
-async def test_connection(db: Session = Depends(get_db)) -> dict[str, Any]:
-    server = _first_server(db)
+async def test_connection(
+    server_id: int | None = Query(None, description="Veeam server config id"),
+    db: Session = Depends(get_db),
+) -> dict[str, Any]:
+    server = _resolve_server(db, server_id)
     if server is None:
         return _failed("test", _NO_SERVER)
     try:
@@ -292,9 +299,10 @@ async def list_jobs(
 @router.get("/jobs/stats")
 async def get_job_stats(
     refresh: bool = Query(False),
+    server_id: int | None = Query(None, description="Veeam server config id"),
     db: Session = Depends(get_db),
 ) -> dict[str, Any]:
-    server = _first_server(db)
+    server = _resolve_server(db, server_id)
     if server is None:
         return _failed("job_stats", _NO_SERVER)
     try:
@@ -308,9 +316,10 @@ async def get_job_stats(
 async def get_job_stats_daily(
     days: int = Query(default=7, ge=1, le=90),
     refresh: bool = Query(False),
+    server_id: int | None = Query(None, description="Veeam server config id"),
     db: Session = Depends(get_db),
 ) -> dict[str, Any]:
-    server = _first_server(db)
+    server = _resolve_server(db, server_id)
     if server is None:
         return _failed("job_stats_daily", _NO_SERVER)
     try:
@@ -326,9 +335,10 @@ async def get_job_stats_daily(
 @router.get("/jobs/{job_id}")
 async def get_job_detail(
     job_id: str,
+    server_id: int | None = Query(None, description="Veeam server config id"),
     db: Session = Depends(get_db),
 ) -> dict[str, Any]:
-    server = _first_server(db)
+    server = _resolve_server(db, server_id)
     if server is None:
         return _failed("job_detail", _NO_SERVER)
     try:
@@ -371,9 +381,10 @@ async def stop_job(
 @router.get("/sessions")
 async def list_sessions(
     refresh: bool = Query(False),
+    server_id: int | None = Query(None, description="Veeam server config id"),
     db: Session = Depends(get_db),
 ) -> dict[str, Any]:
-    server = _first_server(db)
+    server = _resolve_server(db, server_id)
     if server is None:
         return _failed("sessions", _NO_SERVER)
     try:
@@ -386,9 +397,10 @@ async def list_sessions(
 @router.get("/sessions/stats")
 async def get_session_stats(
     refresh: bool = Query(False),
+    server_id: int | None = Query(None, description="Veeam server config id"),
     db: Session = Depends(get_db),
 ) -> dict[str, Any]:
-    server = _first_server(db)
+    server = _resolve_server(db, server_id)
     if server is None:
         return _failed("session_stats", _NO_SERVER)
     try:
@@ -401,9 +413,10 @@ async def get_session_stats(
 @router.get("/repositories")
 async def list_repositories(
     refresh: bool = Query(False),
+    server_id: int | None = Query(None, description="Veeam server config id"),
     db: Session = Depends(get_db),
 ) -> dict[str, Any]:
-    server = _first_server(db)
+    server = _resolve_server(db, server_id)
     if server is None:
         return _failed("repositories", _NO_SERVER)
     try:
@@ -415,9 +428,10 @@ async def list_repositories(
 
 @router.get("/servers")
 async def list_managed_servers(
+    server_id: int | None = Query(None, description="Veeam server config id"),
     db: Session = Depends(get_db),
 ) -> dict[str, Any]:
-    server = _first_server(db)
+    server = _resolve_server(db, server_id)
     if server is None:
         return _failed("servers", _NO_SERVER)
     try:
@@ -430,9 +444,10 @@ async def list_managed_servers(
 @router.get("/restore-points")
 async def list_restore_points(
     vm_id: str | None = Query(None),
+    server_id: int | None = Query(None, description="Veeam server config id"),
     db: Session = Depends(get_db),
 ) -> dict[str, Any]:
-    server = _first_server(db)
+    server = _resolve_server(db, server_id)
     if server is None:
         return _failed("restore_points", _NO_SERVER)
     try:
@@ -445,9 +460,10 @@ async def list_restore_points(
 @router.get("/license")
 async def get_license(
     refresh: bool = Query(False),
+    server_id: int | None = Query(None, description="Veeam server config id"),
     db: Session = Depends(get_db),
 ) -> dict[str, Any]:
-    server = _first_server(db)
+    server = _resolve_server(db, server_id)
     if server is None:
         return _failed("license", _NO_SERVER)
     try:
@@ -460,9 +476,10 @@ async def get_license(
 @router.get("/capacity-tier")
 async def get_capacity_tier(
     refresh: bool = Query(False),
+    server_id: int | None = Query(None, description="Veeam server config id"),
     db: Session = Depends(get_db),
 ) -> dict[str, Any]:
-    server = _first_server(db)
+    server = _resolve_server(db, server_id)
     if server is None:
         return _failed("capacity_tier", _NO_SERVER)
     try:

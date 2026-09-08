@@ -1,4 +1,6 @@
 import { useEffect, useState } from "react";
+import { useVeeamServer } from "../../contexts/VeeamServerContext";
+import { ServerSelector } from "../../components/veeam/ServerSelector";
 import PageHeader from "../../components/common/PageHeader";
 import StatusBadge from "../../components/common/StatusBadge";
 import {
@@ -29,13 +31,19 @@ export default function VeeamOverviewPage() {
     const [repos, setRepos] = useState<VeeamRepository[]>([]);
     const [error, setError] = useState<string | null>(null);
     const [loading, setLoading] = useState(true);
+    const { servers, selectedServerId } = useVeeamServer();
 
     useEffect(() => {
+        // Servers fetched by VeeamServerProvider
+    }, [selectedServerId]);
+
+    useEffect(() => {
+        if (loading) return;
         Promise.all([
-            veeamApi.getSummary(),
-            veeamApi.getHealth(),
-            veeamApi.listJobs(),
-            veeamApi.listRepositories(),
+            veeamApi.getSummary(selectedServerId),
+            veeamApi.getHealth(selectedServerId),
+            veeamApi.listJobs(selectedServerId),
+            veeamApi.listRepositories(selectedServerId),
         ])
             .then(([s, h, j, r]) => {
                 setSummary(s);
@@ -45,7 +53,9 @@ export default function VeeamOverviewPage() {
             })
             .catch((e) => setError(e.message))
             .finally(() => setLoading(false));
-    }, []);
+    }, [selectedServerId, loading]);
+
+    const selectedServerName = servers.length > 0 ? servers.find(s => s.id === selectedServerId)?.name : "Veeam Server";
 
     if (loading) return <div className="loading-bar" />;
     if (error) return <div className="error-banner">{error}</div>;
@@ -60,7 +70,7 @@ export default function VeeamOverviewPage() {
         <>
             <PageHeader
                 title="Veeam Backup &amp; Replication"
-                subtitle={`${summary.name ?? "Veeam Server"} v${summary.version ?? "?"}`}
+                subtitle={`${selectedServerName ?? "Veeam Server"} v${summary.version ?? "?"}`}
             />
             {!summary.success && (
                 <div className="error-banner">
@@ -76,7 +86,6 @@ export default function VeeamOverviewPage() {
                     <span>{health.healthy ? "Server reachable" : health.error}</span>
                 </div>
             )}
-
             <div className="dashboard-row">
                 <div className="dashboard-card">
                     <div className="dashboard-card-header">Jobs</div>
@@ -102,15 +111,13 @@ export default function VeeamOverviewPage() {
             </div>
 
             {summary.success && (
-                <div className="dashboard-row">
-                    <div className="dashboard-section">
-                        <h3>Storage Usage</h3>
-                        <div className="progress-bar">
-                            <div
-                                className={`progress-fill ${storagePercent > 90 ? "danger" : storagePercent > 75 ? "warning" : ""}`}
-                                style={{ width: `${storagePercent}%` }}
-                            />
-                        </div>
+                <div className="dashboard-section">
+                    <h3>Storage Usage</h3>
+                    <div className="progress-bar">
+                        <div
+                            className={`progress-fill ${storagePercent > 90 ? "danger" : storagePercent > 75 ? "warning" : ""}`}
+                            style={{ width: `${storagePercent}%` }}
+                        />
                         <div className="progress-label">
                             {storagePercent}% — {formatBytes(summary.used_space_bytes)} used of{" "}
                             {formatBytes(summary.total_space_bytes)}
@@ -146,7 +153,7 @@ export default function VeeamOverviewPage() {
                                                 <button
                                                     className="btn btn-sm btn-success"
                                                     onClick={() =>
-                                                        veeamApi.startJob(job.id).catch(() => {})
+                                                        veeamApi.startJob(job.id, selectedServerId).catch(() => {})
                                                     }
                                                 >
                                                     Start
@@ -156,7 +163,7 @@ export default function VeeamOverviewPage() {
                                                 <button
                                                     className="btn btn-sm btn-danger"
                                                     onClick={() =>
-                                                        veeamApi.stopJob(job.id).catch(() => {})
+                                                        veeamApi.stopJob(job.id, selectedServerId).catch(() => {})
                                                     }
                                                 >
                                                     Stop
@@ -184,23 +191,26 @@ export default function VeeamOverviewPage() {
                             </tr>
                         </thead>
                         <tbody>
-                            {repos.map((repo) => (
-                                <tr key={repo.id}>
-                                    <td>{repo.name}</td>
-                                    <td>{repo.type}</td>
-                                    <td>{repo.repository?.path ?? "-"}</td>
-                                    <td>
-                                        <StatusBadge
-                                            status={repoStatus(repo) === "Available" ? "healthy" : "warning"}
-                                            label={repoStatus(repo)}
-                                        />
-                                    </td>
-                                </tr>
-                            ))}
+                            {repos.map((repo) => {
+                                return (
+                                    <tr key={repo.id}>
+                                        <td>{repo.name}</td>
+                                        <td>{repo.type}</td>
+                                        <td>{repo.repository?.path ?? "-"}</td>
+                                        <td>
+                                            <StatusBadge
+                                                status={repoStatus(repo) === "Available" ? "healthy" : "warning"}
+                                                label={repoStatus(repo)}
+                                            />
+                                        </td>
+                                    </tr>
+                                );
+                            })}
                         </tbody>
                     </table>
                 </div>
             )}
+            {servers.length > 1 && <ServerSelector />}
         </>
     );
 }

@@ -32,6 +32,7 @@ nginx/ssl/*.crt
 # Backup/build artifacts
 *.bak
 **/tsconfig.app.tsbuildinfo
+**/tsconfig.node.tsbuildinfo
 
 
 # Frontend demo libraries
