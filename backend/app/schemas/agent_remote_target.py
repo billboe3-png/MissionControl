@@ -4,7 +4,7 @@ Mission Control Agent Remote Target Schemas
 
 from datetime import datetime
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class RemoteTargetCreate(BaseModel):
@@ -19,6 +19,8 @@ class RemoteTargetCreate(BaseModel):
     tags: str | None = None
     notes: str | None = None
     target_plugins: str | None = None
+    db_type: str = Field("postgresql", pattern="^(postgresql|mssql)$")
+    column_case: str = Field("pascal", pattern="^(pascal|snake)$")
 
 
 class RemoteTargetUpdate(BaseModel):
@@ -33,6 +35,8 @@ class RemoteTargetUpdate(BaseModel):
     tags: str | None = None
     notes: str | None = None
     target_plugins: str | None = None
+    db_type: str | None = Field(None, pattern="^(postgresql|mssql)$")
+    column_case: str | None = Field(None, pattern="^(pascal|snake)$")
 
 
 class RemoteTargetResponse(BaseModel):
@@ -53,6 +57,8 @@ class RemoteTargetResponse(BaseModel):
     updated_at: datetime
 
     target_plugins: str | None = None
+    db_type: str
+    column_case: str
 
     model_config = {"from_attributes": True}
 
