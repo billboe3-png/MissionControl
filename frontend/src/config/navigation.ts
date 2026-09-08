@@ -119,6 +119,7 @@ export const navigation: NavGroup[] = [
         icon: "📡",
         items: [
             { label: "Overview", path: "/mikrotik", icon: "📊" },
+            { label: "Config", path: "/mikrotik/config", icon: "⚙️" },
             { label: "Interfaces", path: "/mikrotik/interfaces", icon: "🌐" },
             { label: "Firewall", path: "/mikrotik/firewall", icon: "🛡️" },
             { label: "DHCP", path: "/mikrotik/dhcp", icon: "🔌" },

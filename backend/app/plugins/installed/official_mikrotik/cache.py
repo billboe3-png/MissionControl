@@ -196,6 +196,8 @@ class MikroTikCacheManager:
             "username": server.username,
             "api_enabled": server.api_enabled,
             "api_port": server.api_port,
+            "relay_agent_id": server.relay_agent_id,
+            "remote_target_id": server.remote_target_id,
             "enabled": server.enabled,
             "status": server.status,
             "last_error": server.last_error,

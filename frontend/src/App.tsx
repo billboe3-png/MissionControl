@@ -3,6 +3,7 @@ import { AuthProvider } from "./contexts/AuthContext";
 import { SidebarProvider } from "./contexts/SidebarContext";
 import { ToastProvider } from "./contexts/ToastContext";
 import { SiteProvider } from "./contexts/SiteContext";
+import { VeeamServerProvider } from "./contexts/VeeamServerContext";
 import AppLayout from "./layouts/AppLayout";
 import RequireAuth from "./layouts/RequireAuth";
 import RequireSetup from "./layouts/RequireSetup";
@@ -105,6 +106,11 @@ import UniFiSitesPage from "./pages/unifi/SitesPage";
 import NetworkTopologyPage from "./pages/network/NetworkTopologyPage";
 import TopologyPage from "./pages/agents/TopologyPage";
 import MikroTikOverviewPage from "./pages/mikrotik/OverviewPage";
+import MikroTikInterfacesPage from "./pages/mikrotik/InterfacesPage";
+import MikroTikFirewallPage from "./pages/mikrotik/FirewallPage";
+import MikroTikDhcpPage from "./pages/mikrotik/DhcpPage";
+import MikroTikConsolePage from "./pages/mikrotik/ConsolePage";
+import MikroTikConfigPage from "./pages/mikrotik/ConfigPage";
 
 export default function App() {
     return (
@@ -113,7 +119,8 @@ export default function App() {
                 <SidebarProvider>
                     <ToastProvider>
                         <SiteProvider>
-                            <Routes>
+                            <VeeamServerProvider>
+                <Routes>
                             <Route path="/setup" element={<SetupWizardPage />} />
                             <Route element={<RequireSetup />}>
                                 <Route path="/login" element={<LoginPage />} />
@@ -190,6 +197,11 @@ export default function App() {
 
                             {/* MikroTik */}
                             <Route path="/mikrotik" element={<MikroTikOverviewPage />} />
+                            <Route path="/mikrotik/interfaces" element={<MikroTikInterfacesPage />} />
+                            <Route path="/mikrotik/firewall" element={<MikroTikFirewallPage />} />
+                            <Route path="/mikrotik/dhcp" element={<MikroTikDhcpPage />} />
+                            <Route path="/mikrotik/console" element={<MikroTikConsolePage />} />
+                            <Route path="/mikrotik/config" element={<MikroTikConfigPage />} />
 
                             {/* Network */}
                             <Route path="/network/topology" element={<NetworkTopologyPage />} />
@@ -245,6 +257,7 @@ export default function App() {
                         </Route>
                         </Route>
                         </Routes>
+        </VeeamServerProvider>
                     </SiteProvider>
                     </ToastProvider>
                 </SidebarProvider>

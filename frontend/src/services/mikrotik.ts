@@ -13,6 +13,7 @@ export interface MikroTikServer {
   api_enabled: boolean;
   api_port: number | null;
   enabled: boolean;
+  relay_agent_id: number | null;
   status: string;
   last_error: string | null;
   version: string | null;
@@ -55,9 +56,20 @@ export interface MikroTikDhcpLease {
   expires: string | null;
 }
 
+export interface MikroTikAgentOption {
+  id: number;
+  name: string;
+  hostname: string | null;
+  status: string;
+}
+
 export const mikrotikApi = {
   async listServers(): Promise<MikroTikServer[]> {
     return apiClient<MikroTikServer[]>(`${API}/servers`);
+  },
+
+  async listAgents(): Promise<MikroTikAgentOption[]> {
+    return apiClient<MikroTikAgentOption[]>(`${API}/agents`);
   },
 
   async getServer(serverId: number): Promise<MikroTikServer> {
@@ -117,7 +129,80 @@ export const mikrotikApi = {
     });
   },
 
+  async listInterfacesConfig(serverId: number): Promise<{ success: boolean; interfaces: any[] }> {
+    return apiClient(`${API}/servers/${serverId}/config/interfaces`);
+  },
+
+  async updateInterface(serverId: number, name: string, payload: Record<string, unknown>): Promise<any> {
+    return apiClient(`${API}/servers/${serverId}/config/interfaces/${encodeURIComponent(name)}`, {
+      method: "PATCH",
+      json: payload,
+    });
+  },
+
+  async listConfigIpAddresses(serverId: number): Promise<{ success: boolean; addresses: any[] }> {
+    return apiClient(`${API}/servers/${serverId}/config/ip-addresses`);
+  },
+
+  async createIpAddress(serverId: number, payload: Record<string, unknown>): Promise<any> {
+    return apiClient(`${API}/servers/${serverId}/config/ip-addresses`, {
+      method: "POST",
+      json: payload,
+    });
+  },
+
+  async deleteIpAddress(serverId: number, addressId: string): Promise<any> {
+    return apiClient(`${API}/servers/${serverId}/config/ip-addresses/${encodeURIComponent(addressId)}`, {
+      method: "DELETE",
+    });
+  },
+
+  async listFirewallRulesConfig(serverId: number): Promise<{ success: boolean; rules: any[] }> {
+    return apiClient(`${API}/servers/${serverId}/config/firewall-rules`);
+  },
+
+  async createFirewallRule(serverId: number, payload: Record<string, unknown>): Promise<any> {
+    return apiClient(`${API}/servers/${serverId}/config/firewall-rules`, {
+      method: "POST",
+      json: payload,
+    });
+  },
+
+  async updateFirewallRule(serverId: number, ruleId: string, payload: Record<string, unknown>): Promise<any> {
+    return apiClient(`${API}/servers/${serverId}/config/firewall-rules/${encodeURIComponent(ruleId)}`, {
+      method: "PATCH",
+      json: payload,
+    });
+  },
+
+  async deleteFirewallRule(serverId: number, ruleId: string): Promise<any> {
+    return apiClient(`${API}/servers/${serverId}/config/firewall-rules/${encodeURIComponent(ruleId)}`, {
+      method: "DELETE",
+    });
+  },
+
+  async listDhcpLeasesConfig(serverId: number): Promise<{ success: boolean; leases: any[] }> {
+    return apiClient(`${API}/servers/${serverId}/config/dhcp-leases`);
+  },
+
+  async getSystemConfig(serverId: number): Promise<{ success: boolean; config: Record<string, any> }> {
+    return apiClient(`${API}/servers/${serverId}/config/system`);
+  },
+
+  async updateSystemConfig(serverId: number, payload: Record<string, unknown>): Promise<any> {
+    return apiClient(`${API}/servers/${serverId}/config/system`, {
+      method: "PATCH",
+      json: payload,
+    });
+  },
+
   getWebfigUrl(serverId: number, path = ""): string {
     return `${API}/servers/${serverId}/webfig/${path}`;
+  },
+
+  getWebfigWsUrl(serverId: number): string {
+    const loc = typeof window !== "undefined" ? (window as any).location : { protocol: "https:", host: "" };
+    const wsProto = loc.protocol === "https:" ? "wss:" : "ws:";
+    return `${wsProto}//${loc.host}${API}/servers/${serverId}/webfig/ws`;
   },
 };

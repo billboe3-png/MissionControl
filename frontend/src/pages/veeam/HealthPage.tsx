@@ -1,20 +1,33 @@
 import { useEffect, useState } from "react";
+import { useVeeamServer } from "../../contexts/VeeamServerContext";
+import { ServerSelector } from "../../components/veeam/ServerSelector";
 import PageHeader from "../../components/common/PageHeader";
 import StatusBadge from "../../components/common/StatusBadge";
-import { veeamApi, VeeamHealth } from "../../services/veeam";
+import {
+    veeamApi,
+    VeeamHealth,
+} from "../../services/veeam";
 
 export default function VeeamHealthPage() {
     const [health, setHealth] = useState<VeeamHealth | null>(null);
-    const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    const [loading, setLoading] = useState(true);
+    const { servers, selectedServerId } = useVeeamServer();
 
     useEffect(() => {
-        veeamApi
-            .getHealth()
-            .then(setHealth)
-            .catch((e) => setError(e.message))
-            .finally(() => setLoading(false));
-    }, []);
+        // Servers fetched by VeeamServerProvider
+    }, [selectedServerId]);
+
+    useEffect(() => {
+        if (loading) return;
+        veeamApi.getHealth(selectedServerId).then((h) => {
+            setHealth(h);
+        })
+        .catch((e) => setError(e.message))
+        .finally(() => setLoading(false));
+    }, [selectedServerId, loading]);
+
+    const selectedServerName = servers.length > 0 ? servers.find(s => s.id === selectedServerId)?.name : "Veeam Server";
 
     if (loading) return <div className="loading-bar" />;
     if (error) return <div className="error-banner">{error}</div>;
@@ -22,34 +35,21 @@ export default function VeeamHealthPage() {
 
     return (
         <>
-            <PageHeader title="Veeam Health" subtitle="Veeam B&amp;R server health status" />
-            <div className="health-card">
-                <div className="health-card-row">
+            <PageHeader
+                title="Veeam Health"
+                subtitle={`${selectedServerName ?? "Veeam Server"} v${health.version ?? "?"}`}
+            />
+            {health && (
+                <div className="veeam-connection-status">
                     <StatusBadge
                         status={health.healthy ? "healthy" : "error"}
-                        label={health.healthy ? "Healthy" : "Error"}
+                        label={health.healthy ? "Connected" : "Error"}
                     />
-                    <span className="health-status-label">
-                        {health.healthy ? "Server is healthy" : "Server is unreachable"}
-                    </span>
+                    <span>{health.healthy ? "Server reachable" : health.error}</span>
                 </div>
-                <div className="health-card-details">
-                    <div className="health-detail">
-                        <span className="health-detail-label">Name</span>
-                        <span className="health-detail-value">{health.name ?? "-"}</span>
-                    </div>
-                    <div className="health-detail">
-                        <span className="health-detail-label">Version</span>
-                        <span className="health-detail-value">{health.version ?? "-"}</span>
-                    </div>
-                    {health.error && (
-                        <div className="health-detail">
-                            <span className="health-detail-label">Error</span>
-                            <span className="health-detail-value error">{health.error}</span>
-                        </div>
-                    )}
-                </div>
-            </div>
+            )}
+
+        {servers.length > 1 && <ServerSelector />}
         </>
     );
 }

@@ -102,7 +102,7 @@ def job_stats_sql(db_type: str = "postgresql", column_case: str = "pascal") -> s
     SUM(CASE WHEN js.result = 1 THEN 1 ELSE 0 END),
     SUM(CASE WHEN js.result = 2 THEN 1 ELSE 0 END)
 FROM [Backup.Model.JobSessions] js
-LEFT JOIN [Backup.Model.BackupJobSessions] bs ON bs.Id = js.Id
+LEFT JOIN [Backup.Model.BackupJobSessions] bs ON bs.id = js.id
 WHERE 1=1 {_mssql_where(column_case)}
 GROUP BY {norm}
 ORDER BY MAX(js.creation_time) DESC"""
@@ -169,7 +169,7 @@ def job_stats_daily_sql(days: int = 7, db_type: str = "postgresql", column_case:
     SUM(CASE WHEN js.result = 1 THEN 1 ELSE 0 END) AS warning_count,
     SUM(CASE WHEN js.result = 2 THEN 1 ELSE 0 END) AS failed_count
 FROM [Backup.Model.JobSessions] js
-LEFT JOIN [Backup.Model.BackupJobSessions] bs ON bs.Id = js.Id
+LEFT JOIN [Backup.Model.BackupJobSessions] bs ON bs.id = js.id
 WHERE js.creation_time >= DATEADD(day, -{days}, GETDATE()) {_mssql_where(column_case)}
 GROUP BY {norm}, CAST(js.creation_time AS DATE)
 ORDER BY 1, 2 DESC"""
@@ -215,8 +215,8 @@ def session_stats_sql(db_type: str = "postgresql", column_case: str = "pascal") 
         if column_case == "snake":
             norm = _NORM_NAME_MSSQL_SNAKE
             return f"""SELECT TOP 200
-    js.Id,
-    js.JobId,
+    js.id,
+    js.job_id,
     {norm} AS job_name,
     js.state,
     js.creation_time,
@@ -228,7 +228,7 @@ def session_stats_sql(db_type: str = "postgresql", column_case: str = "pascal") 
     ISNULL(bs.stored_size, 0),
     ISNULL(bs.avg_speed, 0)
 FROM [Backup.Model.JobSessions] js
-LEFT JOIN [Backup.Model.BackupJobSessions] bs ON bs.Id = js.Id
+LEFT JOIN [Backup.Model.BackupJobSessions] bs ON bs.id = js.id
 WHERE 1=1 {_mssql_where(column_case)}
 ORDER BY js.creation_time DESC"""
         else:

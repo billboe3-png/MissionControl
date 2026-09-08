@@ -304,8 +304,13 @@ def check_write_permissions() -> CheckResult:
 
     dirs_to_check = [
         os.path.join(tempfile.gettempdir(), "missioncontrol"),
-        os.path.join(os.path.expanduser("~"), ".config", "mission-control"),
     ]
+
+    home_config = os.path.join(
+        os.path.expanduser("~"), ".config", "mission-control"
+    )
+    if os.path.expanduser("~") != "/nonexistent":
+        dirs_to_check.append(home_config)
 
     issues = []
     for d in dirs_to_check:

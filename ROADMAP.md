@@ -1,4 +1,15 @@
-# Roadmap
+# Mission Control — Roadmap
+
+> **Current Release: v3.0.0-RC1 (Release Candidate 1)**
+> **Branch:** `release/v3.0.0-rc1`
+> **Status:** Stabilization and validation for Community Edition RC1
+> **Target:** Real-world client testing → RC1 → Community Edition v1.0
+> 
+> **Immediate Priority:** Keep CI green (ruff + pytest + frontend build), fix known blockers, complete end-to-end agent-relay validation for MikroTik and D-Link.
+> 
+> **CI Status (latest verified):** Run `31415687763` on `release/v3.0.0-rc1`: **all green** — backend lint ✓, backend tests **1512 passed / 1 skipped**, frontend tsc+build ✓.
+
+---
 
 This document outlines the Mission Control project roadmap. Priorities may shift based on community feedback, security needs, and Enterprise customer requirements.
 
@@ -165,3 +176,37 @@ Beta and release candidate periods are used for major releases. Subscribe to [re
 - Open a [Discussion](https://github.com/billboe3-png/MissionControl/discussions) for general roadmap feedback
 - Email [product@missioncontrol.dev](mailto:product@missioncontrol.dev) for Enterprise-specific requests
 - Join the community Slack (link in the repository About section)
+
+---
+
+## RC1-Specific Notes (v3.0.0-RC1)
+
+### Installed Plugins (verified in `backend/app/plugins/installed/`)
+- `git` — Git integration
+- `hyperv` — Hyper-V integration  
+- `official_dlink` — D-Link DGS-1210 agent-relay (NEW)
+- `official_docker` — Docker integration
+- `official_mikrotik` — MikroTik RouterOS agent-relay (NEW)
+- `official_unifi` — UniFi integration
+- `official_veeam` — Veeam integration + collector
+- `system_info` — System info plugin
+- `zabbix` — Zabbix integration
+
+### Agent Plugins (in `.agents/agent/plugins/`)
+- `dlink_plugin.py` — D-Link CLI, REST, WebUI stream
+- `mikrotik_plugin.py` — MikroTik CLI, REST, native API, WebFig relay
+- `active_directory_plugin.py` — AD via SSH/PowerShell
+
+### Known Blockers for RC1
+1. **D-Link import fix** — Local `relay.py` needs `AgentCommand` import corrected
+2. **Agent 6 (zabbix-proxy)** — Goes offline after restart; needs systemd `reset-failed`
+3. **Veeam circular import** — Pre-existing issue causing backend crashes; needs fix
+
+### RC1 Validation Checklist
+- [ ] CI green: ruff + pytest + frontend build
+- [ ] MikroTik E2E via Agent 6: CLI, ARP, Terminal, WebFig
+- [ ] D-Link E2E via Agent 6: CLI, MAC table, VLAN, WebUI tunnel
+- [ ] Veeam dashboard: real data verified
+- [ ] Zabbix integration: hosts, metrics, alerts
+- [ ] UniFi integration: sites, devices, clients
+- [ ] Documentation sync: all docs match repo state

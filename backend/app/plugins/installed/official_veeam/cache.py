@@ -32,7 +32,7 @@ def _server_to_dict(s: VeeamBackupServer) -> dict[str, Any]:
         "column_case": s.column_case,
         "agent_id": s.agent_id,
         "target_id": s.target_id,
-        "rest_url": s.rest_url,
+        "rest_url": s.url,
         "enabled": s.enabled,
         "status": s.status,
         "version": s.version,

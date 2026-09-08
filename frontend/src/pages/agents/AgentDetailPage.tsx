@@ -313,6 +313,8 @@ export default function AgentDetailPage() {
         { label: "Hyper-V", value: "hyperv" },
         { label: "Linux", value: "linux" },
         { label: "Microsoft 365", value: "microsoft_365" },
+        { label: "MikroTik", value: "mikrotik" },
+        { label: "Veeam", value: "veeam" },
         { label: "Windows", value: "windows" },
         { label: "Windows Docker", value: "windows_docker" },
         { label: "Zabbix", value: "zabbix" },

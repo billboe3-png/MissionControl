@@ -3,7 +3,7 @@ MikroTik Plugin SQLAlchemy Models
 """
 from datetime import UTC, datetime
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy import BigInteger, Boolean, DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.database import Base
@@ -19,12 +19,17 @@ class MikroTikServer(Base):
     host: Mapped[str] = mapped_column(String(500), nullable=False)
     ssh_port: Mapped[int] = mapped_column(Integer, nullable=False, default=22)
     telnet_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
-    telnet_port: Mapped[int] = mapped_column(Integer, nullable=True)
+    telnet_port: Mapped[int | None] = mapped_column(Integer, nullable=True)
     username: Mapped[str] = mapped_column(String(200), nullable=False)
     password_encrypted: Mapped[str | None] = mapped_column(Text, nullable=True)
     api_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
-    api_port: Mapped[int] = mapped_column(Integer, nullable=True)
+    api_port: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    relay_agent_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("agents.id", ondelete="SET NULL"), nullable=True
+    )
+    remote_target_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, index=True)
+    allow_insecure_ssl: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     last_sync_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="unknown")
     last_error: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -38,6 +43,30 @@ class MikroTikServer(Base):
     )
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, default=lambda: datetime.now(UTC), onupdate=lambda: datetime.now(UTC)
+    )
+
+
+class MikroTikCommandLog(Base):
+    """Audit log of commands executed against a MikroTik server."""
+
+    __tablename__ = "mikrotik_command_logs"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    server_id: Mapped[int] = mapped_column(
+        Integer,
+        ForeignKey("mikrotik_servers.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    connector_type: Mapped[str] = mapped_column(String(20), nullable=False)
+    command: Mapped[str] = mapped_column(Text, nullable=False)
+    output: Mapped[str | None] = mapped_column(Text, nullable=True)
+    success: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    duration_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    executed_by: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=lambda: datetime.now(UTC), index=True
     )
 
 
@@ -55,10 +84,10 @@ class MikroTikInterface(Base):
     type: Mapped[str | None] = mapped_column(String(50), nullable=True)
     status: Mapped[str | None] = mapped_column(String(20), nullable=True)
     link_status: Mapped[str | None] = mapped_column(String(20), nullable=True)
-    rx_byte_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
-    tx_byte_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
-    rx_packet_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
-    tx_packet_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    rx_byte_count: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
+    tx_byte_count: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
+    rx_packet_count: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
+    tx_packet_count: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
     mac_address: Mapped[str | None] = mapped_column(String(50), nullable=True)
     actual_mtu: Mapped[int | None] = mapped_column(Integer, nullable=True)
     last_seen: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)

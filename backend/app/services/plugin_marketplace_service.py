@@ -18,6 +18,18 @@ BUILTIN_CATALOG: list[dict[str, Any]] = [
     # Server Plugins                                                      #
     # ------------------------------------------------------------------ #
     {
+        "slug": "official_mikrotik",
+        "name": "MikroTik RouterOS",
+        "version": "1.1.0",
+        "description": "MikroTik RouterOS integration: SSH/Telnet console, WebFig/Web UI proxy, interface status, firewall rules, DHCP leases, system health, and configuration backup.",
+        "author": "Mission Control",
+        "execution_target": "server",
+        "category": "networking",
+        "permissions": ["read:dashboard", "read:network", "execute:remote"],
+        "dependencies": [],
+        "min_core_version": "3.0.0",
+    },
+    {
         "slug": "zabbix",
         "name": "Zabbix Monitoring",
         "version": "1.0.0",

@@ -24,6 +24,29 @@ _VEEAM_API_BASE = os.environ.get("MC_VEEAM_API_BASE", "")
 _VEEAM_USERNAME = os.environ.get("MC_VEEAM_USERNAME", "")
 _VEEAM_PASSWORD = os.environ.get("MC_VEEAM_PASSWORD", "")
 
+_NORM_NAME_PG = "regexp_replace(js.job_name, ' - [A-Za-z0-9._]+$', '')"
+
+_NORM_NAME_MSSQL = (
+    "CASE WHEN CHARINDEX(' - ', js.job_name) > 0 "
+    "THEN LEFT(js.job_name, CHARINDEX(' - ', js.job_name) - 1) "
+    "ELSE js.job_name END"
+)
+
+_WHERE_FILTER_SQL = """\
+AND js.job_name NOT LIKE '%Resynchronize%'
+AND js.job_name NOT LIKE '%Host Discovery%'
+AND js.job_name NOT LIKE '%Foreign transform%'
+AND js.job_name NOT LIKE '%Infrastructure update%'
+AND js.job_name NOT LIKE '%Audit Logs%'
+AND js.job_name NOT LIKE '%Catalog Cleanup%'
+AND js.job_name NOT LIKE '%Shell run%'
+AND js.job_name NOT LIKE '%Backup Configuration%'
+AND js.job_name NOT LIKE '%Hyper-V CBT%'
+AND js.job_name NOT LIKE '%Rescan%'
+AND js.job_name NOT LIKE '%Checkpoint Removal%'
+AND js.job_name NOT LIKE '%Retention job%'
+AND js.job_name NOT LIKE '%Malware Detection%'"""
+
 
 class VeeamPlugin(AgentPlugin):
     """Veeam B&R management plugin - cross-platform."""
@@ -733,9 +756,10 @@ class VeeamPlugin(AgentPlugin):
         payload_key = {"managed_servers": "servers"}
         if command in collector_ops:
             collector = collector_ops[command]
+            db_type = args.get("db_type") or None
             items = await self._run_collector_via_relay(collector, target_id=target_id)
             if collector in ("jobs", "sessions", "repositories") and items is None:
-                items = await self._db_collect(collector, target_id)
+                items = await self._db_collect(collector, target_id, db_type=db_type)
             if collector == "license":
                 return {
                     "success": bool(items),
@@ -760,7 +784,7 @@ class VeeamPlugin(AgentPlugin):
                 "error": None if db_ok else "Veeam DB bridge unavailable",
             }
         if command == "veeam:job_stats":
-            jobs = await self._db_job_stats(target_id)
+            jobs = await self._db_job_stats(target_id, db_type=args.get("db_type"))
             return {
                 "success": jobs is not None,
                 "jobs": jobs or [],
@@ -770,7 +794,7 @@ class VeeamPlugin(AgentPlugin):
                 "error": None if jobs is not None else "Veeam DB bridge unavailable",
             }
         if command == "veeam:session_stats":
-            stats = await self._db_session_stats(target_id)
+            stats = await self._db_session_stats(target_id, db_type=args.get("db_type"))
             return {
                 "success": stats is not None,
                 "stats": stats or [],
@@ -781,7 +805,9 @@ class VeeamPlugin(AgentPlugin):
             }
         if command == "veeam:job_stats_daily":
             days = int(args.get("days", 7) or 7)
-            jobs, dates = await self._db_job_stats_daily(days, target_id)
+            jobs, dates = await self._db_job_stats_daily(
+                days, target_id, db_type=args.get("db_type"),
+            )
             return {
                 "success": jobs is not None,
                 "jobs": jobs or [],
@@ -997,27 +1023,16 @@ AND js.job_name NOT LIKE '%Malware Detection%'"""
         }
 
     async def _db_job_stats(
-        self, target_id: int | None = None,
+        self, target_id: int | None = None, db_type: str | None = None,
     ) -> list[dict[str, Any]] | None:
-        sql = (
-            "SELECT " + self._norm_name() + " AS job_name, "
-            "COUNT(*) as session_count, "
-            "COALESCE(SUM(bs.total_size), 0), "
-            "COALESCE(SUM(bs.processed_size), 0), "
-            "COALESCE(SUM(bs.read_size), 0), "
-            "COALESCE(SUM(bs.stored_size), 0), "
-            "COALESCE(AVG(bs.avg_speed), 0), "
-            "MAX(js.creation_time), "
-            "SUM(CASE WHEN js.result = 0 THEN 1 ELSE 0 END), "
-            "SUM(CASE WHEN js.result = 1 THEN 1 ELSE 0 END), "
-            "SUM(CASE WHEN js.result = 2 THEN 1 ELSE 0 END) "
-            'FROM "backup.model.jobsessions" js '
-            'LEFT JOIN "backup.model.backupjobsessions" bs ON bs.id = js.id '
-            "WHERE 1=1 " + self._WHERE_FILTER + " "
-            "GROUP BY 1 "
-            "ORDER BY MAX(js.creation_time) DESC"
+        if db_type in (None, "", "auto"):
+            db_type = await self._resolved_db_type(target_id)
+        sql = self._db_collect_sql("job_stats", db_type)
+        raw = await self._run_db_query_via_relay(
+            sql, target_id=target_id, db_type=db_type
         )
-        raw = await self._run_db_query_via_relay(sql, target_id=target_id)
+        if raw is None:
+            return None
         rows = self._parse_psql_rows(raw)
         jobs = []
         for r in rows:
@@ -1025,36 +1040,30 @@ AND js.job_name NOT LIKE '%Malware Detection%'"""
                 continue
             jobs.append({
                 "job_name": r[0],
-                "session_count": int(r[1] or 0),
-                "total_bytes": int(float(r[2] or 0)),
-                "processed_bytes": int(float(r[3] or 0)),
-                "read_bytes": int(float(r[4] or 0)),
-                "stored_bytes": int(float(r[5] or 0)),
-                "avg_speed": float(r[6] or 0),
-                "last_run": r[7] or None,
-                "success_count": int(r[8] or 0),
-                "warning_count": int(r[9] or 0),
-                "failed_count": int(r[10] or 0),
+                "session_count": self._to_int(r[1]),
+                "total_bytes": self._to_int(r[2]),
+                "processed_bytes": self._to_int(r[3]),
+                "read_bytes": self._to_int(r[4]),
+                "stored_bytes": self._to_int(r[5]),
+                "avg_speed": self._to_float(r[6]),
+                "last_run": r[7] if r[7] and str(r[7]).strip().lower() != "null" else None,
+                "success_count": self._to_int(r[8]),
+                "warning_count": self._to_int(r[9]),
+                "failed_count": self._to_int(r[10]),
             })
         return jobs
 
     async def _db_session_stats(
-        self, target_id: int | None = None,
+        self, target_id: int | None = None, db_type: str | None = None,
     ) -> list[dict[str, Any]] | None:
-        sql = (
-            "SELECT js.id, js.job_id, "
-            + self._norm_name() + " AS job_name, "
-            "js.state, js.creation_time, js.end_time, js.result, "
-            "COALESCE(bs.processed_size, 0), "
-            "COALESCE(bs.read_size, 0), "
-            "COALESCE(bs.stored_size, 0) "
-            'FROM "backup.model.jobsessions" js '
-            'LEFT JOIN "backup.model.backupjobsessions" bs ON bs.id = js.id '
-            "WHERE 1=1 " + self._WHERE_FILTER + " "
-            "ORDER BY js.creation_time DESC "
-            "LIMIT 200"
+        if db_type in (None, "", "auto"):
+            db_type = await self._resolved_db_type(target_id)
+        sql = self._db_collect_sql("session_stats", db_type)
+        raw = await self._run_db_query_via_relay(
+            sql, target_id=target_id, db_type=db_type
         )
-        raw = await self._run_db_query_via_relay(sql, target_id=target_id)
+        if raw is None:
+            return None
         rows = self._parse_psql_rows(raw)
         stats = []
         for r in rows:
@@ -1064,37 +1073,25 @@ AND js.job_name NOT LIKE '%Malware Detection%'"""
                 "session_id": r[0],
                 "job_id": r[1],
                 "job_name": r[2],
-                "creation_time": r[4] or None,
-                "end_time": r[5] or None,
+                "creation_time": r[4] if str(r[4]).strip().lower() != "null" else None,
+                "end_time": r[5] if str(r[5]).strip().lower() != "null" else None,
                 "state": r[3],
-                "processed_bytes": int(float(r[7] or 0)),
-                "read_bytes": int(float(r[8] or 0)),
-                "transferred_bytes": int(float(r[9] or 0)),
+                "processed_bytes": self._to_int(r[7]),
+                "read_bytes": self._to_int(r[8]),
+                "transferred_bytes": self._to_int(r[9]),
             })
         return stats
 
     async def _db_job_stats_daily(
-        self, days: int, target_id: int | None = None,
+        self, days: int, target_id: int | None = None, db_type: str | None = None,
     ) -> tuple[list[dict[str, Any]] | None, list[str]]:
         days = max(1, int(days))
-        sql = (
-            "SELECT " + self._norm_name() + " AS job_name, "
-            "DATE(js.creation_time) AS run_date, "
-            "COALESCE(SUM(bs.processed_size), 0), "
-            "COALESCE(SUM(bs.read_size), 0), "
-            "COALESCE(SUM(bs.stored_size), 0), "
-            "COUNT(*) AS session_count, "
-            "SUM(CASE WHEN js.result = 0 THEN 1 ELSE 0 END) AS success_count, "
-            "SUM(CASE WHEN js.result = 1 THEN 1 ELSE 0 END) AS warning_count, "
-            "SUM(CASE WHEN js.result = 2 THEN 1 ELSE 0 END) AS failed_count "
-            'FROM "backup.model.jobsessions" js '
-            'LEFT JOIN "backup.model.backupjobsessions" bs ON bs.id = js.id '
-            "WHERE js.creation_time >= NOW() - INTERVAL '" + str(days) + " days' "
-            + self._WHERE_FILTER + " "
-            "GROUP BY 1, DATE(js.creation_time) "
-            "ORDER BY 1, DATE(js.creation_time) DESC"
+        if db_type in (None, "", "auto"):
+            db_type = await self._resolved_db_type(target_id)
+        sql = self._db_collect_sql("job_stats_daily", db_type, days=days)
+        raw = await self._run_db_query_via_relay(
+            sql, target_id=target_id, db_type=db_type
         )
-        raw = await self._run_db_query_via_relay(sql, target_id=target_id)
         if raw is None:
             return None, []
         rows = self._parse_psql_rows(raw)
@@ -1104,17 +1101,17 @@ AND js.job_name NOT LIKE '%Malware Detection%'"""
             if len(r) < 9:
                 continue
             job_name, run_date = r[0], r[1]
-            if not run_date:
+            if not run_date or str(run_date).strip().lower() == "null":
                 continue
             date_set.add(run_date)
             cell = {
-                "processed_bytes": int(float(r[2] or 0)),
-                "read_bytes": int(float(r[3] or 0)),
-                "stored_bytes": int(float(r[4] or 0)),
-                "session_count": int(r[5] or 0),
-                "success_count": int(r[6] or 0),
-                "warning_count": int(r[7] or 0),
-                "failed_count": int(r[8] or 0),
+                "processed_bytes": self._to_int(r[2]),
+                "read_bytes": self._to_int(r[3]),
+                "stored_bytes": self._to_int(r[4]),
+                "session_count": self._to_int(r[5]),
+                "success_count": self._to_int(r[6]),
+                "warning_count": self._to_int(r[7]),
+                "failed_count": self._to_int(r[8]),
             }
             if cell["failed_count"] > 0:
                 cell["result"] = "Failed"
@@ -1128,12 +1125,70 @@ AND js.job_name NOT LIKE '%Malware Detection%'"""
         jobs = sorted(by_job.values(), key=lambda j: j["job_name"])
         return jobs, dates
 
-    async def _db_collect(
-        self, collector: str, target_id: int | None = None,
-    ) -> list[dict[str, Any]] | None:
-        """Collect jobs/sessions from the Veeam DB (fallback for PS relay)."""
+    @staticmethod
+    def _to_bool(value: Any) -> bool:
+        """Parse a SQL/text boolean from either PG (t/f) or MSSQL (1/0)."""
+        if isinstance(value, bool):
+            return value
+        s = str(value or "").strip().lower()
+        return s in ("t", "true", "1", "y", "yes")
+
+    @staticmethod
+    def _to_int(value: Any, default: int = 0) -> int:
+        """Coerce a SQL/text integer, tolerating SQLCMD's literal 'NULL'."""
+        if value is None:
+            return default
+        s = str(value).strip()
+        if s.lower() == "null" or s == "":
+            return default
+        try:
+            return int(float(s))
+        except (TypeError, ValueError):
+            return default
+
+    @staticmethod
+    def _to_float(value: Any, default: float = 0.0) -> float:
+        """Coerce a SQL/text float, tolerating SQLCMD's literal 'NULL'."""
+        if value is None:
+            return default
+        s = str(value).strip()
+        if s.lower() == "null" or s == "":
+            return default
+        try:
+            return float(s)
+        except (TypeError, ValueError):
+            return default
+
+    @staticmethod
+    def _db_collect_sql(
+        collector: str, db_type: str = "postgresql", days: int = 7,
+    ) -> str:
+        """Return the SQL for a DB collection, in the target dialect.
+
+        ``db_type`` may be ``auto``/``postgresql``/``mssql``. The MSSQL schema on
+        BPFHBDC-style servers is snake_case: ``BJobs``,
+        ``[Backup.Model.JobSessions]``, ``[Backup.Model.BackupJobSessions]`` and
+        ``BackupRepositories``. Output is pipe-delimited and parsed identically
+        by ``_parse_psql_rows``.
+        """
         if collector == "jobs":
-            sql = (
+            if db_type == "mssql":
+                return (
+                    "SELECT b.id, b.name, b.type, b.schedule_enabled, "
+                    "COALESCE(js.state, -1) AS state, "
+                    "COALESCE(js.result, -1) AS result, "
+                    "js.creation_time, js.end_time, js.progress "
+                    "FROM BJobs b "
+                    "OUTER APPLY ("
+                    "  SELECT TOP 1 state, result, creation_time, end_time, progress "
+                    "  FROM [Backup.Model.JobSessions] js "
+                    "  WHERE js.job_id = b.id "
+                    "  ORDER BY js.creation_time DESC"
+                    ") js "
+                    "WHERE b.is_deleted = 0 "
+                    "ORDER BY b.name"
+                )
+            return (
                 "SELECT b.id, b.name, b.type, b.schedule_enabled, "
                 "COALESCE(js.state, -1) AS state, "
                 "COALESCE(js.result, -1) AS result, "
@@ -1148,7 +1203,161 @@ AND js.job_name NOT LIKE '%Malware Detection%'"""
                 "WHERE b.is_deleted = false "
                 "ORDER BY b.name"
             )
-            raw = await self._run_db_query_via_relay(sql, target_id=target_id)
+        if collector == "sessions":
+            if db_type == "mssql":
+                return (
+                    "SELECT TOP 200 js.id, js.job_id, js.job_name, js.state, "
+                    "js.result, js.creation_time, js.end_time, js.progress "
+                    "FROM [Backup.Model.JobSessions] js "
+                    "WHERE 1=1 " + _WHERE_FILTER_SQL + " "
+                    "ORDER BY js.creation_time DESC"
+                )
+            return (
+                "SELECT js.id, js.job_id, js.job_name, js.state, js.result, "
+                "js.creation_time, js.end_time, js.progress "
+                'FROM "backup.model.jobsessions" js '
+                "WHERE 1=1 " + _WHERE_FILTER_SQL + " "
+                "ORDER BY js.creation_time DESC LIMIT 200"
+            )
+        if collector == "repositories":
+            if db_type == "mssql":
+                return (
+                    "SELECT id, name, description, type, host_id, path, "
+                    "is_unavailable, status "
+                    "FROM BackupRepositories "
+                    "ORDER BY name"
+                )
+            return (
+                "SELECT id, name, description, type, host_id, path, "
+                "is_unavailable, status "
+                'FROM "backuprepositories" '
+                "ORDER BY name"
+            )
+        if collector == "job_stats":
+            if db_type == "mssql":
+                norm = _NORM_NAME_MSSQL
+                return (
+                    "SELECT " + norm + " AS job_name, "
+                    "COUNT(*) AS session_count, "
+                    "ISNULL(SUM(bs.total_size), 0), "
+                    "ISNULL(SUM(bs.processed_size), 0), "
+                    "ISNULL(SUM(bs.read_size), 0), "
+                    "ISNULL(SUM(bs.stored_size), 0), "
+                    "ISNULL(AVG(bs.avg_speed), 0), "
+                    "MAX(js.creation_time), "
+                    "SUM(CASE WHEN js.result = 0 THEN 1 ELSE 0 END), "
+                    "SUM(CASE WHEN js.result = 1 THEN 1 ELSE 0 END), "
+                    "SUM(CASE WHEN js.result = 2 THEN 1 ELSE 0 END) "
+                    "FROM [Backup.Model.JobSessions] js "
+                    "LEFT JOIN [Backup.Model.BackupJobSessions] bs "
+                    "ON bs.id = js.id "
+                    "WHERE 1=1 " + _WHERE_FILTER_SQL
+                    + " GROUP BY " + norm
+                    + " ORDER BY MAX(js.creation_time) DESC"
+                )
+            return (
+                "SELECT " + _NORM_NAME_PG + " AS job_name, "
+                "COUNT(*) as session_count, "
+                "COALESCE(SUM(bs.total_size), 0), "
+                "COALESCE(SUM(bs.processed_size), 0), "
+                "COALESCE(SUM(bs.read_size), 0), "
+                "COALESCE(SUM(bs.stored_size), 0), "
+                "COALESCE(AVG(bs.avg_speed), 0), "
+                "MAX(js.creation_time), "
+                "SUM(CASE WHEN js.result = 0 THEN 1 ELSE 0 END), "
+                "SUM(CASE WHEN js.result = 1 THEN 1 ELSE 0 END), "
+                "SUM(CASE WHEN js.result = 2 THEN 1 ELSE 0 END) "
+                'FROM "backup.model.jobsessions" js '
+                'LEFT JOIN "backup.model.backupjobsessions" bs ON bs.id = js.id '
+                "WHERE 1=1 " + _WHERE_FILTER_SQL + " "
+                "GROUP BY 1 "
+                "ORDER BY MAX(js.creation_time) DESC"
+            )
+        if collector == "session_stats":
+            if db_type == "mssql":
+                return (
+                    "SELECT TOP 200 js.id, js.job_id, "
+                    + _NORM_NAME_MSSQL + " AS job_name, "
+                    "js.state, js.creation_time, js.end_time, js.result, "
+                    "ISNULL(bs.processed_size, 0), "
+                    "ISNULL(bs.read_size, 0), "
+                    "ISNULL(bs.stored_size, 0) "
+                    "FROM [Backup.Model.JobSessions] js "
+                    "LEFT JOIN [Backup.Model.BackupJobSessions] bs "
+                    "ON bs.id = js.id "
+                    "WHERE 1=1 " + _WHERE_FILTER_SQL + " "
+                    "ORDER BY js.creation_time DESC"
+                )
+            return (
+                "SELECT js.id, js.job_id, "
+                + _NORM_NAME_PG + " AS job_name, "
+                "js.state, js.creation_time, js.end_time, js.result, "
+                "COALESCE(bs.processed_size, 0), "
+                "COALESCE(bs.read_size, 0), "
+                "COALESCE(bs.stored_size, 0) "
+                'FROM "backup.model.jobsessions" js '
+                'LEFT JOIN "backup.model.backupjobsessions" bs ON bs.id = js.id '
+                "WHERE 1=1 " + _WHERE_FILTER_SQL + " "
+                "ORDER BY js.creation_time DESC "
+                "LIMIT 200"
+            )
+        if collector == "job_stats_daily":
+            days = max(1, int(days or 7))
+            if db_type == "mssql":
+                norm = _NORM_NAME_MSSQL
+                return (
+                    "SELECT " + norm + " AS job_name, "
+                    "CAST(js.creation_time AS DATE) AS run_date, "
+                    "ISNULL(SUM(bs.processed_size), 0), "
+                    "ISNULL(SUM(bs.read_size), 0), "
+                    "ISNULL(SUM(bs.stored_size), 0), "
+                    "COUNT(*) AS session_count, "
+                    "SUM(CASE WHEN js.result = 0 THEN 1 ELSE 0 END) AS success_count, "
+                    "SUM(CASE WHEN js.result = 1 THEN 1 ELSE 0 END) AS warning_count, "
+                    "SUM(CASE WHEN js.result = 2 THEN 1 ELSE 0 END) AS failed_count "
+                    "FROM [Backup.Model.JobSessions] js "
+                    "LEFT JOIN [Backup.Model.BackupJobSessions] bs "
+                    "ON bs.id = js.id "
+                    "WHERE js.creation_time >= DATEADD(day, -" + str(days)
+                    + ", GETDATE()) " + _WHERE_FILTER_SQL
+                    + " GROUP BY " + norm + ", CAST(js.creation_time AS DATE) "
+                    "ORDER BY 1, 2 DESC"
+                )
+            return (
+                "SELECT " + _NORM_NAME_PG + " AS job_name, "
+                "DATE(js.creation_time) AS run_date, "
+                "COALESCE(SUM(bs.processed_size), 0), "
+                "COALESCE(SUM(bs.read_size), 0), "
+                "COALESCE(SUM(bs.stored_size), 0), "
+                "COUNT(*) AS session_count, "
+                "SUM(CASE WHEN js.result = 0 THEN 1 ELSE 0 END) AS success_count, "
+                "SUM(CASE WHEN js.result = 1 THEN 1 ELSE 0 END) AS warning_count, "
+                "SUM(CASE WHEN js.result = 2 THEN 1 ELSE 0 END) AS failed_count "
+                'FROM "backup.model.jobsessions" js '
+                'LEFT JOIN "backup.model.backupjobsessions" bs ON bs.id = js.id '
+                "WHERE js.creation_time >= NOW() - INTERVAL '"
+                + str(days) + " days' " + _WHERE_FILTER_SQL + " "
+                "GROUP BY 1, DATE(js.creation_time) "
+                "ORDER BY 1, DATE(js.creation_time) DESC"
+            )
+        return ""
+
+    async def _db_collect(
+        self, collector: str, target_id: int | None = None,
+        db_type: str | None = None,
+    ) -> list[dict[str, Any]] | None:
+        """Collect jobs/sessions from the Veeam DB (fallback for PS relay).
+
+        ``db_type`` may be given explicitly (from the server config, the
+        authoritative source); otherwise it is probed via ``_resolved_db_type``.
+        """
+        if db_type in (None, "", "auto"):
+            db_type = await self._resolved_db_type(target_id)
+        if collector == "jobs":
+            sql = self._db_collect_sql("jobs", db_type)
+            raw = await self._run_db_query_via_relay(
+                sql, target_id=target_id, db_type=db_type
+            )
             if raw is None:
                 return None
             rows = self._parse_psql_rows(raw)
@@ -1156,38 +1365,35 @@ AND js.job_name NOT LIKE '%Malware Detection%'"""
             for r in rows:
                 if len(r) < 9:
                     continue
-                last_state = self._map_job_state(int(r[4] or -1))
-                last_result = self._map_result(int(r[5] or -1))
+                last_state = self._map_job_state(self._to_int(r[4], -1))
+                last_result = self._map_result(self._to_int(r[5], -1))
+                enabled = self._to_bool(r[3])
                 last_run = None
-                if r[6]:
+                if r[6] and str(r[6]).strip().lower() != "null":
                     last_run = {
                         "id": r[0],
                         "state": last_state,
                         "result": {"result": last_result} if last_result else None,
                         "creationTime": r[6],
                         "endTime": r[7],
-                        "progressPercent": int(r[8] or 0),
+                        "progressPercent": self._to_int(r[8], 0),
                     }
                 jobs.append({
                     "id": r[0],
                     "name": r[1],
-                    "type": self._map_job_type(int(r[2] or 0)),
+                    "type": self._map_job_type(self._to_int(r[2], 0)),
                     "state": last_state,
-                    "enabled": bool(r[3]),
-                    "schedule": {"kind": "periodic"} if bool(r[3]) else None,
+                    "enabled": enabled,
+                    "schedule": {"kind": "periodic"} if enabled else None,
                     "lastRun": last_run,
                     "includedObjects": {"objectsInJob": 0},
                 })
             return jobs
         if collector == "sessions":
-            sql = (
-                "SELECT js.id, js.job_id, js.job_name, js.state, js.result, "
-                "js.creation_time, js.end_time, js.progress "
-                'FROM "backup.model.jobsessions" js '
-                "WHERE 1=1 " + self._WHERE_FILTER + " "
-                "ORDER BY js.creation_time DESC LIMIT 200"
+            sql = self._db_collect_sql("sessions", db_type)
+            raw = await self._run_db_query_via_relay(
+                sql, target_id=target_id, db_type=db_type
             )
-            raw = await self._run_db_query_via_relay(sql, target_id=target_id)
             if raw is None:
                 return None
             rows = self._parse_psql_rows(raw)
@@ -1195,27 +1401,24 @@ AND js.job_name NOT LIKE '%Malware Detection%'"""
             for r in rows:
                 if len(r) < 8:
                     continue
-                result_name = self._map_result(int(r[4] or -1))
+                result_name = self._map_result(self._to_int(r[4], -1))
                 sessions.append({
                     "id": r[0],
                     "jobId": r[1],
                     "name": r[2],
                     "sessionType": "Backup",
-                    "state": self._map_job_state(int(r[3] or -1)),
+                    "state": self._map_job_state(self._to_int(r[3], -1)),
                     "result": {"result": result_name} if result_name else None,
-                    "creationTime": r[5] or None,
-                    "endTime": r[6] or None,
-                    "progressPercent": int(r[7] or 0),
+                    "creationTime": r[5] if r[5] and str(r[5]).strip().lower() != "null" else None,
+                    "endTime": r[6] if r[6] and str(r[6]).strip().lower() != "null" else None,
+                    "progressPercent": self._to_int(r[7], 0),
                 })
             return sessions
         if collector == "repositories":
-            sql = (
-                "SELECT id, name, description, type, host_id, path, "
-                "is_unavailable, status "
-                'FROM "backuprepositories" '
-                "ORDER BY name"
+            sql = self._db_collect_sql("repositories", db_type)
+            raw = await self._run_db_query_via_relay(
+                sql, target_id=target_id, db_type=db_type
             )
-            raw = await self._run_db_query_via_relay(sql, target_id=target_id)
             if raw is None:
                 return None
             rows = self._parse_psql_rows(raw)
@@ -1223,7 +1426,7 @@ AND js.job_name NOT LIKE '%Malware Detection%'"""
             for r in rows:
                 if len(r) < 8:
                     continue
-                status = "Unavailable" if r[6] == "t" else "Available"
+                status = "Unavailable" if self._to_bool(r[6]) else "Available"
                 repos.append({
                     "id": r[0],
                     "name": r[1],

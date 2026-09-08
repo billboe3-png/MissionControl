@@ -12,6 +12,7 @@ export interface RemoteTarget {
     username: string;
     enabled: boolean;
     tags: string | null;
+    target_plugins: string | null;
     notes: string | null;
     last_collected_at: string | null;
     last_status: string;
@@ -30,6 +31,7 @@ export interface RemoteTargetCreate {
     ssh_key?: string;
     enabled?: boolean;
     tags?: string;
+    target_plugins?: string;
     notes?: string;
 }
 
@@ -43,6 +45,7 @@ export interface RemoteTargetUpdate {
     ssh_key?: string;
     enabled?: boolean;
     tags?: string;
+    target_plugins?: string;
     notes?: string;
 }
 

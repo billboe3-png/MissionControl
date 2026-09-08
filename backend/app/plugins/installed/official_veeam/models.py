@@ -19,6 +19,7 @@ from sqlalchemy import (
     Integer,
     String,
     Text,
+    UniqueConstraint,
 )
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -26,38 +27,23 @@ from app.db.database import Base
 
 
 class VeeamBackupServer(Base):
-    """Registered Veeam B&R server connection (live registry)."""
+    """Registered Veeam B&R server connection."""
 
     __tablename__ = "veeam_backup_servers"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     name: Mapped[str] = mapped_column(String(200), nullable=False, unique=True)
-    edition: Mapped[str] = mapped_column(String(20), nullable=False, default="enterprise")
-    data_source: Mapped[str] = mapped_column(String(20), nullable=False, default="both")
-    db_type: Mapped[str] = mapped_column(String(20), nullable=False, default="auto")
-    column_case: Mapped[str] = mapped_column(String(20), nullable=False, default="pascal")
-    agent_id: Mapped[int | None] = mapped_column(
-        Integer, ForeignKey("agents.id", ondelete="SET NULL"), nullable=True, index=True
-    )
-    target_id: Mapped[int | None] = mapped_column(
-        Integer, ForeignKey("agent_remote_targets.id", ondelete="SET NULL"),
-        nullable=True, index=True,
-    )
-    rest_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
-    rest_username: Mapped[str | None] = mapped_column(String(200), nullable=True)
-    rest_password_encrypted: Mapped[str | None] = mapped_column(Text, nullable=True)
+    url: Mapped[str | None] = mapped_column(String(500), nullable=True, name="rest_url")
+    username: Mapped[str | None] = mapped_column(String(200), nullable=True, name="rest_username")
+    encrypted_password: Mapped[str | None] = mapped_column(Text, nullable=True, name="rest_password_encrypted")
     verify_ssl: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     timeout: Mapped[int] = mapped_column(Integer, nullable=False, default=30)
     enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, index=True)
     version: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    edition: Mapped[str | None] = mapped_column(String(50), nullable=True)
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="unknown")
     last_error: Mapped[str | None] = mapped_column(Text, nullable=True)
     last_sync_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
-    last_diagnostic: Mapped[str | None] = mapped_column(Text, nullable=True)
-    legacy_ssh_host: Mapped[str | None] = mapped_column(String(500), nullable=True)
-    legacy_ssh_port: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    legacy_ssh_username: Mapped[str | None] = mapped_column(String(200), nullable=True)
-    legacy_ssh_password_encrypted: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime, default=lambda: datetime.now(UTC)
     )
@@ -65,6 +51,26 @@ class VeeamBackupServer(Base):
         DateTime, default=lambda: datetime.now(UTC),
         onupdate=lambda: datetime.now(UTC),
     )
+
+    # Legacy SSH fields (deprecated)
+    legacy_ssh_host: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    legacy_ssh_port: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    legacy_ssh_username: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    legacy_ssh_password_encrypted: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    # Database connection settings for SSH+SQL bridge
+    ssh_host: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    ssh_port: Mapped[int] = mapped_column(Integer, nullable=False, default=22)
+    ssh_username: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    encrypted_ssh_password: Mapped[str | None] = mapped_column(Text, nullable=True)
+    data_source: Mapped[str] = mapped_column(String(20), nullable=False, default="both")
+    db_type: Mapped[str] = mapped_column(String(20), nullable=False, default="postgresql")  # postgresql, mssql
+    column_case: Mapped[str] = mapped_column(String(20), nullable=False, default="pascal")  # pascal, snake (for MSSQL)
+
+    # Agent/Target association
+    agent_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    target_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    last_diagnostic: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
 
 class VeeamRepository(Base):
@@ -195,4 +201,26 @@ class VeeamLicense(Base):
     total_licenses: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     synced_at: Mapped[datetime] = mapped_column(
         DateTime, default=lambda: datetime.now(UTC)
+    )
+
+
+class VeeamSnapshot(Base):
+    """Hourly snapshot of a live Veeam dataset for instant cache reads."""
+
+    __tablename__ = "veeam_snapshots"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    server_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("veeam_backup_servers.id", ondelete="CASCADE"),
+        nullable=False, index=True,
+    )
+    dataset: Mapped[str] = mapped_column(String(50), nullable=False, index=True)
+    payload: Mapped[str] = mapped_column(Text, nullable=False)
+    collected_at: Mapped[datetime] = mapped_column(
+        DateTime, default=lambda: datetime.now(UTC), nullable=False,
+    )
+
+    __table_args__ = (
+        UniqueConstraint("server_id", "dataset", name="uq_veeam_snapshots_server_dataset"),
+        {"mysql_engine": "InnoDB", "mysql_charset": "utf8mb4"},
     )

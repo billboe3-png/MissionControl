@@ -1,9 +1,8 @@
 #!/usr/bin/env bash
 # =============================================================================
-# Mission Control — Backup Validation Script
+# Mission Control — Environment Backup Validation
 #
-# Verifies that PostgreSQL, Redis, and configuration backups exist
-# and are valid. Tests restore capability.
+# Verifies backups for a specific environment: DEV or LIVE.
 # =============================================================================
 
 set -euo pipefail
@@ -13,6 +12,26 @@ GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 NC='\033[0m'
 
+usage() {
+    echo "Usage: $0 -e <dev|live> [-d backup_dir]"
+    exit 1
+}
+
+ENV=""
+BACKUP_DIR="./backups"
+
+while getopts "e:d:" opt; do
+    case "$opt" in
+        e) ENV="$OPTARG" ;;
+        d) BACKUP_DIR="$OPTARG" ;;
+        *) usage ;;
+    esac
+done
+
+if [[ "$ENV" != "dev" && "$ENV" != "live" ]]; then
+    usage
+fi
+
 PASS=0
 FAIL=0
 WARN=0
@@ -21,37 +40,48 @@ pass() { echo -e "  ${GREEN}✓${NC} $1"; ((PASS++)); }
 fail() { echo -e "  ${RED}✗${NC} $1"; ((FAIL++)); }
 warn() { echo -e "  ${YELLOW}!${NC} $1"; ((WARN++)); }
 
-BACKUP_DIR="${BACKUP_DIR:-./backups}"
-TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+echo ""
+echo "  Mission Control — $ENV Backup Validation"
+echo "  ─────────────────────────────────────────"
 
-echo ""
-echo "  Mission Control — Backup Validation"
-echo "  ────────────────────────────────────"
-echo ""
+TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+TEST_DUMP="${BACKUP_DIR}/test_pg_${ENV}_${TIMESTAMP}.sql.gz"
+CONFIG_SRC=""
+CONFIG_DST="${BACKUP_DIR}/config_${ENV}_${TIMESTAMP}"
+
+mkdir -p "$BACKUP_DIR"
+
+if [[ "$ENV" == "live" ]]; then
+    COMPOSE_PROJECT="missioncontrol-live"
+    DB="missioncontrol_live"
+    CONFIG_SRC=".env.production"
+else
+    COMPOSE_PROJECT="missioncontrol-dev"
+    DB="missioncontrol_dev"
+    CONFIG_SRC=".env.dev"
+fi
 
 # ------------------------------------------------------------------ #
 # 1. PostgreSQL Backup                                                 #
 # ------------------------------------------------------------------ #
 
+echo ""
 echo "  PostgreSQL Backup"
 
 if command -v docker &>/dev/null; then
-    # Test pg_dump
-    TEST_DUMP="${BACKUP_DIR}/test_pg_${TIMESTAMP}.sql.gz"
-    mkdir -p "$BACKUP_DIR"
-
-    if docker compose exec -T postgres pg_dump -U missioncontrol -d mission_control 2>/dev/null | gzip > "$TEST_DUMP"; then
+    if docker compose \
+      --project-name "$COMPOSE_PROJECT" \
+      exec -T postgres pg_dump -U "$DB" -d "$DB" 2>/dev/null | gzip > "$TEST_DUMP"; then
         SIZE=$(stat -f%z "$TEST_DUMP" 2>/dev/null || stat -c%s "$TEST_DUMP" 2>/dev/null || echo "0")
         if [ "$SIZE" -gt 100 ]; then
-            pass "pg_dump successful (${SIZE} bytes)"
+            pass "pg_dump successful for $ENV (${SIZE} bytes)"
         else
             fail "pg_dump produced empty or tiny file"
         fi
     else
-        fail "pg_dump failed"
+        fail "pg_dump failed for $ENV"
     fi
 
-    # Verify dump is valid gzip
     if gzip -t "$TEST_DUMP" 2>/dev/null; then
         pass "pg_dump file is valid gzip"
     else
@@ -70,16 +100,24 @@ fi
 echo ""
 echo "  Redis Backup"
 
-if docker compose exec -T redis redis-cli BGSAVE 2>/dev/null | grep -q "OK"; then
-    pass "Redis BGSAVE initiated"
-else
-    warn "Redis BGSAVE could not be verified"
-fi
+if command -v docker &>/dev/null; then
+    if docker compose \
+      --project-name "$COMPOSE_PROJECT" \
+      exec -T redis redis-cli BGSAVE 2>/dev/null | grep -q "OK"; then
+        pass "Redis BGSAVE initiated"
+    else
+        warn "Redis BGSAVE could not be verified"
+    fi
 
-if docker compose exec -T redis redis-cli LASTSAVE 2>/dev/null | grep -q "^[0-9]"; then
-    pass "Redis has snapshot data"
+    if docker compose \
+      --project-name "$COMPOSE_PROJECT" \
+      exec -T redis redis-cli LASTSAVE 2>/dev/null | grep -q "^[0-9]"; then
+        pass "Redis has snapshot data"
+    else
+        warn "Redis snapshot status unknown"
+    fi
 else
-    warn "Redis snapshot status unknown"
+    warn "Docker not available, skipping Redis backup test"
 fi
 
 # ------------------------------------------------------------------ #
@@ -89,39 +127,37 @@ fi
 echo ""
 echo "  Configuration Backup"
 
-CONFIG_BACKUP="${BACKUP_DIR}/config_${TIMESTAMP}"
-mkdir -p "$CONFIG_BACKUP"
+mkdir -p "$CONFIG_DST"
 
-# Copy .env
-if [ -f ".env" ]; then
-    cp .env "$CONFIG_BACKUP/"
-    pass ".env backed up"
+if [ -f "$CONFIG_SRC" ]; then
+    cp "$CONFIG_SRC" "$CONFIG_DST/"
+    pass "$CONFIG_SRC backed up"
 else
-    warn ".env file not found"
+    warn "$CONFIG_SRC file not found"
 fi
 
-# Copy docker-compose files
-for f in docker-compose.yml docker-compose.prod.yml; do
+for f in docker-compose.yml docker-compose.dev.yml docker-compose.production.yml; do
     if [ -f "$f" ]; then
-        cp "$f" "$CONFIG_BACKUP/"
+        cp "$f" "$CONFIG_DST/"
         pass "$f backed up"
     fi
 done
 
-# Copy docker-compose prod if exists
-if [ -f "docker-compose.prod.yml" ]; then
-    pass "Production compose backed up"
+if [ -f "nginx/default.conf" ]; then
+    mkdir -p "$CONFIG_DST/nginx"
+    cp nginx/default.conf "$CONFIG_DST/nginx/"
+    pass "nginx/default.conf backed up"
 fi
 
 # ------------------------------------------------------------------ #
-# 4. Restore Test                                                      #
+# 4. Restore Validation                                                #
 # ------------------------------------------------------------------ #
 
 echo ""
 echo "  Restore Validation"
 
-if [ -f "$CONFIG_BACKUP/.env" ]; then
-    if grep -q "MISSIONCONTROL_SECRET_KEY" "$CONFIG_BACKUP/.env"; then
+if [ -f "$CONFIG_DST/$CONFIG_SRC" ]; then
+    if grep -q "MISSIONCONTROL_SECRET_KEY" "$CONFIG_DST/$CONFIG_SRC"; then
         pass "Config backup contains secret key"
     else
         warn "Config backup missing secret key"
@@ -130,15 +166,18 @@ else
     warn "Config backup not available for restore test"
 fi
 
-# Cleanup
-rm -rf "$CONFIG_BACKUP"
+# ------------------------------------------------------------------ #
+# Cleanup                                                              #
+# ------------------------------------------------------------------ #
+
+rm -rf "$CONFIG_DST"
 
 # ------------------------------------------------------------------ #
 # Summary                                                              #
 # ------------------------------------------------------------------ #
 
 echo ""
-echo "  ────────────────────────────────────"
+echo "  ─────────────────────────────────────────"
 echo "  Passed: ${PASS}  Failed: ${FAIL}  Warnings: ${WARN}"
 
 if [ "$FAIL" -gt 0 ]; then

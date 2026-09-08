@@ -5,13 +5,10 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class MikroTikPluginConfig(BaseSettings):
-    """Plugin-level configuration."""
+    """Plugin-level configuration (per-device settings live in the DB)."""
 
     model_config = SettingsConfigDict(env_prefix="MIKROTIK_", extra="ignore")
 
-    default_ssh_port: int = 22
-    default_telnet_port: int = 23
-    default_webfig_port: int = 80
     connection_timeout: int = 30
     command_timeout: int = 60
     auto_sync_enabled: bool = True

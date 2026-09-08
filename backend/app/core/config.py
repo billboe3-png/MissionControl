@@ -310,10 +310,6 @@ class Settings(BaseSettings):
         extra="ignore",
     )
 
-    # ------------------------------------------------------------------
-    # Computed Properties
-    # ------------------------------------------------------------------
-
     @computed_field
     @property
     def database_url(self) -> str:
