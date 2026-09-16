@@ -42,3 +42,4 @@ frontend/public/demo/lib/*
 # Local debug scripts
 backend/debug/
 debug/
+/.opencode/agents
