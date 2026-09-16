@@ -159,6 +159,8 @@ def sync_target_to_server(db: Session, target) -> None:
             legacy_ssh_port=target.port,
             legacy_ssh_username=target.username,
             legacy_ssh_password_encrypted=target.password_encrypted,
+            db_type=getattr(target, "db_type", "postgresql"),
+            column_case=getattr(target, "column_case", "pascal"),
             enabled=True,
             status="unknown",
         )
@@ -170,6 +172,8 @@ def sync_target_to_server(db: Session, target) -> None:
         row.legacy_ssh_port = target.port
         row.legacy_ssh_username = target.username
         row.legacy_ssh_password_encrypted = target.password_encrypted
+        row.db_type = getattr(target, "db_type", "postgresql")
+        row.column_case = getattr(target, "column_case", "pascal")
         row.enabled = True
     db.commit()
 

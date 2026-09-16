@@ -45,50 +45,14 @@ export const VeeamServerProvider: React.FC<{ children: ReactNode }> = ({ childre
         async function fetchServers() {
             setLoading(true);
             try {
-                // Try to fetch remote targets from the agent remote target API
-                // This lists targets for the authenticated agent
-                const result = await fetch("/api/v1/agents/remote-targets", {
+                const configResult = await fetch("/api/v1/plugins/veeam/servers/config", {
                     credentials: "include",
                 });
-                
-                if (result.ok) {
-                    const targets: any[] = await result.json();
-                    
-                    // Filter targets that have the Veeam plugin "tick" enabled
-                    // target_plugins should contain 'veeam' and enabled should be true
-                    const veeamTargets = targets.filter((t: any) => 
-                        t.target_plugins && t.target_plugins.includes("veeam") && t.enabled
-                    );
-
-                    // Convert remote targets to VeeamServerConfig objects
-                    const configList: VeeamServerConfig[] = veeamTargets.map((t: any) => ({
-                        id: t.id,
-                        name: t.name,
-                        url: t.hostname || "",
-                        username: t.username || "",
-                        verify_ssl: true,
-                        timeout: 30,
-                        enabled: t.enabled,
-                        ssh_host: t.hostname || null,
-                        ssh_port: t.port || 22,
-                        ssh_username: t.username || null,
-                        data_source: "ssh",
-                        db_type: "postgresql",
-                        column_case: "pascal",
-                    }));
-
+                if (configResult.ok) {
+                    const configList: VeeamServerConfig[] = await configResult.json();
                     setServers(configList);
                 } else {
-                    // Fallback: fetch from the servers config API
-                    const configResult = await fetch("/api/v1/plugins/veeam/servers/config", {
-                        credentials: "include",
-                    });
-                    if (configResult.ok) {
-                        const configList: VeeamServerConfig[] = await configResult.json();
-                        setServers(configList);
-                    } else {
-                        setServers([]);
-                    }
+                    setServers([]);
                 }
             } catch (e) {
                 console.error("Failed to fetch Veeam servers:", e);

@@ -11,7 +11,7 @@ import {
 export default function VeeamHealthPage() {
     const [health, setHealth] = useState<VeeamHealth | null>(null);
     const [error, setError] = useState<string | null>(null);
-    const [loading, setLoading] = useState(true);
+    const [loading, setLoading] = useState(false);
     const { servers, selectedServerId } = useVeeamServer();
 
     useEffect(() => {
@@ -19,13 +19,13 @@ export default function VeeamHealthPage() {
     }, [selectedServerId]);
 
     useEffect(() => {
-        if (loading) return;
+        setLoading(true);
         veeamApi.getHealth(selectedServerId).then((h) => {
             setHealth(h);
         })
         .catch((e) => setError(e.message))
         .finally(() => setLoading(false));
-    }, [selectedServerId, loading]);
+    }, [selectedServerId]);
 
     const selectedServerName = servers.length > 0 ? servers.find(s => s.id === selectedServerId)?.name : "Veeam Server";
 

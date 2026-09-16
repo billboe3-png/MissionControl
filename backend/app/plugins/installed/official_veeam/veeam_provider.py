@@ -18,8 +18,6 @@ from urllib.parse import urlparse
 
 import httpx
 
-from app.plugins.installed.official_veeam.base_provider import VeeamProvider
-
 logger = logging.getLogger(__name__)
 
 DEFAULT_TIMEOUT = 30
@@ -101,6 +99,7 @@ class VeeamRESTProvider:
         )
         payload = dict(params or {})
         payload.setdefault("db_type", self.db_type)
+        payload.setdefault("column_case", self.column_case)
         result = await executor.run(op=op, params=payload, timeout=120)
         if not result.get("success"):
             return {

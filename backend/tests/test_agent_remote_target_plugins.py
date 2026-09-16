@@ -95,6 +95,22 @@ def test_create_with_veeam_registers_server(client, db_session):
     ).one()
     assert row.enabled is True
     assert row.agent_id == agent["agent_id"]
+    assert row.db_type == "postgresql"
+    assert row.column_case == "pascal"
+
+
+def test_create_veeam_target_propagates_db_type_and_column_case(client, db_session):
+    from app.plugins.installed.official_veeam.models import VeeamBackupServer
+
+    agent = _register_agent(client, "DbType Registry Agent")
+    target = _create_target(
+        client, agent["agent_id"], target_plugins="veeam", db_type="mssql", column_case="snake"
+    )
+    row = db_session.query(VeeamBackupServer).filter(
+        VeeamBackupServer.target_id == target["id"]
+    ).one()
+    assert row.db_type == "mssql"
+    assert row.column_case == "snake"
 
 
 def test_update_removing_veeam_disables_server(client, db_session):

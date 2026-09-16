@@ -11,7 +11,7 @@ import {
 export default function VeeamSessionsPage() {
     const [sessions, setSessions] = useState<VeeamSession[]>([]);
     const [error, setError] = useState<string | null>(null);
-    const [loading, setLoading] = useState(true);
+    const [loading, setLoading] = useState(false);
     const { servers, selectedServerId } = useVeeamServer();
 
     useEffect(() => {
@@ -19,13 +19,13 @@ export default function VeeamSessionsPage() {
     }, [selectedServerId]);
 
     useEffect(() => {
-        if (loading) return;
+        setLoading(true);
         veeamApi.listSessions(selectedServerId).then((s) => {
             setSessions(s);
         })
         .catch((e) => setError(e.message))
         .finally(() => setLoading(false));
-    }, [selectedServerId, loading]);
+    }, [selectedServerId]);
 
     const selectedServerName = servers.length > 0 ? servers.find(s => s.id === selectedServerId)?.name : "Veeam Server";
 

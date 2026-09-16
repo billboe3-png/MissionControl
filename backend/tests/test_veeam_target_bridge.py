@@ -39,6 +39,34 @@ def test_sync_creates_server_row(db_session):
     assert row.target_id == target.id
     assert row.enabled is True
     assert row.name == "[Veeam Host]"
+    assert row.db_type == "postgresql"
+    assert row.column_case == "pascal"
+
+
+def test_sync_propagates_db_type_and_column_case(db_session):
+    _, target = _make_target(
+        db_session, db_type="mssql", column_case="snake"
+    )
+    sync_target_to_server(db_session, target)
+    row = db_session.query(VeeamBackupServer).filter(
+        VeeamBackupServer.target_id == target.id
+    ).one()
+    assert row.db_type == "mssql"
+    assert row.column_case == "snake"
+
+
+def test_sync_updates_db_type_and_column_case_on_existing_row(db_session):
+    _, target = _make_target(db_session)
+    sync_target_to_server(db_session, target)
+    target.db_type = "mssql"
+    target.column_case = "snake"
+    db_session.commit()
+    sync_target_to_server(db_session, target)
+    row = db_session.query(VeeamBackupServer).filter(
+        VeeamBackupServer.target_id == target.id
+    ).one()
+    assert row.db_type == "mssql"
+    assert row.column_case == "snake"
 
 
 def test_sync_disables_row_when_veeam_unchecked(db_session):
