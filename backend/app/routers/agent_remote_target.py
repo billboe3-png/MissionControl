@@ -102,6 +102,8 @@ async def create_remote_target(
         "tags": payload.tags,
         "notes": payload.notes,
         "target_plugins": payload.target_plugins,
+        "db_type": payload.db_type,
+        "column_case": payload.column_case,
     }
 
     if payload.password is not None and payload.password != "":
