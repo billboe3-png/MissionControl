@@ -180,6 +180,18 @@ export default function AgentsOverviewPage() {
         }
     };
 
+    const handleDelete = async (agent: Agent) => {
+        if (!window.confirm(`Delete agent "${agent.name}" (${agent.hostname})? This cannot be undone.`)) {
+            return;
+        }
+        try {
+            await agentsApi.remove(agent.id);
+            setAgents((prev) => prev.filter((a) => a.id !== agent.id));
+        } catch (e) {
+            alert(e instanceof Error ? e.message : "Delete failed");
+        }
+    };
+
     const handleGlobalDownload = async (platform: "linux" | "windows") => {
         setGlobalDownload(platform);
         try {
@@ -484,6 +496,15 @@ export default function AgentsOverviewPage() {
                                             <option value="linux">Linux bundle</option>
                                             <option value="windows">Windows bundle</option>
                                         </select>
+                                    </td>
+                                    <td>
+                                        <button
+                                            className="btn btn-link text-danger"
+                                            onClick={() => handleDelete(agent)}
+                                            title="Delete agent"
+                                        >
+                                            Delete
+                                        </button>
                                     </td>
                                 </tr>
                             ))}
