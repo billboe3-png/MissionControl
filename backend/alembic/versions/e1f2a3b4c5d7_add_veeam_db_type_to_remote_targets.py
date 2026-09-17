@@ -4,15 +4,29 @@ Revision ID: e1f2a3b4c5d7
 Revises: f1d543c4ff24
 Create Date: 2026-09-08
 """
-
 import sqlalchemy as sa
-
 from alembic import op
+
 
 revision = "e1f2a3b4c5d7"
 down_revision = "f1d543c4ff24"
 branch_labels = None
 depends_on = None
+
+
+def _table_exists(table_name: str) -> bool:
+    """Return True if *table_name* exists in the public schema."""
+    bind = op.get_bind()
+    result = bind.execute(
+        sa.text(
+            "SELECT 1 FROM information_schema.tables "
+            "WHERE table_schema = 'public' AND table_name = :t"
+        ),
+        {"t": table_name},
+    )
+    if result is None:
+        return False
+    return result.fetchone() is not None
 
 
 def upgrade() -> None:
@@ -24,17 +38,18 @@ def upgrade() -> None:
         "agent_remote_targets",
         sa.Column("column_case", sa.String(20), nullable=False, server_default="pascal"),
     )
-    # Backfill from linked Veeam server rows (existing targets + their
-    # auto-provisioned community server rows share target_id).
-    op.execute(
-        """
-        UPDATE agent_remote_targets AS t
-        SET db_type = v.db_type,
-            column_case = v.column_case
-        FROM veeam_backup_servers AS v
-        WHERE v.target_id = t.id
-        """
-    )
+    # Backfill from linked Veeam server rows only if the table exists
+    # (may not if 471bafbbdcd7/286fb97c4a3c haven't run yet).
+    if _table_exists("veeam_backup_servers"):
+        op.execute(
+            """
+            UPDATE agent_remote_targets AS t
+            SET db_type = v.db_type,
+                column_case = v.column_case
+            FROM veeam_backup_servers AS v
+            WHERE v.target_id = t.id
+            """
+        )
 
 
 def downgrade() -> None:

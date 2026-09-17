@@ -45,53 +45,51 @@ def upgrade() -> None:
         ),
     )
 
-    # Migrate existing plaintext data to encrypted columns
-    # Only if MISSIONCONTROL_SECRET_KEY is available
+    # Migrate existing plaintext data to encrypted columns.
+    # op.get_bind().execute() returns a CursorResult in online mode; in
+    # offline/sql mode it returns None so guard before iterating.
     secret_key = os.environ.get("MISSIONCONTROL_SECRET_KEY")
     if secret_key:
         from cryptography.fernet import Fernet
 
         fernet = Fernet(secret_key.encode())
 
-        # Get all credential profiles with plaintext data
-        conn = op.get_bind()
-        result = conn.execute(
+        bind = op.get_bind()
+        result = bind.execute(
             sa.text(
                 "SELECT id, password, ssh_key FROM credential_profiles "
                 "WHERE password IS NOT NULL OR ssh_key IS NOT NULL"
             )
         )
+        if result is not None:
+            for row in result:
+                cred_id, password, ssh_key = row
 
-        for row in result:
-            cred_id, password, ssh_key = row
+                if password:
+                    encrypted_password = fernet.encrypt(
+                        password.encode("utf-8")
+                    ).decode("utf-8")
+                    bind.execute(
+                        sa.text(
+                            "UPDATE credential_profiles "
+                            "SET password_encrypted = :encrypted "
+                            "WHERE id = :id"
+                        ),
+                        {"encrypted": encrypted_password, "id": cred_id},
+                    )
 
-            # Encrypt password if present
-            if password:
-                encrypted_password = fernet.encrypt(
-                    password.encode("utf-8")
-                ).decode("utf-8")
-                conn.execute(
-                    sa.text(
-                        "UPDATE credential_profiles "
-                        "SET password_encrypted = :encrypted "
-                        "WHERE id = :id"
-                    ),
-                    {"encrypted": encrypted_password, "id": cred_id},
-                )
-
-            # Encrypt SSH key if present (stored as private_key_encrypted)
-            if ssh_key:
-                encrypted_key = fernet.encrypt(
-                    ssh_key.encode("utf-8")
-                ).decode("utf-8")
-                conn.execute(
-                    sa.text(
-                        "UPDATE credential_profiles "
-                        "SET private_key_encrypted = :encrypted "
-                        "WHERE id = :id"
-                    ),
-                    {"encrypted": encrypted_key, "id": cred_id},
-                )
+                if ssh_key:
+                    encrypted_key = fernet.encrypt(
+                        ssh_key.encode("utf-8")
+                    ).decode("utf-8")
+                    bind.execute(
+                        sa.text(
+                            "UPDATE credential_profiles "
+                            "SET private_key_encrypted = :encrypted "
+                            "WHERE id = :id"
+                        ),
+                        {"encrypted": encrypted_key, "id": cred_id},
+                    )
 
 
 def downgrade() -> None:

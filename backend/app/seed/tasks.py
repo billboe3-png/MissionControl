@@ -96,6 +96,10 @@ def seed(db: Session) -> bool:
                 priority=priority,
                 created_at=now,
                 updated_at=now,
+                assignee=None,
+                due_date=None,
+                started_at=None,
+                completed_at=None,
             )
         )
 

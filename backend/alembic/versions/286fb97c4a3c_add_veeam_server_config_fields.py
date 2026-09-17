@@ -17,19 +17,59 @@ depends_on = None
 
 
 def upgrade() -> None:
-    # Add columns to veeam_backup_servers table (only missing ones)
-    op.add_column('veeam_backup_servers',
-        sa.Column('ssh_host', sa.String(200), nullable=True))
-    op.add_column('veeam_backup_servers',
-        sa.Column('ssh_port', sa.Integer(), nullable=False, server_default='22'))
-    op.add_column('veeam_backup_servers',
-        sa.Column('ssh_username', sa.String(200), nullable=True))
-    op.add_column('veeam_backup_servers',
-        sa.Column('encrypted_ssh_password', sa.Text(), nullable=True))
+    # Use a PL/pgSQL DO block so each column addition is independent —
+    # if one column already exists the block continues to the next.
+    # This survives being wrapped in a single alembic transaction.
+    op.execute("""
+        DO $$
+        DECLARE
+            col_exists boolean;
+        BEGIN
+            SELECT EXISTS (
+                SELECT 1 FROM information_schema.columns
+                WHERE table_schema = 'public'
+                  AND table_name   = 'veeam_backup_servers'
+                  AND column_name  = 'ssh_host'
+            ) INTO col_exists;
+            IF NOT col_exists THEN
+                ALTER TABLE veeam_backup_servers ADD COLUMN ssh_host VARCHAR(200);
+            END IF;
+
+            SELECT EXISTS (
+                SELECT 1 FROM information_schema.columns
+                WHERE table_schema = 'public'
+                  AND table_name   = 'veeam_backup_servers'
+                  AND column_name  = 'ssh_port'
+            ) INTO col_exists;
+            IF NOT col_exists THEN
+                ALTER TABLE veeam_backup_servers ADD COLUMN ssh_port INTEGER NOT NULL DEFAULT 22;
+            END IF;
+
+            SELECT EXISTS (
+                SELECT 1 FROM information_schema.columns
+                WHERE table_schema = 'public'
+                  AND table_name   = 'veeam_backup_servers'
+                  AND column_name  = 'ssh_username'
+            ) INTO col_exists;
+            IF NOT col_exists THEN
+                ALTER TABLE veeam_backup_servers ADD COLUMN ssh_username VARCHAR(200);
+            END IF;
+
+            SELECT EXISTS (
+                SELECT 1 FROM information_schema.columns
+                WHERE table_schema = 'public'
+                  AND table_name   = 'veeam_backup_servers'
+                  AND column_name  = 'encrypted_ssh_password'
+            ) INTO col_exists;
+            IF NOT col_exists THEN
+                ALTER TABLE veeam_backup_servers ADD COLUMN encrypted_ssh_password TEXT;
+            END IF;
+        END $$;
+    """)
 
 
 def downgrade() -> None:
-    op.drop_column('veeam_backup_servers', 'ssh_host')
-    op.drop_column('veeam_backup_servers', 'ssh_port')
-    op.drop_column('veeam_backup_servers', 'ssh_username')
     op.drop_column('veeam_backup_servers', 'encrypted_ssh_password')
+    op.drop_column('veeam_backup_servers', 'ssh_username')
+    op.drop_column('veeam_backup_servers', 'ssh_port')
+    op.drop_column('veeam_backup_servers', 'ssh_host')
