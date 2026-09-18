@@ -111,6 +111,7 @@ export interface VeeamJobDailyCell {
     processed_bytes: number;
     read_bytes: number;
     stored_bytes: number;
+    transferred_bytes: number;
     session_count: number;
     success_count: number;
     warning_count: number;
