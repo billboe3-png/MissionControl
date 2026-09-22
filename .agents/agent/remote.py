@@ -49,6 +49,7 @@ class RemoteManager:
     def __init__(self):
         self._targets: dict[int, dict[str, Any]] = {}
         self._connectors: dict[int, RemoteConnector] = {}
+        self._tasks: list[asyncio.Task] = []
 
     def update_targets(self, targets: list[dict]) -> None:
         """Update target list from heartbeat response."""

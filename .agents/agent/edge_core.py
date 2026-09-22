@@ -70,6 +70,7 @@ class EdgeCore:
 
         # Remote manager
         self._remote_manager = RemoteManager()
+        self._remote_inventory_cache: dict[str, Any] = {}
 
         # Sync manager
         self._sync: EdgeSync | None = None
@@ -121,6 +122,7 @@ class EdgeCore:
             self._sync_loop(),
             self._heartbeat_loop(),
             self._inventory_loop(),
+            self._remote_inventory_loop(),
             self._command_loop(),
         )
 
@@ -409,6 +411,28 @@ class EdgeCore:
     # ------------------------------------------------------------------ #
     # Inventory loop
     # ------------------------------------------------------------------ #
+
+    async def _remote_inventory_loop(self) -> None:
+        """Periodic remote target inventory collection."""
+        while self._running:
+            try:
+                await asyncio.sleep(self.config.remote_inventory_interval)
+                if not self._running:
+                    break
+                if self._remote_manager.target_count == 0:
+                    continue
+
+                self._remote_inventory_cache = (
+                    await self._remote_manager.collect_inventory()
+                )
+                if self._sync is not None:
+                    self._sync.remote_inventory_cache = self._remote_inventory_cache
+                logger.info(
+                    "Remote inventory collected: %d targets",
+                    len(self._remote_inventory_cache),
+                )
+            except Exception as e:
+                logger.warning("Remote inventory cycle failed: %s", e)
 
     async def _inventory_loop(self) -> None:
         """Run plugins and cache results locally."""

@@ -1,6 +1,7 @@
 """Mission Control Agent - WinRM connector."""
 
 import asyncio
+import base64
 import json
 import logging
 from typing import Any
@@ -31,20 +32,44 @@ class WinRMConnector(RemoteConnector):
         )
         return session
 
-    async def _run_ps(self, script: str, timeout: int = 30) -> dict:
-        """Run a PowerShell script on the remote host via WinRM."""
+    async def _run_ps(self, script: str, timeout: int = 30, shell: str = "powershell") -> dict:
+        """Run a PowerShell script on the remote host via WinRM.
+
+        shell="pwsh" runs the script under PowerShell 7 (pwsh) instead of
+        Windows PowerShell 5.1. Some modules (e.g. Veeam.Backup.PowerShell)
+        require PowerShell 7+.
+        """
         try:
+
+            def _decode(value) -> str:
+                if value is None:
+                    return ""
+                if isinstance(value, bytes):
+                    return value.decode("utf-8", errors="replace")
+                return str(value)
 
             def _exec():
                 session = self._get_session()
-                result = session.run_ps(script)
+                if shell == "pwsh":
+                    encoded = base64.b64encode(
+                        script.encode("utf-16-le")
+                    ).decode("ascii")
+                    wrapper = (
+                        "$p = Get-Command pwsh -ErrorAction SilentlyContinue; "
+                        "if (-not $p) { throw 'pwsh not found' }; "
+                        f"& $p.Source -NoProfile -NonInteractive "
+                        f"-EncodedCommand '{encoded}'"
+                    )
+                    result = session.run_ps(wrapper)
+                else:
+                    result = session.run_ps(script)
                 return (
                     result.status_code,
-                    result.std_out or "",
-                    result.std_err or "",
+                    _decode(result.std_out),
+                    _decode(result.std_err),
                 )
 
-            loop = asyncio.get_event_loop()
+            loop = asyncio.get_running_loop()
             exit_code, stdout, stderr = await asyncio.wait_for(
                 loop.run_in_executor(None, _exec), timeout=timeout + 5
             )
@@ -171,9 +196,14 @@ class WinRMConnector(RemoteConnector):
         return None
 
     async def collect_veeam_inventory(self) -> dict | None:
-        """Collect Veeam B&R data if Veeam PowerShell module is available."""
+        """Collect Veeam B&R data if Veeam PowerShell module is available.
+
+        The Veeam.Backup.PowerShell module requires PowerShell 7+, so the
+        data-gathering script runs under pwsh.
+        """
         check = (
-            "if (Get-Module -ListAvailable -Name Veeam.Backup.PowerShell) { "
+            "if (((Get-Module -ListAvailable -Name Veeam.Backup.PowerShell) -and "
+            "  (Get-Command pwsh -ErrorAction SilentlyContinue))) { "
             "  'available' "
             "} else { 'unavailable' }"
         )
@@ -212,7 +242,7 @@ class WinRMConnector(RemoteConnector):
             "  capacity_tier=(try { $capacityTier | ConvertFrom-Json } catch { $null }) "
             "} | ConvertTo-Json -Depth 5"
         )
-        result = await self._run_ps(script, timeout=60)
+        result = await self._run_ps(script, timeout=60, shell="pwsh")
         if result["success"]:
             try:
                 return json.loads(result["stdout"])

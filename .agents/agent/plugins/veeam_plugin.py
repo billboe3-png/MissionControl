@@ -45,7 +45,10 @@ AND js.job_name NOT LIKE '%Hyper-V CBT%'
 AND js.job_name NOT LIKE '%Rescan%'
 AND js.job_name NOT LIKE '%Checkpoint Removal%'
 AND js.job_name NOT LIKE '%Retention job%'
-AND js.job_name NOT LIKE '%Malware Detection%'"""
+AND js.job_name NOT LIKE '%Malware Detection%'
+AND js.job_name NOT LIKE '%Database Maintenance%'
+AND js.job_name NOT LIKE '%HealthCheck %'
+AND js.job_name NOT LIKE '%Security & Compliance Analyzer%'"""
 
 
 class VeeamPlugin(AgentPlugin):
@@ -805,8 +808,10 @@ class VeeamPlugin(AgentPlugin):
             }
         if command == "veeam:job_stats_daily":
             days = int(args.get("days", 7) or 7)
+            include_system = bool(args.get("include_system", False))
             jobs, dates = await self._db_job_stats_daily(
                 days, target_id, db_type=args.get("db_type"),
+                include_system=include_system,
             )
             return {
                 "success": jobs is not None,
@@ -912,7 +917,10 @@ AND js.job_name NOT LIKE '%Hyper-V CBT%'
 AND js.job_name NOT LIKE '%Rescan%'
 AND js.job_name NOT LIKE '%Checkpoint Removal%'
 AND js.job_name NOT LIKE '%Retention job%'
-AND js.job_name NOT LIKE '%Malware Detection%'"""
+AND js.job_name NOT LIKE '%Malware Detection%'
+AND js.job_name NOT LIKE '%Database Maintenance%'
+AND js.job_name NOT LIKE '%HealthCheck %'
+AND js.job_name NOT LIKE '%Security & Compliance Analyzer%'"""
 
     @staticmethod
     def _norm_name() -> str:
@@ -1084,11 +1092,12 @@ AND js.job_name NOT LIKE '%Malware Detection%'"""
 
     async def _db_job_stats_daily(
         self, days: int, target_id: int | None = None, db_type: str | None = None,
+        include_system: bool = False,
     ) -> tuple[list[dict[str, Any]] | None, list[str]]:
         days = max(1, int(days))
         if db_type in (None, "", "auto"):
             db_type = await self._resolved_db_type(target_id)
-        sql = self._db_collect_sql("job_stats_daily", db_type, days=days)
+        sql = self._db_collect_sql("job_stats_daily", db_type, days=days, include_system=include_system)
         raw = await self._run_db_query_via_relay(
             sql, target_id=target_id, db_type=db_type
         )
@@ -1162,6 +1171,7 @@ AND js.job_name NOT LIKE '%Malware Detection%'"""
     @staticmethod
     def _db_collect_sql(
         collector: str, db_type: str = "postgresql", days: int = 7,
+        include_system: bool = False,
     ) -> str:
         """Return the SQL for a DB collection, in the target dialect.
 
@@ -1303,6 +1313,8 @@ AND js.job_name NOT LIKE '%Malware Detection%'"""
             )
         if collector == "job_stats_daily":
             days = max(1, int(days or 7))
+            window_start = days - 1
+            where_filter = "" if include_system else _WHERE_FILTER_SQL
             if db_type == "mssql":
                 norm = _NORM_NAME_MSSQL
                 return (
@@ -1318,8 +1330,9 @@ AND js.job_name NOT LIKE '%Malware Detection%'"""
                     "FROM [Backup.Model.JobSessions] js "
                     "LEFT JOIN [Backup.Model.BackupJobSessions] bs "
                     "ON bs.id = js.id "
-                    "WHERE js.creation_time >= DATEADD(day, -" + str(days)
-                    + ", GETDATE()) " + _WHERE_FILTER_SQL
+                    "WHERE CAST(js.creation_time AS DATE) >= DATEADD(day, -"
+                    + str(window_start)
+                    + ", CAST(GETDATE() AS DATE)) " + where_filter
                     + " GROUP BY " + norm + ", CAST(js.creation_time AS DATE) "
                     "ORDER BY 1, 2 DESC"
                 )
@@ -1335,8 +1348,8 @@ AND js.job_name NOT LIKE '%Malware Detection%'"""
                 "SUM(CASE WHEN js.result = 2 THEN 1 ELSE 0 END) AS failed_count "
                 'FROM "backup.model.jobsessions" js '
                 'LEFT JOIN "backup.model.backupjobsessions" bs ON bs.id = js.id '
-                "WHERE js.creation_time >= NOW() - INTERVAL '"
-                + str(days) + " days' " + _WHERE_FILTER_SQL + " "
+                "WHERE DATE(js.creation_time) >= CURRENT_DATE - ("
+                + str(window_start) + ") " + where_filter + " "
                 "GROUP BY 1, DATE(js.creation_time) "
                 "ORDER BY 1, DATE(js.creation_time) DESC"
             )

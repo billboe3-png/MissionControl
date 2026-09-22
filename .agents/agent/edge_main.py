@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import logging
+import os
 import sys
 from pathlib import Path
 
@@ -86,8 +87,9 @@ def main() -> None:
         except Exception as e:
             logging.error("Edge agent failed: %s", e)
         if not getattr(core, "_running", False):
-            logging.info("Edge agent restarting...")
-            continue
+            logging.info("Edge agent restarting (re-exec)...")
+            argv = [sys.executable, "-m", "agent.edge_main", *sys.argv[1:]]
+            os.execv(sys.executable, argv)
         break
 
 

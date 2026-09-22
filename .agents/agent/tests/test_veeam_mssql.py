@@ -303,8 +303,14 @@ def test_collect_sql_session_stats_mssql_top200():
 
 def test_collect_sql_job_stats_daily_mssql():
     sql = VeeamPlugin._db_collect_sql("job_stats_daily", "mssql", days=7)
-    assert "DATEADD(day, -7, GETDATE())" in sql
+    assert "DATEADD(day, -6, CAST(GETDATE() AS DATE))" in sql
     assert "CAST(js.creation_time AS DATE)" in sql
+    assert "NOW() - INTERVAL" not in sql
+
+
+def test_collect_sql_job_stats_daily_postgres():
+    sql = VeeamPlugin._db_collect_sql("job_stats_daily", "postgresql", days=7)
+    assert "DATE(js.creation_time) >= CURRENT_DATE - (6)" in sql
     assert "NOW() - INTERVAL" not in sql
 
 
@@ -385,4 +391,23 @@ def test_execute_relay_job_stats_daily_pass_db_type_and_days():
     ))
     assert result["success"] is True
     assert p.calls and p.calls[-1]["db_type"] == "mssql"
-    assert "DATEADD(day, -7, GETDATE())" in p.calls[-1]["sql"]
+    assert "DATEADD(day, -6, CAST(GETDATE() AS DATE))" in p.calls[-1]["sql"]
+
+
+def test_execute_relay_job_stats_daily_default_hides_system_jobs():
+    p = _StubDbQueryNoPs("")
+    _run(p._execute_relay(
+        "veeam:job_stats_daily", {"target_id": 12, "db_type": "mssql", "days": 7},
+    ))
+    sql = p.calls[-1]["sql"]
+    assert "Host Discovery" in sql
+
+
+def test_execute_relay_job_stats_daily_include_system_skips_filter():
+    p = _StubDbQueryNoPs("")
+    _run(p._execute_relay(
+        "veeam:job_stats_daily",
+        {"target_id": 12, "db_type": "mssql", "days": 7, "include_system": True},
+    ))
+    sql = p.calls[-1]["sql"]
+    assert "Host Discovery" not in sql

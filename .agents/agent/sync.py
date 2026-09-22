@@ -7,6 +7,7 @@ All operations are best-effort and offline-safe.
 from __future__ import annotations
 
 import gzip
+import hashlib
 import json
 import logging
 from datetime import UTC, datetime
@@ -55,6 +56,8 @@ class EdgeSync:
         if api_key:
             self._client.headers["X-Agent-API-Key"] = api_key
         self._bundle_path = bundle_path or (Path.cwd() / "agent-bundle-live.zip")
+        self.remote_inventory_cache: dict[str, Any] = {}
+        self._last_remote_digest: str = ""
 
     def close(self) -> None:
         """Close the HTTP client."""
@@ -179,20 +182,35 @@ class EdgeSync:
     # ------------------------------------------------------------------ #
 
     def push_inventory(self, limit: int = 100) -> SyncResult:
-        """Push pending inventory records to the cloud."""
+        """Push pending inventory records and any new remote-target data."""
         endpoint = f"{self._base_url}/api/v1/edge/{self._agent_id}/inventory"
         records = self._storage.get_unpushed_inventory(limit)
-        if not records:
+
+        remote = self.remote_inventory_cache or {}
+        remote_digest = (
+            hashlib.sha256(
+                json.dumps(remote, sort_keys=True, default=str).encode("utf-8")
+            ).hexdigest()
+            if remote
+            else ""
+        )
+        new_remote = bool(remote) and remote_digest != self._last_remote_digest
+
+        if not records and not new_remote:
             return SyncResult("push-inventory", True, 0, 0, 0)
 
         plugins: dict[str, Any] = {}
         for r in records:
-            plugins.setdefault(r.plugin_name, {}).update(r.data if isinstance(r.data, dict) else {"value": str(r.data)})
+            plugins.setdefault(r.plugin_name, {}).update(
+                r.data if isinstance(r.data, dict) else {"value": str(r.data)}
+            )
         payload = {
             "agent_id": self._agent_id,
             "plugins": plugins,
             "records": [self._serialize_inventory(r) for r in records],
         }
+        if new_remote:
+            payload["remote_targets"] = remote
         compressed = gzip.compress(json.dumps(payload).encode("utf-8"))
         try:
             response = self._client.post(
@@ -205,7 +223,13 @@ class EdgeSync:
             if success:
                 for r in records:
                     self._storage.mark_inventory_pushed(r.id or 0)
-                logger.info("Pushed %s inventory records", len(records))
+                if new_remote:
+                    self._last_remote_digest = remote_digest
+                logger.info(
+                    "Pushed %s inventory records%s",
+                    len(records),
+                    " + remote targets" if new_remote else "",
+                )
             else:
                 logger.warning("Inventory push failed: %s", status)
             self._storage.log_sync(
