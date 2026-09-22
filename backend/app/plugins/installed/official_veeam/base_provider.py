@@ -87,7 +87,7 @@ class VeeamProvider(ABC):
         pass
 
     @abstractmethod
-    async def get_job_stats_daily(self, days: int = 7) -> dict:
+    async def get_job_stats_daily(self, days: int = 7, include_system: bool = False) -> dict:
         """Get daily job statistics."""
         pass
 

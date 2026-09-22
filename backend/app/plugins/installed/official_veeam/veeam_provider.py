@@ -13,6 +13,7 @@ expose (e.g. session transfer statistics), relayed through the agent.
 
 import json
 import logging
+from datetime import date, timedelta
 from typing import Any
 from urllib.parse import urlparse
 
@@ -31,6 +32,18 @@ def _extract_items(data: Any) -> list:
     if isinstance(data, dict):
         return data.get("data", [])
     return []
+
+
+def _job_stats_daily_calendar(days: int) -> list[str]:
+    """Return the last ``days`` calendar dates ending today (oldest first).
+
+    The jobs grid always renders an N-day window whose final column is
+    today, even when no backup session has run yet today. Days with no
+    sessions simply render as empty cells.
+    """
+    days = max(1, int(days or 7))
+    start = date.today() - timedelta(days=days - 1)
+    return [(start + timedelta(days=i)).isoformat() for i in range(days)]
 
 
 class VeeamRESTProvider:
@@ -835,14 +848,17 @@ class VeeamRESTProvider:
             "count": len(jobs),
         }
 
-    async def get_job_stats_daily(self, days: int = 7) -> dict:
+    async def get_job_stats_daily(self, days: int = 7, include_system: bool = False) -> dict:
         if self._has_relay():
-            result = await self._relay("veeam:job_stats_daily", {"days": int(days)})
+            result = await self._relay("veeam:job_stats_daily", {
+                "days": int(days),
+                "include_system": bool(include_system),
+            })
             if result.get("success") or result.get("jobs"):
                 return {
                     "success": True,
                     "jobs": result.get("jobs", []) or [],
-                    "dates": result.get("dates", []) or [],
+                    "dates": _job_stats_daily_calendar(days),
                     "ssh_available": result.get("ssh_available", True),
                     "count": len(result.get("jobs", []) or []),
                     "message": result.get("message"),
@@ -864,7 +880,10 @@ class VeeamRESTProvider:
                 "message": "SSH bridge not configured",
             }
 
-        sql = job_stats_daily_sql(days=days, db_type=self.db_type, column_case=self.column_case)
+        sql = job_stats_daily_sql(
+            days=days, db_type=self.db_type, column_case=self.column_case,
+            include_system=include_system,
+        )
         result = await self._run_pg_query(sql)
         if not result.get("success"):
             return {
@@ -877,7 +896,6 @@ class VeeamRESTProvider:
             }
 
         job_map: dict[str, dict[str, dict]] = {}
-        dates_set: set[str] = set()
         output = result.get("output", "").strip()
         for line in output.split("\n"):
             line = line.strip()
@@ -902,7 +920,6 @@ class VeeamRESTProvider:
                 else:
                     result_status = "Success"
 
-                dates_set.add(run_date)
                 if job_name not in job_map:
                     job_map[job_name] = {}
                 job_map[job_name][run_date] = {
@@ -923,7 +940,7 @@ class VeeamRESTProvider:
                 "daily": daily,
             })
 
-        dates = sorted(dates_set, reverse=True)
+        dates = _job_stats_daily_calendar(days)
 
         return {
             "success": True,

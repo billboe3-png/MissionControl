@@ -30,7 +30,10 @@ AND js.job_name NOT LIKE '%Hyper-V CBT%'
 AND js.job_name NOT LIKE '%Rescan%'
 AND js.job_name NOT LIKE '%Checkpoint Removal%'
 AND js.job_name NOT LIKE '%Retention job%'
-AND js.job_name NOT LIKE '%Malware Detection%'"""
+AND js.job_name NOT LIKE '%Malware Detection%'
+AND js.job_name NOT LIKE '%Database Maintenance%'
+AND js.job_name NOT LIKE '%HealthCheck %'
+AND js.job_name NOT LIKE '%Security & Compliance Analyzer%'"""
 
 # ── Job name normalization ──────────────────────────────────────────
 # PostgreSQL: regexp_replace strips trailing " - hostname"
@@ -67,7 +70,10 @@ AND js.job_name NOT LIKE '%Hyper-V CBT%'
 AND js.job_name NOT LIKE '%Rescan%'
 AND js.job_name NOT LIKE '%Checkpoint Removal%'
 AND js.job_name NOT LIKE '%Retention job%'
-AND js.job_name NOT LIKE '%Malware Detection%'"""
+AND js.job_name NOT LIKE '%Malware Detection%'
+AND js.job_name NOT LIKE '%Database Maintenance%'
+AND js.job_name NOT LIKE '%HealthCheck %'
+AND js.job_name NOT LIKE '%Security & Compliance Analyzer%'"""
     return """\
 AND js.JobName NOT LIKE '%Resynchronize%'
 AND js.JobName NOT LIKE '%Host Discovery%'
@@ -81,7 +87,26 @@ AND js.JobName NOT LIKE '%Hyper-V CBT%'
 AND js.JobName NOT LIKE '%Rescan%'
 AND js.JobName NOT LIKE '%Checkpoint Removal%'
 AND js.JobName NOT LIKE '%Retention job%'
-AND js.JobName NOT LIKE '%Malware Detection%'"""
+AND js.JobName NOT LIKE '%Malware Detection%'
+AND js.JobName NOT LIKE '%Database Maintenance%'
+AND js.JobName NOT LIKE '%HealthCheck %'
+AND js.JobName NOT LIKE '%Security & Compliance Analyzer%'"""
+
+
+def _daily_where_filter(
+    db_type: str = "postgresql", column_case: str = "pascal", include_system: bool = False,
+) -> str:
+    """WHERE fragment for the daily stats query.
+
+    System/internal job sessions are excluded by default. When
+    ``include_system`` is True an empty fragment is returned so every job
+    session (including internal Veeam jobs) is counted.
+    """
+    if include_system:
+        return ""
+    if db_type == "mssql":
+        return _mssql_where(column_case)
+    return _WHERE_FILTER_PG
 
 
 def job_stats_sql(db_type: str = "postgresql", column_case: str = "pascal") -> str:
@@ -146,15 +171,22 @@ GROUP BY 1
 ORDER BY MAX(js.creation_time) DESC"""
 
 
-def job_stats_daily_sql(days: int = 7, db_type: str = "postgresql", column_case: str = "pascal") -> str:
+def job_stats_daily_sql(
+    days: int = 7, db_type: str = "postgresql", column_case: str = "pascal",
+    include_system: bool = False,
+) -> str:
     """Per-job per-day transfer stats.
 
     ``days`` is the only caller-supplied value interpolated into SQL. It is
     coerced to int so a non-numeric value can never break out of the literal
     (the API already validates it as an int Query, but we defensively coerce
     here too). All other fragments are module-level constants.
+
+    ``include_system`` toggles the system/internal job exclusion.
     """
     days = int(days)  # coerced to int; remaining fragments are module constants
+    where = _daily_where_filter(db_type, column_case, include_system)
+    window_start = days - 1
     if db_type == "mssql":
         if column_case == "snake":
             norm = _NORM_NAME_MSSQL_SNAKE
@@ -170,7 +202,7 @@ def job_stats_daily_sql(days: int = 7, db_type: str = "postgresql", column_case:
     SUM(CASE WHEN js.result = 2 THEN 1 ELSE 0 END) AS failed_count
 FROM [Backup.Model.JobSessions] js
 LEFT JOIN [Backup.Model.BackupJobSessions] bs ON bs.id = js.id
-WHERE js.creation_time >= DATEADD(day, -{days}, GETDATE()) {_mssql_where(column_case)}
+WHERE CAST(js.creation_time AS DATE) >= DATEADD(day, -{window_start}, CAST(GETDATE() AS DATE)) {where}
 GROUP BY {norm}, CAST(js.creation_time AS DATE)
 ORDER BY 1, 2 DESC"""
         else:
@@ -187,7 +219,7 @@ ORDER BY 1, 2 DESC"""
     SUM(CASE WHEN js.Result = 2 THEN 1 ELSE 0 END) AS failed_count
 FROM [Backup.Model.JobSessions] js
 LEFT JOIN [Backup.Model.BackupJobSessions] bs ON bs.Id = js.Id
-WHERE js.CreationTime >= DATEADD(day, -{days}, GETDATE()) {_mssql_where(column_case)}
+WHERE CAST(js.CreationTime AS DATE) >= DATEADD(day, -{window_start}, CAST(GETDATE() AS DATE)) {where}
 GROUP BY {norm}, CAST(js.CreationTime AS DATE)
 ORDER BY 1, 2 DESC"""
     else:
@@ -204,7 +236,7 @@ ORDER BY 1, 2 DESC"""
     SUM(CASE WHEN js.result = 2 THEN 1 ELSE 0 END) AS failed_count
 FROM "backup.model.jobsessions" js
 LEFT JOIN "backup.model.backupjobsessions" bs ON bs.id = js.id
-WHERE js.creation_time >= NOW() - INTERVAL '{days} days' {_WHERE_FILTER_PG}
+WHERE DATE(js.creation_time) >= CURRENT_DATE - {window_start} {where}
 GROUP BY 1, DATE(js.creation_time)
 ORDER BY 1, DATE(js.creation_time) DESC"""
 

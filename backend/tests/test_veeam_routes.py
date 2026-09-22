@@ -6,10 +6,13 @@ success/healthy/connected False) and with-server delegation to a fake
 provider returning canned legacy dicts.
 """
 
+import json
+from datetime import UTC, datetime, timedelta
+
 import pytest
 from fastapi.testclient import TestClient
 
-from app.plugins.installed.official_veeam.models import VeeamBackupServer
+from app.plugins.installed.official_veeam.models import VeeamBackupServer, VeeamSnapshot
 
 NO_SERVER_ERROR = "No Veeam server configured"
 
@@ -135,7 +138,7 @@ class FakeProvider:
     async def get_job_stats(self):
         return self._result("get_job_stats")
 
-    async def get_job_stats_daily(self, days=7):
+    async def get_job_stats_daily(self, days=7, include_system=False):
         return self._result("get_job_stats_daily")
 
     async def get_job_detail(self, job_id):
@@ -292,8 +295,9 @@ def test_with_server_test_mapping(veeam_client, fake_provider, monkeypatch):
 def test_with_server_job_stats_daily_passes_days(veeam_client, fake_provider, monkeypatch):
     captured = {}
 
-    async def get_job_stats_daily(days=7):
+    async def get_job_stats_daily(days=7, include_system=False):
         captured["days"] = days
+        captured["include_system"] = include_system
         return CANNED["get_job_stats_daily"]
 
     monkeypatch.setattr(fake_provider, "get_job_stats_daily", get_job_stats_daily)
@@ -302,6 +306,81 @@ def test_with_server_job_stats_daily_passes_days(veeam_client, fake_provider, mo
     )
     assert response.status_code == 200
     assert captured["days"] == 14
+    assert captured["include_system"] is False
+
+    response = veeam_client.get(
+        "/api/v1/plugins/veeam/jobs/stats/daily",
+        params={"days": 14, "include_system": True},
+    )
+    assert response.status_code == 200
+    assert captured["include_system"] is True
+
+
+def _seed_snapshot(db_session, server_id, dataset, payload, collected_at):
+    db_session.add(VeeamSnapshot(
+        server_id=server_id,
+        dataset=dataset,
+        payload=json.dumps(payload),
+        collected_at=collected_at,
+    ))
+    db_session.commit()
+
+
+def test_fresh_snapshot_served_from_cache(veeam_client, veeam_server, fake_provider, monkeypatch, db_session):
+    async def boom():
+        raise AssertionError("provider should not be called for fresh snapshot")
+
+    CACHED = CANNED["get_jobs"]
+    _seed_snapshot(
+        db_session, veeam_server.id, "jobs", CACHED,
+        datetime.now(UTC) - timedelta(minutes=1),
+    )
+    monkeypatch.setattr(fake_provider, "get_jobs", boom)
+    response = veeam_client.get("/api/v1/plugins/veeam/jobs")
+    assert response.status_code == 200
+    assert response.json() == CACHED
+
+
+def test_stale_snapshot_triggers_recollect(veeam_client, veeam_server, fake_provider, db_session):
+    _seed_snapshot(
+        db_session, veeam_server.id, "jobs",
+        {"success": True, "jobs": [{"id": "stale"}], "count": 1,
+         "server_names": [], "error": None},
+        datetime.now(UTC) - timedelta(hours=2),
+    )
+    response = veeam_client.get("/api/v1/plugins/veeam/jobs")
+    assert response.status_code == 200
+    assert response.json() == CANNED["get_jobs"]
+
+    from sqlalchemy import select
+    row = db_session.execute(
+        select(VeeamSnapshot).where(VeeamSnapshot.dataset == "jobs")
+    ).scalar_one_or_none()
+    assert row is not None and row.payload == json.dumps(CANNED["get_jobs"])
+
+
+def test_stale_snapshot_failure_returns_cached_with_error(
+    veeam_client, veeam_server, fake_provider, monkeypatch, db_session,
+):
+    CACHED = {
+        "success": True, "jobs": [{"id": "old"}], "count": 1,
+        "server_names": [], "error": None,
+    }
+    _seed_snapshot(
+        db_session, veeam_server.id, "jobs", CACHED,
+        datetime.now(UTC) - timedelta(hours=2),
+    )
+
+    async def failing():
+        return {"success": False, "jobs": [], "count": 0,
+                "server_names": [], "error": "relay down"}
+
+    monkeypatch.setattr(fake_provider, "get_jobs", failing)
+    response = veeam_client.get("/api/v1/plugins/veeam/jobs")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["jobs"] == CACHED["jobs"]
+    assert "may be stale" in data["error"]
 
 
 def test_with_server_restore_points_passes_vm_id(veeam_client, fake_provider, monkeypatch):

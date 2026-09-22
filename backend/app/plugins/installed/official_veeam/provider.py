@@ -82,8 +82,8 @@ class VeeamServerProvider:
     async def get_session_stats(self) -> dict[str, Any]:
         return await self._client.get_session_stats()
 
-    async def get_job_stats_daily(self, days: int = 7) -> dict[str, Any]:
-        return await self._client.get_job_stats_daily(days)
+    async def get_job_stats_daily(self, days: int = 7, include_system: bool = False) -> dict[str, Any]:
+        return await self._client.get_job_stats_daily(days, include_system=include_system)
 
     async def start_job(self, job_id: str) -> dict[str, Any]:
         return await self._client.start_job(job_id)

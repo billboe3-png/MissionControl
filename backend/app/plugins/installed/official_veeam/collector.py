@@ -89,7 +89,10 @@ async def _get_job_stats(provider: VeeamServerProvider, **_: Any) -> dict[str, A
 async def _get_job_stats_daily(
     provider: VeeamServerProvider, **params: Any,
 ) -> dict[str, Any]:
-    return await provider.get_job_stats_daily(days=int(params.get("days", 7)))
+    return await provider.get_job_stats_daily(
+        days=int(params.get("days", 7)),
+        include_system=bool(params.get("include_system", False)),
+    )
 
 
 async def _get_sessions(provider: VeeamServerProvider, **_: Any) -> dict[str, Any]:

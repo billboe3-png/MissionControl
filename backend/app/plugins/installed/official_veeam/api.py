@@ -172,8 +172,8 @@ class VeeamApiClient:
     async def get_job_stats(self) -> dict[str, Any]:
         return await self._provider.get_job_stats()
 
-    async def get_job_stats_daily(self, days: int = 7) -> dict[str, Any]:
-        return await self._provider.get_job_stats_daily(days)
+    async def get_job_stats_daily(self, days: int = 7, include_system: bool = False) -> dict[str, Any]:
+        return await self._provider.get_job_stats_daily(days, include_system=include_system)
 
     def get_session_stats_sync(self) -> dict[str, Any]:
         return self._run_async(self.get_session_stats())
@@ -181,8 +181,8 @@ class VeeamApiClient:
     def get_job_stats_sync(self) -> dict[str, Any]:
         return self._run_async(self.get_job_stats())
 
-    def get_job_stats_daily_sync(self, days: int = 7) -> dict[str, Any]:
-        return self._run_async(self.get_job_stats_daily(days))
+    def get_job_stats_daily_sync(self, days: int = 7, include_system: bool = False) -> dict[str, Any]:
+        return self._run_async(self.get_job_stats_daily(days, include_system=include_system))
 
     def get_sessions_sync(self) -> dict[str, Any]:
         return self._run_async(self.get_sessions())
