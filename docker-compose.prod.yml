@@ -19,6 +19,8 @@ services:
     environment:
       DOCKER_HOST: unix:///var/run/docker.sock
       MISSIONCONTROL_SECRET_KEY: ${MISSIONCONTROL_SECRET_KEY:?Set MISSIONCONTROL_SECRET_KEY in .env}
+    volumes:
+      - /opt/MissionControl/.agents:/project/.agents:ro
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/v1/health/live', timeout=2)"]
       interval: 30s
