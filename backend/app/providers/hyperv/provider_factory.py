@@ -244,10 +244,16 @@ def get_hyperv_provider(db: Session | None = None, host_id: int | None = None) -
 
     if host_id is not None:
         if host_id <= -1000:
-            return _get_local_agent_provider(db, -(1000 + host_id))
+            try:
+                return _get_local_agent_provider(db, -(1000 + host_id))
+            except ValueError as e:
+                logger.warning("Local agent provider unavailable for host_id=%s: %s", host_id, e)
 
         if host_id < 0:
-            return _get_agent_provider(db, -host_id)
+            try:
+                return _get_agent_provider(db, -host_id)
+            except ValueError as e:
+                logger.warning("Agent provider unavailable for host_id=%s: %s", host_id, e)
 
         if host_id in _providers:
             cached = _providers[host_id]
@@ -534,8 +540,14 @@ def _try_agent_default_provider(db: Session | None) -> HyperVProvider | None:
         local_inventory = plugin_data.get("local") or {}
         remote_inventory = plugin_data.get("remote") or {}
         hyperv = local_inventory or remote_inventory or plugin_data
-        if not hyperv or (isinstance(hyperv, dict) and hyperv.get("vm_count", 0) <= 0):
+        if not hyperv:
             return None
+        if isinstance(hyperv, dict):
+            vms = hyperv.get("vms") or []
+            if isinstance(vms, dict):
+                vms = [vms]
+            if not vms:
+                return None
 
         return AgentHyperVProvider(
             hyperv,

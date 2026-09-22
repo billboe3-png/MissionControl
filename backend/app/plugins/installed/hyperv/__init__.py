@@ -12,6 +12,7 @@ and caches results into local DB tables for dashboard widgets and REST API.
 
 import asyncio
 import contextlib
+import json
 import logging
 from datetime import UTC, datetime
 from typing import Any
@@ -113,13 +114,15 @@ class HyperVPlugin(ServerPluginSDK):
             host_id = await asyncio.to_thread(_upsert_host)
             self._host_cache[host["profile_id"]] = host_id
 
+        await self._register_agent_hosts()
+
         logger.info(
             "Hyper-V plugin setup: %d host(s) configured", len(self._host_cache)
         )
 
     async def start(self) -> None:
         """Start background sync task."""
-        if self._plugin_config.auto_sync_enabled and self._host_cache:
+        if self._plugin_config.auto_sync_enabled:
             self._sync_task = asyncio.create_task(self._background_sync())
             logger.info(
                 "Hyper-V background sync started (interval=%ds)",
@@ -151,6 +154,8 @@ class HyperVPlugin(ServerPluginSDK):
 
     async def _run_sync_cycle(self) -> None:
         """Run one sync cycle for all hosts."""
+        await self._register_agent_hosts()
+
         def _load_hosts():
             session = SessionLocal()
             try:
@@ -179,6 +184,100 @@ class HyperVPlugin(ServerPluginSDK):
             source="plugin.hyperv",
         ))
 
+    async def _register_agent_hosts(self) -> None:
+        """Register Hyper-V hosts served by an edge agent's local inventory.
+
+        Agents that collect Hyper-V plugin inventory (plugins.hyperv.local)
+        are upserted as Hyper-V hosts using the -(1000 + agent.id) mapping
+        consumed by get_hyperv_provider, so the background sync caches their
+        data into the hyperv_* tables without needing a WinRM profile.
+        """
+
+        def _load():
+            session = SessionLocal()
+            try:
+                from app.models.db.agent import Agent
+
+                agents = session.execute(
+                    select(Agent).where(
+                        Agent.inventory_json.isnot(None),
+                        Agent.status != "offline",
+                    )
+                ).scalars().all()
+                hosts = []
+                for agent in agents:
+                    try:
+                        full_inv = json.loads(agent.inventory_json or "{}")
+                    except (json.JSONDecodeError, TypeError):
+                        continue
+                    plugin_data = full_inv.get("plugins", {}).get("hyperv") or {}
+                    local = plugin_data.get("local") or plugin_data
+                    if not isinstance(local, dict) or not local.get("vms"):
+                        continue
+                    hosts.append({
+                        "agent_id": agent.id,
+                        "name": agent.name
+                        or full_inv.get("system", {}).get("hostname")
+                        or f"agent-{agent.id}",
+                        "hostname": agent.ip_address
+                        or agent.name
+                        or f"agent-{agent.id}",
+                        "version": getattr(agent, "agent_version", None)
+                        or getattr(agent, "version", None),
+                    })
+                return hosts
+            finally:
+                session.close()
+
+        def _upsert(host):
+            session = SessionLocal()
+            try:
+                existing = session.execute(
+                    select(HyperVHost).where(
+                        HyperVHost.integration_profile_id == -(1000 + host["agent_id"])
+                    )
+                ).scalars().first()
+                if existing is None:
+                    existing = session.execute(
+                        select(HyperVHost).where(HyperVHost.name == host["name"])
+                    ).scalars().first()
+                    if existing is not None:
+                        existing.integration_profile_id = -(1000 + host["agent_id"])
+                if existing is not None:
+                    existing.hostname = host["hostname"]
+                    existing.enabled = True
+                    existing.status = "healthy"
+                    existing.last_sync_at = datetime.now(UTC)
+                    if host.get("version"):
+                        existing.version = host["version"]
+                    session.commit()
+                    return
+                session.add(HyperVHost(
+                    integration_profile_id=-(1000 + host["agent_id"]),
+                    name=host["name"],
+                    hostname=host["hostname"],
+                    transport="agent",
+                    port=0,
+                    enabled=True,
+                    status="healthy",
+                    version=host.get("version"),
+                ))
+                session.commit()
+            except Exception as exc:
+                session.rollback()
+                logger.warning(
+                    "Failed to register agent Hyper-V host %s: %s",
+                    host["name"], exc,
+                )
+            finally:
+                session.close()
+
+        hosts = await asyncio.to_thread(_load)
+        for host in hosts:
+            await asyncio.to_thread(_upsert, host)
+        if hosts:
+            logger.info("Hyper-V plugin: registered %d agent-based host(s)", len(hosts))
+
     async def _sync_host(self, host: HyperVHost) -> None:
         """Sync all data for a single Hyper-V host."""
         from app.providers.hyperv.provider_factory import get_hyperv_provider
@@ -187,7 +286,7 @@ class HyperVPlugin(ServerPluginSDK):
             db = SessionLocal()
             try:
                 profile_id = host.integration_profile_id
-                if profile_id and profile_id > 0:
+                if profile_id:
                     return get_hyperv_provider(db, profile_id)
                 return None
             finally:
