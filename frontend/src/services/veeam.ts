@@ -318,8 +318,14 @@ export const veeamApi = {
         return apiClient<VeeamJobStatsResponse>(`${API}/jobs/stats${qs}`);
     },
 
-    async getJobStatsDaily(days: number = 7, serverId?: number | null): Promise<VeeamJobStatsDailyResponse> {
+    async getJobStatsDaily(
+        days: number = 7,
+        serverId?: number | null,
+        includeSystem: boolean = false,
+    ): Promise<VeeamJobStatsDailyResponse> {
         const sid = serverId != null ? `&server_id=${serverId}` : '';
-        return apiClient<VeeamJobStatsDailyResponse>(`${API}/jobs/stats/daily?days=${days}${sid}`);
+        return apiClient<VeeamJobStatsDailyResponse>(
+            `${API}/jobs/stats/daily?days=${days}&include_system=${includeSystem}${sid}`,
+        );
     },
 };

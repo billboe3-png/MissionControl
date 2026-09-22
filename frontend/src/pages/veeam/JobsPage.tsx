@@ -21,6 +21,7 @@ function dateHeader(d: string): string {
 export default function VeeamJobsPage() {
     const [jobs, setJobs] = useState<VeeamJobDailyRow[]>([]);
     const [days, setDays] = useState<DayPreset>(8);
+    const [showSystem, setShowSystem] = useState(false);
     const [dates, setDates] = useState<string[]>([]);
     const [error, setError] = useState<string | null>(null);
     const [loading, setLoading] = useState(false);
@@ -30,7 +31,7 @@ export default function VeeamJobsPage() {
         setLoading(true);
         setError(null);
         veeamApi
-            .getJobStatsDaily(days, selectedServerId)
+            .getJobStatsDaily(days, selectedServerId, showSystem)
             .then((r) => {
                 if (!r.success) {
                     setError(r.error ?? "Failed to load job stats");
@@ -41,7 +42,7 @@ export default function VeeamJobsPage() {
             })
             .catch((e) => setError(e.message))
             .finally(() => setLoading(false));
-    }, [days, selectedServerId]);
+    }, [days, showSystem, selectedServerId]);
 
     const selectedServerName =
         servers.length > 0 ? servers.find((s) => s.id === selectedServerId)?.name : "Veeam Server";
@@ -71,6 +72,15 @@ export default function VeeamJobsPage() {
                         </option>
                     ))}
                 </select>
+                <label className="jobs-system-label">
+                    <input
+                        type="checkbox"
+                        className="jobs-system-toggle"
+                        checked={showSystem}
+                        onChange={(e) => setShowSystem(e.target.checked)}
+                    />
+                    Show system jobs
+                </label>
             </div>
             {jobs.length === 0 ? (
                 <div className="data-table-empty">No job data available.</div>
