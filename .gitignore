@@ -43,3 +43,10 @@ frontend/public/demo/lib/*
 backend/debug/
 debug/
 /.opencode/agents
+# Production secrets / runtime state
+nginx/certs/
+agent-data/
+
+# Generated agent bundles - rebuild via .agents/build_bundle.py
+.agents/agent-bundle-*.zip
+.agents/agent-bundle-*.version
