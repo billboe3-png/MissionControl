@@ -1,4 +1,5 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from "react";
+import { apiClient } from "../utils/apiClient";
 
 export interface VeeamServerConfig {
     id: number;
@@ -45,15 +46,10 @@ export const VeeamServerProvider: React.FC<{ children: ReactNode }> = ({ childre
         async function fetchServers() {
             setLoading(true);
             try {
-                const configResult = await fetch("/api/v1/plugins/veeam/servers/config", {
-                    credentials: "include",
-                });
-                if (configResult.ok) {
-                    const configList: VeeamServerConfig[] = await configResult.json();
-                    setServers(configList);
-                } else {
-                    setServers([]);
-                }
+                const configList = await apiClient<VeeamServerConfig[]>(
+                    "/api/v1/plugins/veeam/servers/config",
+                );
+                setServers(configList);
             } catch (e) {
                 console.error("Failed to fetch Veeam servers:", e);
                 setServers([]);
