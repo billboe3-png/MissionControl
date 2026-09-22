@@ -3,11 +3,14 @@ Veeam Plugin REST API Routes
 
 FastAPI router exposed by the Veeam plugin.
 Cache routes serve widget data from cache_manager.
-Live routes serve hourly snapshots; ?refresh=1 forces live collection.
+Live routes serve DB snapshots, re-collected when older than
+SNAPSHOT_TTL_SECONDS; ?refresh=1 forces live collection.
 """
 
 import json
 import logging
+import os
+from datetime import UTC, datetime
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -19,6 +22,7 @@ from app.core.config import get_settings
 from app.core.security import CredentialCipher
 from app.db.database import get_db
 from app.plugins.installed.official_veeam.cache import cache_manager
+from app.plugins.installed.official_veeam.collector import _upsert_snapshot
 from app.plugins.installed.official_veeam.models import (
     VeeamBackupServer,
     VeeamSnapshot,
@@ -30,6 +34,15 @@ logger = logging.getLogger("plugin.veeam.routes")
 router = APIRouter(prefix="/api/v1/plugins/veeam", tags=["veeam-plugin"])
 
 _NO_SERVER = "No Veeam server configured"
+
+SNAPSHOT_TTL_SECONDS = int(os.environ.get("VEEAM_SNAPSHOT_TTL_SECONDS", "900"))
+
+
+def _snapshot_age(row: VeeamSnapshot) -> float:
+    collected = row.collected_at
+    if collected.tzinfo is None:
+        collected = collected.replace(tzinfo=UTC)
+    return (datetime.now(UTC) - collected).total_seconds()
 
 
 # Pydantic models for server config API
@@ -73,6 +86,13 @@ class VeeamServerConfigUpdate(BaseModel):
 
 class VeeamServerConfigResponse(VeeamServerConfigBase):
     id: int
+
+    url: str | None = None
+    username: str | None = None
+    ssh_host: str | None = None
+    ssh_username: str | None = None
+    password: str | None = None
+    ssh_password: str | None = None
 
     class Config:
         from_attributes = True
@@ -199,7 +219,8 @@ async def _serve(
     dataset_key = dataset
     if dataset == "job_stats_daily":
         days = params.get("days", 7)
-        dataset_key = f"job_stats_daily:{int(days)}"
+        include_system = params.get("include_system", False)
+        dataset_key = f"job_stats_daily:{int(days)}:{'sys' if include_system else 'jobs'}"
 
     row = db.execute(
         select(VeeamSnapshot).where(
@@ -211,7 +232,6 @@ async def _serve(
     if refresh:
         payload = await method(**params)
         if payload.get("success", False):
-            from app.plugins.installed.official_veeam.collector import _upsert_snapshot
             _upsert_snapshot(db, server.id, dataset_key, payload)
             db.commit()
             return payload
@@ -219,16 +239,23 @@ async def _serve(
             stale = dict(json.loads(row.payload))
             stale["error"] = f"Data may be stale — last collected {row.collected_at.isoformat()}"
             return stale
-        from app.plugins.installed.official_veeam.collector import _upsert_snapshot
         _upsert_snapshot(db, server.id, dataset_key, payload)
         db.commit()
         return payload
 
-    if row is not None:
+    if row is not None and _snapshot_age(row) < SNAPSHOT_TTL_SECONDS:
         return json.loads(row.payload)
 
     payload = await method(**params)
-    from app.plugins.installed.official_veeam.collector import _upsert_snapshot
+    if payload.get("success", False):
+        _upsert_snapshot(db, server.id, dataset_key, payload)
+        db.commit()
+        return payload
+    if row is not None:
+        stale = dict(json.loads(row.payload))
+        stale["error"] = f"Data may be stale — last collected {row.collected_at.isoformat()}"
+        return stale
+
     _upsert_snapshot(db, server.id, dataset_key, payload)
     db.commit()
     return payload
@@ -315,6 +342,7 @@ async def get_job_stats(
 @router.get("/jobs/stats/daily")
 async def get_job_stats_daily(
     days: int = Query(default=7, ge=1, le=90),
+    include_system: bool = Query(False, description="Include Veeam system/internal jobs"),
     refresh: bool = Query(False),
     server_id: int | None = Query(None, description="Veeam server config id"),
     db: Session = Depends(get_db),
@@ -326,7 +354,7 @@ async def get_job_stats_daily(
         provider = build_server_provider(db, server)
         return await _serve(
             db, provider, server, "job_stats_daily",
-            provider.get_job_stats_daily, refresh, days=days,
+            provider.get_job_stats_daily, refresh, days=days, include_system=include_system,
         )
     except Exception as exc:
         return _failed("job_stats_daily", str(exc))
