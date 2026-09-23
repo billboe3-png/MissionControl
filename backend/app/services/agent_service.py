@@ -781,10 +781,10 @@ class AgentService:
     # ------------------------------------------------------------------ #
 
     async def list_agents(
-        self, db: Session
+        self, db: Session, company_scope=None
     ) -> AgentListResponse:
         """List all agents with online/offline counts."""
-        agents = AgentRepository.get_all(db)
+        agents = AgentRepository.get_all(db, extra_where=company_scope)
         online = sum(1 for a in agents if a.status == "online")
         offline = len(agents) - online
         return AgentListResponse(

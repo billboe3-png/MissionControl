@@ -12,6 +12,7 @@ from fastapi import APIRouter, Depends
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.core.auth_dependency import get_current_user
 from app.db.database import get_db
 from app.plugins.installed.zabbix.models import (
     ZabbixEvent,
@@ -22,7 +23,11 @@ from app.plugins.installed.zabbix.models import (
 
 logger = logging.getLogger("plugin.zabbix.routes")
 
-router = APIRouter(prefix="/api/v1/plugins/zabbix", tags=["zabbix-plugin"])
+router = APIRouter(
+    prefix="/api/v1/plugins/zabbix",
+    tags=["zabbix-plugin"],
+    dependencies=[Depends(get_current_user)],
+)
 
 
 @router.get("/servers")

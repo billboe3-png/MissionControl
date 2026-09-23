@@ -7,11 +7,15 @@ Sprint 2.9 - Multi-Site Management.
 
 import logging
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.auth_dependency import get_current_user
+from app.core.rbac import company_scope_clause, entity_in_company_scope
 from app.db import get_db
+from app.models.db.site import Site
+from app.models.db.user import User
 from app.schemas.site import (
     SiteCreate,
     SiteHealthResponse,
@@ -20,6 +24,7 @@ from app.schemas.site import (
     SiteSummaryResponse,
     SiteUpdate,
 )
+from app.services.auth_service import require_role
 from app.services.site_service import SiteService, site_service
 
 logger = logging.getLogger(__name__)
@@ -35,6 +40,22 @@ def get_site_service() -> SiteService:
     return site_service
 
 
+def _get_scoped_site(db: Session, user: User, site_id: int) -> Site:
+    """Fetch a site and verify it is visible to `user` (404 on mismatch)."""
+    site = db.scalar(select(Site).where(Site.id == site_id))
+    if site is None or not entity_in_company_scope(db, user, site.company_id):
+        raise HTTPException(status_code=404, detail="Site not found")
+    return site
+
+
+def _scoped_site_ids(db: Session, user: User) -> list[int] | None:
+    """Return site IDs visible to `user`; None means unrestricted (global)."""
+    clause = company_scope_clause(db, user, Site)
+    if clause is None:
+        return None
+    return list(db.scalars(select(Site.id).where(clause)).all())
+
+
 # ------------------------------------------------------------------ #
 # List / Get                                                          #
 # ------------------------------------------------------------------ #
@@ -42,11 +63,17 @@ def get_site_service() -> SiteService:
 
 @router.get("", response_model=SiteListResponse)
 async def list_sites(
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
     service: SiteService = Depends(get_site_service),
 ) -> SiteListResponse:
-    """List all sites."""
-    return await service.list_sites(db)
+    """List sites visible to the current user."""
+    result = await service.list_sites(db)
+    if current_user.role == "global_admin":
+        return result
+    result.items = [s for s in result.items if s.company_id == current_user.company_id]
+    result.count = len(result.items)
+    return result
 
 
 @router.get(
@@ -54,11 +81,16 @@ async def list_sites(
     response_model=list[SiteSummaryResponse],
 )
 async def list_site_summaries(
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
     service: SiteService = Depends(get_site_service),
 ) -> list[SiteSummaryResponse]:
     """Compact site list for selector dropdown."""
-    return await service.list_summaries(db)
+    result = await service.list_summaries(db)
+    scoped_ids = _scoped_site_ids(db, current_user)
+    if scoped_ids is None:
+        return result
+    return [s for s in result if s.id in scoped_ids]
 
 
 @router.get(
@@ -66,11 +98,16 @@ async def list_site_summaries(
     response_model=list[SiteHealthResponse],
 )
 async def list_sites_health(
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
     service: SiteService = Depends(get_site_service),
 ) -> list[SiteHealthResponse]:
-    """Health status for all sites."""
-    return await service.get_all_sites_health(db)
+    """Health status for sites visible to the current user."""
+    result = await service.get_all_sites_health(db)
+    scoped_ids = _scoped_site_ids(db, current_user)
+    if scoped_ids is None:
+        return result
+    return [s for s in result if s.site_id in scoped_ids]
 
 
 @router.get(
@@ -79,10 +116,12 @@ async def list_sites_health(
 )
 async def get_site(
     site_id: int,
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
     service: SiteService = Depends(get_site_service),
 ) -> SiteResponse:
     """Get a single site."""
+    _get_scoped_site(db, current_user, site_id)
     return await service.get_site(db, site_id)
 
 
@@ -92,11 +131,17 @@ async def get_site(
 )
 async def get_site_by_code(
     code: str,
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
     service: SiteService = Depends(get_site_service),
 ) -> SiteResponse:
     """Get a site by its code."""
-    return await service.get_site_by_code(db, code)
+    site = await service.get_site_by_code(db, code)
+    if site is None or not entity_in_company_scope(
+        db, current_user, site.company_id
+    ):
+        raise HTTPException(status_code=404, detail="Site not found")
+    return site
 
 
 # ------------------------------------------------------------------ #
@@ -111,10 +156,19 @@ async def get_site_by_code(
 )
 async def create_site(
     payload: SiteCreate,
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
     service: SiteService = Depends(get_site_service),
 ) -> SiteResponse:
-    """Create a new site."""
+    """Create a new site (company admins within their own company)."""
+    require_role(current_user, "company_admin")
+    if current_user.role != "global_admin":
+        if (
+            payload.company_id is not None
+            and payload.company_id != current_user.company_id
+        ):
+            raise HTTPException(status_code=403, detail="Company not allowed")
+        payload.company_id = current_user.company_id
     return await service.create_site(db, payload)
 
 
@@ -125,10 +179,13 @@ async def create_site(
 async def update_site(
     site_id: int,
     payload: SiteUpdate,
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
     service: SiteService = Depends(get_site_service),
 ) -> SiteResponse:
     """Update an existing site."""
+    require_role(current_user, "company_admin")
+    _get_scoped_site(db, current_user, site_id)
     return await service.update_site(db, site_id, payload)
 
 
@@ -138,10 +195,13 @@ async def update_site(
 )
 async def delete_site(
     site_id: int,
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
     service: SiteService = Depends(get_site_service),
 ) -> None:
     """Delete a site."""
+    require_role(current_user, "company_admin")
+    _get_scoped_site(db, current_user, site_id)
     await service.delete_site(db, site_id)
 
 
@@ -156,10 +216,13 @@ async def delete_site(
 )
 async def enable_site(
     site_id: int,
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
     service: SiteService = Depends(get_site_service),
 ) -> SiteResponse:
     """Enable a site."""
+    require_role(current_user, "company_admin")
+    _get_scoped_site(db, current_user, site_id)
     return await service.enable_site(db, site_id)
 
 
@@ -169,10 +232,13 @@ async def enable_site(
 )
 async def disable_site(
     site_id: int,
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
     service: SiteService = Depends(get_site_service),
 ) -> SiteResponse:
     """Disable a site."""
+    require_role(current_user, "company_admin")
+    _get_scoped_site(db, current_user, site_id)
     return await service.disable_site(db, site_id)
 
 
@@ -187,8 +253,10 @@ async def disable_site(
 )
 async def get_site_health(
     site_id: int,
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
     service: SiteService = Depends(get_site_service),
 ) -> SiteHealthResponse:
     """Get health status for a site."""
+    _get_scoped_site(db, current_user, site_id)
     return await service.get_site_health(db, site_id)

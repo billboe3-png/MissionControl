@@ -18,6 +18,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.core.auth_dependency import get_current_user
 from app.core.config import get_settings
 from app.core.security import CredentialCipher
 from app.db.database import get_db
@@ -31,7 +32,11 @@ from app.plugins.installed.official_veeam.provider import build_server_provider
 
 logger = logging.getLogger("plugin.veeam.routes")
 
-router = APIRouter(prefix="/api/v1/plugins/veeam", tags=["veeam-plugin"])
+router = APIRouter(
+    prefix="/api/v1/plugins/veeam",
+    tags=["veeam-plugin"],
+    dependencies=[Depends(get_current_user)],
+)
 
 _NO_SERVER = "No Veeam server configured"
 

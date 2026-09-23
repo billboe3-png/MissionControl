@@ -4,24 +4,26 @@ Mission Control Company Context
 Provides company/site context to all routes via FastAPI dependency injection.
 Sprint 2.9 - Multi-Tenant & Multi-Site Platform.
 
+Scope always derives from the authenticated user's JWT claims, never from
+client-supplied headers.
+
 Usage:
     @router.get("/things")
     def list_things(ctx: CompanyContext = Depends(get_company_ctx)):
         things = repository.get_all(db, ctx.company_id, ctx.site_id)
 """
 
-import contextlib
 from dataclasses import dataclass
 
-from fastapi import Depends, Header, Request
-from sqlalchemy.orm import Session
+from fastapi import Depends
 
-from app.db import get_db
+from app.core.auth_dependency import get_current_user
+from app.models.db.user import User
 
 
 @dataclass
 class CompanyContext:
-    """Tenant context extracted from the current request."""
+    """Tenant context derived from the authenticated user."""
 
     company_id: int | None = None
     site_id: int | None = None
@@ -29,40 +31,16 @@ class CompanyContext:
 
 
 async def get_company_ctx(
-    request: Request,
-    x_company_id: str | None = Header(None, alias="X-Company-Id"),
-    x_site_id: str | None = Header(None, alias="X-Site-Id"),
-    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ) -> CompanyContext:
     """
-    Extract company/site context from request headers.
+    Derive company/site context from the authenticated user's JWT claims.
 
-    Headers:
-        X-Company-Id: The ID of the company to scope queries to.
-        X-Site-Id: The ID of the site to scope queries to.
-
-    Global administrators can omit X-Company-Id to see all companies.
-    Regular users must always provide X-Company-Id.
+    Global administrators see all companies (is_global=True). Non-global
+    users are confined to their own company_id / site_id when querying.
     """
-    company_id = None
-    site_id = None
-    is_global = False
-
-    if x_company_id:
-        with contextlib.suppress(ValueError):
-            company_id = int(x_company_id)
-
-    if x_site_id:
-        with contextlib.suppress(ValueError):
-            site_id = int(x_site_id)
-
-    # Check if this is a global admin (future Phase 4 will use JWT)
-    # For now, allow access without company_id for backward compatibility
-    if company_id is None:
-        is_global = True
-
     return CompanyContext(
-        company_id=company_id,
-        site_id=site_id,
-        is_global=is_global,
+        company_id=current_user.company_id,
+        site_id=current_user.site_id,
+        is_global=current_user.role == "global_admin",
     )

@@ -12,6 +12,7 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.core.auth_dependency import get_current_user
 from app.db.database import get_db
 from app.plugins.installed.hyperv.models import (
     HyperVCheckpoint,
@@ -23,7 +24,11 @@ from app.plugins.installed.hyperv.models import (
 
 logger = logging.getLogger("plugin.hyperv.routes")
 
-router = APIRouter(prefix="/api/v1/plugins/hyperv", tags=["hyperv-plugin"])
+router = APIRouter(
+    prefix="/api/v1/plugins/hyperv",
+    tags=["hyperv-plugin"],
+    dependencies=[Depends(get_current_user)],
+)
 
 
 @router.get("/hosts")

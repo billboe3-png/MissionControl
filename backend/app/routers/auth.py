@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 
 from app.core.auth_dependency import get_current_user
 from app.db import get_db
+from app.models.db.site import Site
 from app.models.db.user import User
 from app.schemas.auth import (
     LoginRequest,
@@ -24,6 +25,7 @@ from app.schemas.auth import (
     UserUpdateRequest,
 )
 from app.services.auth_service import (
+    ROLE_HIERARCHY,
     AuthService,
     hash_password,
     require_role,
@@ -31,6 +33,16 @@ from app.services.auth_service import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+def _site_in_company(
+    db: Session, site_id: int | None, company_id: int | None
+) -> bool:
+    """True if site_id is None or the site belongs to company_id."""
+    if site_id is None:
+        return True
+    site = db.scalar(select(Site).where(Site.id == site_id))
+    return site is not None and site.company_id == company_id
 
 
 
@@ -140,6 +152,18 @@ def create_user(
     company_id = request.company_id
     if current_user.role != "global_admin":
         company_id = current_user.company_id
+        if ROLE_HIERARCHY.get(request.role, 0) >= ROLE_HIERARCHY.get(
+            current_user.role, 0
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Cannot assign a role at or above your own",
+            )
+        if not _site_in_company(db, request.site_id, current_user.company_id):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Site not in your company",
+            )
 
     user = AuthService.create_user(
         db,
@@ -176,6 +200,38 @@ def update_user(
     user = db.scalar(select(User).where(User.id == user_id))
     if user is None:
         raise HTTPException(status_code=404, detail="User not found")
+
+    if current_user.role != "global_admin":
+        if user.company_id != current_user.company_id:
+            raise HTTPException(status_code=404, detail="User not found")
+        if user.id != current_user.id and ROLE_HIERARCHY.get(
+            user.role, 0
+        ) >= ROLE_HIERARCHY.get(current_user.role, 0):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Cannot modify users at or above your own role",
+            )
+        next_role = request.role if request.role is not None else user.role
+        if ROLE_HIERARCHY.get(next_role, 0) >= ROLE_HIERARCHY.get(
+            current_user.role, 0
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Cannot assign a role at or above your own",
+            )
+        if (
+            request.company_id is not None
+            and request.company_id != current_user.company_id
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Company not allowed",
+            )
+        if not _site_in_company(db, request.site_id, current_user.company_id):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Site not in your company",
+            )
 
     if request.display_name is not None:
         user.display_name = request.display_name
@@ -221,6 +277,17 @@ def delete_user(
             status_code=400,
             detail="Cannot delete your own account",
         )
+
+    if current_user.role != "global_admin":
+        if user.company_id != current_user.company_id:
+            raise HTTPException(status_code=404, detail="User not found")
+        if ROLE_HIERARCHY.get(user.role, 0) >= ROLE_HIERARCHY.get(
+            current_user.role, 0
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Cannot delete users at or above your own role",
+            )
 
     db.delete(user)
     db.commit()

@@ -25,6 +25,7 @@ class AgentRepository:
         db: Session,
         company_id: int | None = None,
         site_id: int | None = None,
+        extra_where=None,
     ) -> list[Agent]:
         """Return all agents ordered by creation date."""
         stmt = select(Agent).order_by(Agent.created_at.desc())
@@ -32,6 +33,8 @@ class AgentRepository:
             stmt = stmt.where(Agent.company_id == company_id)
         if site_id is not None:
             stmt = stmt.where(Agent.site_id == site_id)
+        if extra_where is not None:
+            stmt = stmt.where(extra_where)
         return list(db.scalars(stmt).all())
 
     @staticmethod

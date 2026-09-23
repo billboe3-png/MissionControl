@@ -15,7 +15,11 @@ from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 
 from app.core.auth_dependency import get_current_user
+from app.core.rbac import company_scope_clause, entity_in_company_scope
 from app.db import get_db
+from app.models.db.agent import Agent
+from app.models.db.user import User
+from app.repositories.agent_repository import AgentRepository
 from app.schemas.agent import (
     AgentCommandDispatchRequest,
     AgentCommandListResponse,
@@ -32,6 +36,7 @@ from app.schemas.agent import (
     AgentUpdate,
 )
 from app.services.agent_service import AgentService, agent_service
+from app.services.auth_service import require_role
 
 logger = logging.getLogger(__name__)
 
@@ -40,6 +45,17 @@ router = APIRouter(prefix="/agents", tags=["Agents"])
 
 def get_agent_service() -> AgentService:
     return agent_service
+
+
+def _get_scoped_agent(db: Session, user: User, agent_id: int) -> Agent:
+    """Fetch an agent and verify it is visible to `user` (404 on mismatch)."""
+    agent = AgentRepository.get_by_id(db, agent_id)
+    if agent is None or not entity_in_company_scope(db, user, agent.company_id):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Agent not found",
+        )
+    return agent
 
 
 # ------------------------------------------------------------------ #
@@ -81,6 +97,13 @@ async def register_agent(
         company_id = token.company_id
         site_id = token.site_id
         AgentTokenService.consume_token(db, token)
+    else:
+        existing = AgentRepository.get_by_hostname(db, payload.hostname)
+        if existing is not None:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Re-registration requires a valid registration_token",
+            )
 
     return await service.register_agent(
         db, payload, company_id=company_id, site_id=site_id
@@ -142,22 +165,24 @@ async def update_inventory(
 
 @router.get("", response_model=AgentListResponse)
 async def list_agents(
-    current_user: object = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
     service: AgentService = Depends(get_agent_service),
 ) -> AgentListResponse:
-    """List all registered agents."""
-    return await service.list_agents(db)
+    """List agents within the current user's scope."""
+    scope = company_scope_clause(db, current_user, Agent)
+    return await service.list_agents(db, company_scope=scope)
 
 
 @router.get("/{agent_id}", response_model=AgentResponse)
 async def get_agent(
     agent_id: int,
-    current_user: object = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
     service: AgentService = Depends(get_agent_service),
 ) -> AgentResponse:
     """Get a single agent by ID."""
+    _get_scoped_agent(db, current_user, agent_id)
     return await service.get_agent(db, agent_id)
 
 
@@ -165,11 +190,13 @@ async def get_agent(
 async def update_agent(
     agent_id: int,
     payload: AgentUpdate,
-    current_user: object = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
     service: AgentService = Depends(get_agent_service),
 ) -> AgentResponse:
     """Update agent settings."""
+    require_role(current_user, "company_admin")
+    _get_scoped_agent(db, current_user, agent_id)
     return await service.update_agent(db, agent_id, payload)
 
 
@@ -179,22 +206,26 @@ async def update_agent(
 )
 async def delete_agent(
     agent_id: int,
-    current_user: object = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
     service: AgentService = Depends(get_agent_service),
 ) -> None:
     """Delete an agent."""
+    require_role(current_user, "company_admin")
+    _get_scoped_agent(db, current_user, agent_id)
     await service.delete_agent(db, agent_id)
 
 
 @router.get("/{agent_id}/api-key")
 async def reveal_agent_api_key(
     agent_id: int,
-    current_user: object = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
     service: AgentService = Depends(get_agent_service),
 ) -> dict:
-    """Reveal the API key for an agent."""
+    """Reveal the API key for an agent (global admins only)."""
+    require_role(current_user, "global_admin")
+    _get_scoped_agent(db, current_user, agent_id)
     return await service.reveal_api_key(db, agent_id)
 
 
@@ -204,11 +235,13 @@ async def reveal_agent_api_key(
 )
 async def enable_agent(
     agent_id: int,
-    current_user: object = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
     service: AgentService = Depends(get_agent_service),
 ) -> AgentResponse:
     """Enable an agent."""
+    require_role(current_user, "company_admin")
+    _get_scoped_agent(db, current_user, agent_id)
     return await service.enable_agent(db, agent_id)
 
 
@@ -218,11 +251,13 @@ async def enable_agent(
 )
 async def disable_agent(
     agent_id: int,
-    current_user: object = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
     service: AgentService = Depends(get_agent_service),
 ) -> AgentResponse:
     """Disable an agent."""
+    require_role(current_user, "company_admin")
+    _get_scoped_agent(db, current_user, agent_id)
     return await service.disable_agent(db, agent_id)
 
 
@@ -239,11 +274,13 @@ async def disable_agent(
 async def dispatch_command(
     agent_id: int,
     payload: AgentCommandDispatchRequest,
-    current_user: object = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
     service: AgentService = Depends(get_agent_service),
 ) -> AgentCommandResponse:
     """Dispatch a command to an agent for execution."""
+    require_role(current_user, "operator")
+    _get_scoped_agent(db, current_user, agent_id)
     payload.agent_id = agent_id
     return await service.dispatch_command(db, payload)
 
@@ -255,11 +292,12 @@ async def dispatch_command(
 async def get_agent_commands(
     agent_id: int,
     limit: int = Query(50, ge=1, le=500),
-    current_user: object = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
     service: AgentService = Depends(get_agent_service),
 ) -> AgentCommandListResponse:
     """Get command history for a specific agent."""
+    _get_scoped_agent(db, current_user, agent_id)
     return await service.get_agent_commands(db, agent_id)
 
 
@@ -292,11 +330,12 @@ async def get_all_commands(
 )
 async def get_inventory(
     agent_id: int,
-    current_user: object = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
     service: AgentService = Depends(get_agent_service),
 ) -> AgentInventoryResponse:
     """Get current inventory for an agent."""
+    _get_scoped_agent(db, current_user, agent_id)
     return await service.get_inventory(db, agent_id)
 
 
@@ -305,11 +344,12 @@ async def get_inventory(
 )
 async def get_remote_inventory(
     agent_id: int,
-    current_user: object = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
     service: AgentService = Depends(get_agent_service),
 ) -> dict:
     """Get remote target inventory from an agent's latest inventory data."""
+    _get_scoped_agent(db, current_user, agent_id)
     return await service.get_remote_inventory(db, agent_id)
 
 

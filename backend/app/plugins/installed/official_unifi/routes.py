@@ -11,12 +11,17 @@ from typing import Any
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
+from app.core.auth_dependency import get_current_user
 from app.db.database import get_db
 from app.plugins.installed.official_unifi.cache import cache_manager
 
 logger = logging.getLogger("plugin.unifi.routes")
 
-router = APIRouter(prefix="/api/v1/plugins/unifi", tags=["unifi-plugin"])
+router = APIRouter(
+    prefix="/api/v1/plugins/unifi",
+    tags=["unifi-plugin"],
+    dependencies=[Depends(get_current_user)],
+)
 
 
 @router.get("/controllers")

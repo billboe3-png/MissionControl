@@ -12,6 +12,7 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.core.auth_dependency import get_current_user
 from app.db.database import get_db
 from app.plugins.installed.git.models import (
     GitBranch,
@@ -22,7 +23,11 @@ from app.plugins.installed.git.models import (
 
 logger = logging.getLogger("plugin.git.routes")
 
-router = APIRouter(prefix="/api/v1/plugins/git", tags=["git-plugin"])
+router = APIRouter(
+    prefix="/api/v1/plugins/git",
+    tags=["git-plugin"],
+    dependencies=[Depends(get_current_user)],
+)
 
 
 @router.get("/repositories")
