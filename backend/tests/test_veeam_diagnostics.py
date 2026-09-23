@@ -6,7 +6,6 @@ import pytest
 
 from app.plugins.installed.official_veeam.diagnostics import run_connection_diagnostics
 from app.plugins.installed.official_veeam.models import VeeamBackupServer
-from app.plugins.installed.official_veeam.provider import VeeamServerProvider
 
 
 class FakeRest:
@@ -40,6 +39,17 @@ class FakeSession:
         self.committed = True
 
 
+class FakeProvider:
+    """Duck-typed stand-in for the provider interface diagnostics consumes."""
+
+    def __init__(self, server, executor, rest, db=None):
+        self.server = server
+        self.executor = executor
+        self.rest = rest
+        self._db = db
+        self.db = db
+
+
 def make_test_provider(edition="enterprise", data_source="both", db_type="postgresql", executor_results=None, rest_connected=True, rest_error=None):
     server = VeeamBackupServer(
         name="v1",
@@ -47,12 +57,12 @@ def make_test_provider(edition="enterprise", data_source="both", db_type="postgr
         data_source=data_source,
         db_type=db_type,
         column_case="pascal",
-        rest_url="https://veeam:9419",
+        url="https://veeam:9419",
     )
     executor = FakeExecutor(executor_results)
     rest = FakeRest(connected=rest_connected, error=rest_error)
     session = FakeSession()
-    provider = VeeamServerProvider(server=server, db=session, executor=executor, rest=rest)
+    provider = FakeProvider(server=server, executor=executor, rest=rest, db=session)
     return provider, server, session
 
 

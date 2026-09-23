@@ -66,9 +66,9 @@ class TestSyncProfileToServer:
         server = _get_server(db_session, "VBR01")
         assert server is not None
         assert server.edition == "enterprise"
-        assert server.rest_url == "https://veeam.example.com"
-        assert server.rest_username == "admin"
-        assert server.rest_password_encrypted == "gAAAAABcrypted"
+        assert server.url == "https://veeam.example.com"
+        assert server.username == "admin"
+        assert server.encrypted_password == "gAAAAABcrypted"
         assert server.data_source == "both"
         assert server.verify_ssl is True
         assert server.timeout == 30
@@ -89,13 +89,13 @@ class TestSyncProfileToServer:
         server = _get_server(db_session, "VBR02")
         assert server is not None
         assert server.edition == "community"
-        assert server.rest_url is None
+        assert server.url is None
 
     def test_updates_existing_row_in_place(self, db_session):
         profile = _make_profile(db_session, name="VBR03", base_url="https://old.example.com")
         sync_profile_to_server(db_session, profile)
         first = _get_server(db_session, "VBR03")
-        assert first is not None and first.rest_url == "https://old.example.com"
+        assert first is not None and first.url == "https://old.example.com"
 
         profile.base_url = "https://new.example.com"
         db_session.commit()
@@ -103,7 +103,7 @@ class TestSyncProfileToServer:
 
         servers = db_session.query(VeeamBackupServer).all()
         assert len(servers) == 1
-        assert servers[0].rest_url == "https://new.example.com"
+        assert servers[0].url == "https://new.example.com"
         assert servers[0].edition == "enterprise"
 
     def test_update_flips_edition_to_community(self, db_session):
@@ -117,7 +117,7 @@ class TestSyncProfileToServer:
         server = _get_server(db_session, "VBR04")
         assert server is not None
         assert server.edition == "community"
-        assert server.rest_url is None
+        assert server.url is None
 
     def test_non_veeam_profile_is_noop(self, db_session):
         profile = _make_profile(db_session, name="zabbix-prod", integration_type="zabbix")
@@ -173,10 +173,10 @@ class TestIntegrationServiceWiring:
         server = _get_server(db_session, "UI Onboarded VBR")
         assert server is not None
         assert server.edition == "enterprise"
-        assert server.rest_url == "https://veeam.corp.local"
+        assert server.url == "https://veeam.corp.local"
         assert server.enabled is True
         assert server.legacy_ssh_host == "10.0.0.5"
-        assert server.rest_password_encrypted is not None
+        assert server.encrypted_password is not None
 
     async def test_update_veeam_profile_updates_server_row(self, db_session):
         from app.schemas.integration import (
@@ -204,7 +204,7 @@ class TestIntegrationServiceWiring:
 
         servers = db_session.query(VeeamBackupServer).all()
         assert len(servers) == 1
-        assert servers[0].rest_url == "https://new.example.com"
+        assert servers[0].url == "https://new.example.com"
         assert servers[0].edition == "enterprise"
 
     async def test_delete_veeam_profile_removes_server_row(self, db_session):

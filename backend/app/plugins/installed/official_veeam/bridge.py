@@ -44,9 +44,9 @@ def sync_profile_to_server(db: Session, profile: IntegrationProfile) -> None:
             name=name,
             edition=edition,
             data_source=profile.data_source or "both",
-            rest_url=(profile.base_url or "").strip() or None,
-            rest_username=profile.username,
-            rest_password_encrypted=profile.encrypted_secret,
+            url=(profile.base_url or "").strip() or None,
+            username=profile.username,
+            encrypted_password=profile.encrypted_secret,
             verify_ssl=bool(profile.verify_ssl),
             timeout=profile.timeout or 30,
             enabled=bool(profile.enabled),
@@ -60,9 +60,9 @@ def sync_profile_to_server(db: Session, profile: IntegrationProfile) -> None:
     else:
         existing.edition = edition
         existing.data_source = profile.data_source or "both"
-        existing.rest_url = (profile.base_url or "").strip() or None
-        existing.rest_username = profile.username
-        existing.rest_password_encrypted = profile.encrypted_secret
+        existing.url = (profile.base_url or "").strip() or None
+        existing.username = profile.username
+        existing.encrypted_password = profile.encrypted_secret
         existing.verify_ssl = bool(profile.verify_ssl)
         existing.timeout = profile.timeout or 30
         existing.enabled = bool(profile.enabled)
@@ -73,7 +73,7 @@ def sync_profile_to_server(db: Session, profile: IntegrationProfile) -> None:
 
     row = existing if existing is not None else server
 
-    if row.rest_url is None and (row.agent_id is None or row.target_id is None):
+    if row.url is None and (row.agent_id is None or row.target_id is None):
         from app.models.db.agent_remote_target import AgentRemoteTarget
 
         ssh_host = (profile.ssh_host or "").strip()

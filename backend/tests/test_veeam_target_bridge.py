@@ -138,7 +138,7 @@ def test_first_server_prefers_enterprise(db_session):
     ))
     db_session.add(VeeamBackupServer(
         name="Enterprise", edition="enterprise", data_source="api",
-        rest_url="https://v:9419/api/v1", enabled=True, status="unknown",
+        url="https://v:9419/api/v1", enabled=True, status="unknown",
     ))
     db_session.commit()
     server = _first_server(db_session)
@@ -197,4 +197,4 @@ def test_profile_with_non_matching_ssh_host_does_not_link(db_session):
     assert row.agent_id is None
     assert row.target_id is None
     assert row.legacy_ssh_host == "10.99.99.99"
-    assert row.rest_url is None
+    assert row.url is None

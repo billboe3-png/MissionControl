@@ -330,19 +330,19 @@ class TestVeeamApiClient:
 
     def test_api_client_init(self):
         from app.plugins.installed.official_veeam.api import VeeamApiClient  # noqa: I001
-        from app.plugins.installed.official_veeam.provider import (
-            VeeamServerProvider,
+        from app.plugins.installed.official_veeam.veeam_provider import (
+            VeeamRESTProvider,
         )
 
         server = VeeamBackupServer(
             name="v1",
             edition="enterprise",
             data_source="both",
-            rest_url="https://veeam.local:9419",
+            url="https://veeam.local:9419",
         )
         client = VeeamApiClient.from_server(db=object(), server=server)
-        assert isinstance(client._provider, VeeamServerProvider)
-        assert client._provider.server.name == "v1"
+        assert isinstance(client._provider, VeeamRESTProvider)
+        assert client._provider._server_host == "veeam.local"
 
     @pytest.mark.asyncio
     async def test_get_jobs_delegates_to_provider(self):
@@ -352,7 +352,7 @@ class TestVeeamApiClient:
             name="v1",
             edition="enterprise",
             data_source="both",
-            rest_url="https://veeam.local:9419",
+            url="https://veeam.local:9419",
         )
         client = VeeamApiClient.from_server(db=object(), server=server)
 
