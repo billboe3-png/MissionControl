@@ -191,11 +191,18 @@
 
 ---
 
-## Verified CI Status (Run 31415687763)
+## Verified CI Status (latest)
 
-- Backend lint: ✓
-- Backend tests: **1512 passed / 1 skipped**
-- Frontend TypeScript + build: ✓
+- Latest full backend run on `release/v3.0.0-rc1` (`3332a8b`): **1700 passed / 2 failed (Python-3.11-venv-only env checks) / 1 skipped**
+- The 2 failures (`test_startup_config::test_valid_returns_dict`, `test_marketplace::test_check_all_compatible`) assert Python**3.12+**; server venv is **3.11.15** → they pass in CI (both workflows pin `PYTHON_VERSION: 3.12`). Never "fix" them.
+- Tenancy/authz hardening shipped `9b80d6f..7d31f5b` (`edf06a6` + `578c0ac` + `7d31f5b`); ruff clean on all 15 changed files; targeted **160 passed**.
+- Veeam stale-test fix `3332a8b`: corrected `bridge.py` (model attrs `url`/`username`/`encrypted_password`, SQL cols `rest_url`/`rest_username`/`rest_password_encrypted`), restored `_first_server` enterprise-ordering (lost in `fa77db2`), removed obsolete `tests/test_veeam_provider.py` (`578c0ac`). Targeted veeam **68 passed**.
+- Full-suite baseline pre-fix verified via `git stash`: all 24 failures pre-existed at HEAD `9b80d6f`; 22 were stale Veeam tests, 2 env-only.
+
+## Test Infrastructure (server)
+
+- Temp containers (running, host ports bound): `mc-test-postgres` (0.0.0.0:5432), `mc-test-redis` (0.0.0.0:6379).
+- Server venv **3.11.15** at `/opt/MissionControl/backend/.venv` (AGENTS.md top-level snippet is stale regarding Python version).
 
 ---
 

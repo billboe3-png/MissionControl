@@ -399,7 +399,7 @@ Ideas that are intentionally not implemented because they are outside the curren
 - **D-Link plugin import**: Local `relay.py` had `AgentCommand` imported from wrong module (`app.models.db.agent` instead of `app.models.db.agent_command`). Container copy was fixed via script; local file needs update and commit.
 - **Agent 6 (zabbix-proxy)**: Goes offline after restart commands due to systemd start-limit-hit. Requires manual `sudo systemctl reset-failed mission-control-agent && sudo systemctl start mission-control-agent`.
 - **Backend container stability**: Veeam circular import issue caused crashes; requires monitoring.
-- **RC1 CI**: Must keep backend tests (1512+ passed) and frontend build green.
+- **RC1 CI**: Must keep backend tests (1700+ passed) and frontend build green. Full backend suite on `release/v3.0.0-rc1` is **1700 passed / 2 env-only fails / 1 skipped** — the 2 fails are Python-3.12-version assertions that only fail on the server's Python-3.11 venv (pass in CI which pins 3.12); do not "fix" them.
 
 ---
 
