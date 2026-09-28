@@ -106,7 +106,7 @@ export default function VeeamJobsPage() {
                                         if (!cell) return <td key={d} className="cell-no-data" />;
                                         let cls = "cell-success";
                                         let content = formatBytes(
-                                            cell.transferred_bytes ?? cell.processed_bytes ?? 0,
+                                            cell.transferred_bytes ?? cell.stored_bytes ?? cell.processed_bytes ?? 0,
                                         );
                                         if (cell.failed_count > 0) {
                                             cls = "cell-failed";

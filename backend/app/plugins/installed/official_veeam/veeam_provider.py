@@ -46,6 +46,24 @@ def _job_stats_daily_calendar(days: int) -> list[str]:
     return [(start + timedelta(days=i)).isoformat() for i in range(days)]
 
 
+def _ensure_transferred_bytes(jobs: list[dict]) -> list[dict]:
+    """Ensure every daily cell carries ``transferred_bytes``.
+
+    Veeam's console shows "Transferred" as the data actually written to the
+    repository (``stored_size``). Older daily cells only expose
+    ``stored_bytes``/``read_bytes``, so fill ``transferred_bytes`` from the
+    stored value to keep the frontend grid aligned with the Veeam console.
+    """
+    for job in jobs:
+        for cell in (job.get("daily") or {}).values():
+            stored = cell.get("stored_bytes", 0)
+            if stored is None:
+                stored = cell.get("read_bytes", 0)
+            if "transferred_bytes" not in cell:
+                cell["transferred_bytes"] = stored or cell.get("read_bytes", 0)
+    return jobs
+
+
 class VeeamRESTProvider:
     """Veeam B&R provider (agent-relay or direct REST)."""
 
@@ -855,12 +873,13 @@ class VeeamRESTProvider:
                 "include_system": bool(include_system),
             })
             if result.get("success") or result.get("jobs"):
+                jobs = _ensure_transferred_bytes(result.get("jobs", []) or [])
                 return {
                     "success": True,
-                    "jobs": result.get("jobs", []) or [],
+                    "jobs": jobs,
                     "dates": _job_stats_daily_calendar(days),
                     "ssh_available": result.get("ssh_available", True),
-                    "count": len(result.get("jobs", []) or []),
+                    "count": len(jobs),
                     "message": result.get("message"),
                 }
             return {
@@ -926,6 +945,7 @@ class VeeamRESTProvider:
                     "processed_bytes": processed,
                     "read_bytes": read_bytes,
                     "stored_bytes": stored,
+                    "transferred_bytes": stored or read_bytes,
                     "session_count": session_count,
                     "success_count": success,
                     "warning_count": warning,

@@ -314,6 +314,21 @@ def test_collect_sql_job_stats_daily_postgres():
     assert "NOW() - INTERVAL" not in sql
 
 
+def test_stats_sql_count_parent_session_once():
+    """Regression: Veeam writes one parent session per run plus one child
+    session per protected host (``<job> - <host>``) with identical byte
+    counters. Both normalized to the same name and were summed, doubling
+    every agent job's stats. The SQL builders must keep only the parent row
+    (one whose name _NORM_NAME_MSSQL/_NORM_NAME_PG leaves unchanged)."""
+    mssql_parent = "CHARINDEX(' - ', js.job_name) = 0"
+    pg_parent = "regexp_replace(js.job_name, ' - [A-Za-z0-9._]+$', '') = js.job_name"
+    for collector in ("job_stats", "session_stats", "job_stats_daily"):
+        sql = VeeamPlugin._db_collect_sql(collector, "mssql")
+        assert mssql_parent in sql, f"{collector} mssql missing parent filter"
+        sql = VeeamPlugin._db_collect_sql(collector, "postgresql")
+        assert pg_parent in sql, f"{collector} pg missing parent filter"
+
+
 def test_db_job_stats_mssql_parses_rows_and_null():
     raw = (
         "BPFHBAPPSERVER_EXT|12|322126844962|12345|100|200|40|2026-09-01 22:00:00|10|1|1\n"

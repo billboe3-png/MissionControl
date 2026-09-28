@@ -93,6 +93,23 @@ AND js.JobName NOT LIKE '%HealthCheck %'
 AND js.JobName NOT LIKE '%Security & Compliance Analyzer%'"""
 
 
+def _parent_only_filter(
+    db_type: str = "postgresql", column_case: str = "pascal",
+) -> str:
+    """AND fragment selecting only parent job sessions.
+
+    Veeam records one parent session per run plus one child session per
+    protected host, named ``<job name> - <hostname>``. Both carry identical
+    byte counters, so summing them would double count every job. Keeping only
+    the parent (whose name matches the job name with no `` - <host>`` suffix)
+    makes each job count exactly once.
+    """
+    if db_type == "mssql":
+        col = "js.JobName" if column_case != "snake" else "js.job_name"
+        return f"AND CHARINDEX(' - ', {col}) = 0"
+    return "AND regexp_replace(js.job_name, ' - [A-Za-z0-9._]+$', '') = js.job_name"
+
+
 def _daily_where_filter(
     db_type: str = "postgresql", column_case: str = "pascal", include_system: bool = False,
 ) -> str:
@@ -129,6 +146,7 @@ def job_stats_sql(db_type: str = "postgresql", column_case: str = "pascal") -> s
 FROM [Backup.Model.JobSessions] js
 LEFT JOIN [Backup.Model.BackupJobSessions] bs ON bs.id = js.id
 WHERE 1=1 {_mssql_where(column_case)}
+{_parent_only_filter(db_type, column_case)}
 GROUP BY {norm}
 ORDER BY MAX(js.creation_time) DESC"""
         else:
@@ -148,6 +166,7 @@ ORDER BY MAX(js.creation_time) DESC"""
 FROM [Backup.Model.JobSessions] js
 LEFT JOIN [Backup.Model.BackupJobSessions] bs ON bs.Id = js.Id
 WHERE 1=1 {_mssql_where(column_case)}
+{_parent_only_filter(db_type, column_case)}
 GROUP BY {norm}
 ORDER BY MAX(js.CreationTime) DESC"""
     else:
@@ -167,6 +186,7 @@ ORDER BY MAX(js.CreationTime) DESC"""
 FROM "backup.model.jobsessions" js
 LEFT JOIN "backup.model.backupjobsessions" bs ON bs.id = js.id
 WHERE 1=1 {_WHERE_FILTER_PG}
+{_parent_only_filter(db_type, column_case)}
 GROUP BY 1
 ORDER BY MAX(js.creation_time) DESC"""
 
@@ -203,6 +223,7 @@ def job_stats_daily_sql(
 FROM [Backup.Model.JobSessions] js
 LEFT JOIN [Backup.Model.BackupJobSessions] bs ON bs.id = js.id
 WHERE CAST(js.creation_time AS DATE) >= DATEADD(day, -{window_start}, CAST(GETDATE() AS DATE)) {where}
+{_parent_only_filter(db_type, column_case)}
 GROUP BY {norm}, CAST(js.creation_time AS DATE)
 ORDER BY 1, 2 DESC"""
         else:
@@ -220,6 +241,7 @@ ORDER BY 1, 2 DESC"""
 FROM [Backup.Model.JobSessions] js
 LEFT JOIN [Backup.Model.BackupJobSessions] bs ON bs.Id = js.Id
 WHERE CAST(js.CreationTime AS DATE) >= DATEADD(day, -{window_start}, CAST(GETDATE() AS DATE)) {where}
+{_parent_only_filter(db_type, column_case)}
 GROUP BY {norm}, CAST(js.CreationTime AS DATE)
 ORDER BY 1, 2 DESC"""
     else:
@@ -237,6 +259,7 @@ ORDER BY 1, 2 DESC"""
 FROM "backup.model.jobsessions" js
 LEFT JOIN "backup.model.backupjobsessions" bs ON bs.id = js.id
 WHERE DATE(js.creation_time) >= CURRENT_DATE - {window_start} {where}
+{_parent_only_filter(db_type, column_case)}
 GROUP BY 1, DATE(js.creation_time)
 ORDER BY 1, DATE(js.creation_time) DESC"""
 
@@ -262,6 +285,7 @@ def session_stats_sql(db_type: str = "postgresql", column_case: str = "pascal") 
 FROM [Backup.Model.JobSessions] js
 LEFT JOIN [Backup.Model.BackupJobSessions] bs ON bs.id = js.id
 WHERE 1=1 {_mssql_where(column_case)}
+{_parent_only_filter(db_type, column_case)}
 ORDER BY js.creation_time DESC"""
         else:
             norm = _NORM_NAME_MSSQL_PASCAL
@@ -281,6 +305,7 @@ ORDER BY js.creation_time DESC"""
 FROM [Backup.Model.JobSessions] js
 LEFT JOIN [Backup.Model.BackupJobSessions] bs ON bs.Id = js.Id
 WHERE 1=1 {_mssql_where(column_case)}
+{_parent_only_filter(db_type, column_case)}
 ORDER BY js.CreationTime DESC"""
     else:
         norm = _NORM_NAME_PG
@@ -296,6 +321,7 @@ ORDER BY js.CreationTime DESC"""
 FROM "backup.model.jobsessions" js
 LEFT JOIN "backup.model.backupjobsessions" bs ON bs.id = js.id
 WHERE 1=1 {_WHERE_FILTER_PG}
+{_parent_only_filter(db_type, column_case)}
 ORDER BY js.creation_time DESC
 LIMIT 200"""
 
@@ -310,10 +336,12 @@ def job_names_sql(db_type: str = "postgresql", column_case: str = "pascal") -> s
         return f"""SELECT DISTINCT {norm} AS job_name
 FROM [Backup.Model.JobSessions] js
 WHERE 1=1 {_mssql_where(column_case)}
+{_parent_only_filter(db_type, column_case)}
 ORDER BY 1"""
     else:
         norm = _NORM_NAME_PG
         return f"""SELECT DISTINCT {norm} AS job_name
 FROM "backup.model.jobsessions" js
 WHERE 1=1 {_WHERE_FILTER_PG}
+{_parent_only_filter(db_type, column_case)}
 ORDER BY 1"""

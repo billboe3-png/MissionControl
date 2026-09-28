@@ -50,6 +50,15 @@ AND js.job_name NOT LIKE '%Database Maintenance%'
 AND js.job_name NOT LIKE '%HealthCheck %'
 AND js.job_name NOT LIKE '%Security & Compliance Analyzer%'"""
 
+# Parent-session filter: keep only rows that _NORM_NAME_MSSQL/_NORM_NAME_PG
+# above leave unchanged (i.e. no trailing " - <hostname>" host-child suffix).
+# Veeam writes one parent session per run plus one child session per protected
+# host with identical byte counters; counting both would double every job.
+_PARENT_ONLY_MSSQL = "AND CHARINDEX(' - ', js.job_name) = 0"
+_PARENT_ONLY_PG = (
+    "AND regexp_replace(js.job_name, ' - [A-Za-z0-9._]+$', '') = js.job_name"
+)
+
 
 class VeeamPlugin(AgentPlugin):
     """Veeam B&R management plugin - cross-platform."""
@@ -1117,6 +1126,7 @@ AND js.job_name NOT LIKE '%Security & Compliance Analyzer%'"""
                 "processed_bytes": self._to_int(r[2]),
                 "read_bytes": self._to_int(r[3]),
                 "stored_bytes": self._to_int(r[4]),
+                "transferred_bytes": self._to_int(r[4]) or self._to_int(r[3]),
                 "session_count": self._to_int(r[5]),
                 "success_count": self._to_int(r[6]),
                 "warning_count": self._to_int(r[7]),
@@ -1261,7 +1271,8 @@ AND js.job_name NOT LIKE '%Security & Compliance Analyzer%'"""
                     "FROM [Backup.Model.JobSessions] js "
                     "LEFT JOIN [Backup.Model.BackupJobSessions] bs "
                     "ON bs.id = js.id "
-                    "WHERE 1=1 " + _WHERE_FILTER_SQL
+                    "WHERE 1=1 " + _WHERE_FILTER_SQL + " "
+                    + _PARENT_ONLY_MSSQL
                     + " GROUP BY " + norm
                     + " ORDER BY MAX(js.creation_time) DESC"
                 )
@@ -1280,6 +1291,7 @@ AND js.job_name NOT LIKE '%Security & Compliance Analyzer%'"""
                 'FROM "backup.model.jobsessions" js '
                 'LEFT JOIN "backup.model.backupjobsessions" bs ON bs.id = js.id '
                 "WHERE 1=1 " + _WHERE_FILTER_SQL + " "
+                + _PARENT_ONLY_PG + " "
                 "GROUP BY 1 "
                 "ORDER BY MAX(js.creation_time) DESC"
             )
@@ -1296,6 +1308,7 @@ AND js.job_name NOT LIKE '%Security & Compliance Analyzer%'"""
                     "LEFT JOIN [Backup.Model.BackupJobSessions] bs "
                     "ON bs.id = js.id "
                     "WHERE 1=1 " + _WHERE_FILTER_SQL + " "
+                    + _PARENT_ONLY_MSSQL + " "
                     "ORDER BY js.creation_time DESC"
                 )
             return (
@@ -1308,6 +1321,7 @@ AND js.job_name NOT LIKE '%Security & Compliance Analyzer%'"""
                 'FROM "backup.model.jobsessions" js '
                 'LEFT JOIN "backup.model.backupjobsessions" bs ON bs.id = js.id '
                 "WHERE 1=1 " + _WHERE_FILTER_SQL + " "
+                + _PARENT_ONLY_PG + " "
                 "ORDER BY js.creation_time DESC "
                 "LIMIT 200"
             )
@@ -1333,6 +1347,7 @@ AND js.job_name NOT LIKE '%Security & Compliance Analyzer%'"""
                     "WHERE CAST(js.creation_time AS DATE) >= DATEADD(day, -"
                     + str(window_start)
                     + ", CAST(GETDATE() AS DATE)) " + where_filter
+                    + " " + _PARENT_ONLY_MSSQL
                     + " GROUP BY " + norm + ", CAST(js.creation_time AS DATE) "
                     "ORDER BY 1, 2 DESC"
                 )
@@ -1350,6 +1365,7 @@ AND js.job_name NOT LIKE '%Security & Compliance Analyzer%'"""
                 'LEFT JOIN "backup.model.backupjobsessions" bs ON bs.id = js.id '
                 "WHERE DATE(js.creation_time) >= CURRENT_DATE - ("
                 + str(window_start) + ") " + where_filter + " "
+                + _PARENT_ONLY_PG + " "
                 "GROUP BY 1, DATE(js.creation_time) "
                 "ORDER BY 1, DATE(js.creation_time) DESC"
             )
@@ -1606,11 +1622,13 @@ AND js.job_name NOT LIKE '%Security & Compliance Analyzer%'"""
 
         hostname = ""
         resolved_id: int | None = None
+        protocol = "ssh"
         if target_id is not None:
             target = (getattr(remote_manager, "targets", {}) or {}).get(target_id)
-            if target and (target.get("protocol") or "").lower() == "ssh":
+            if target and (target.get("protocol") or "").lower() in ("ssh", "winrm"):
                 resolved_id = target_id
                 hostname = target.get("hostname") or ""
+                protocol = (target.get("protocol") or "ssh").lower()
 
         if resolved_id is None:
             api_base = self._api_base.strip()
@@ -1623,29 +1641,42 @@ AND js.job_name NOT LIKE '%Security & Compliance Analyzer%'"""
             for tid, target in (getattr(remote_manager, "targets", {}) or {}).items():
                 if (
                     target.get("hostname") == hostname
-                    and (target.get("protocol") or "").lower() == "ssh"
+                    and (target.get("protocol") or "").lower() in ("ssh", "winrm")
                 ):
                     resolved_id = tid
+                    protocol = (target.get("protocol") or "ssh").lower()
                     break
 
         if resolved_id is None:
-            logger.warning("Veeam relay skipped: no SSH target for host %s", hostname)
+            logger.warning("Veeam relay skipped: no relay target for host %s", hostname)
             return {
                 "success": False,
                 "stdout": "",
-                "stderr": f"no ssh target for {hostname}",
+                "stderr": f"no relay target for {hostname}",
                 "exit_code": -1,
                 "data": None,
             }
 
-        encoded = self._encode_powershell(script)
-        ps_command = f"powershell -NoProfile -NonInteractive -EncodedCommand {encoded}"
-        logger.info("Veeam relay script -> target=%s host=%s", resolved_id, hostname)
-        result = await remote_manager.execute_on_target(
-            target_id=resolved_id,
-            command=ps_command,
-            timeout=timeout,
+        logger.info(
+            "Veeam relay script -> target=%s host=%s protocol=%s",
+            resolved_id, hostname, protocol,
         )
+        if protocol == "winrm":
+            # The WinRM connector executes PowerShell natively; pass the script
+            # directly to avoid nested powershell/EncodedCommand length limits.
+            result = await remote_manager.execute_on_target(
+                target_id=resolved_id, command=script, timeout=timeout
+            )
+        else:
+            encoded = self._encode_powershell(script)
+            ps_command = (
+                f"powershell -NoProfile -NonInteractive -EncodedCommand {encoded}"
+            )
+            result = await remote_manager.execute_on_target(
+                target_id=resolved_id,
+                command=ps_command,
+                timeout=timeout,
+            )
         return {
             "success": result.get("success", False),
             "stdout": result.get("stdout", ""),

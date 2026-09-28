@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from "react";
 import { apiClient } from "../utils/apiClient";
+import { useAuth } from "./AuthContext";
 
 export interface VeeamServerConfig {
     id: number;
@@ -35,6 +36,7 @@ export const useVeeamServer = (): VeeamServerContextValue => {
 };
 
 export const VeeamServerProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
+    const { token } = useAuth();
     const [servers, setServers] = useState<VeeamServerConfig[]>([]);
     const [selectedServerId, setSelectedServerId] = useState<number | null>(() => {
         const stored = typeof window !== "undefined" ? localStorage.getItem("veeam.selectedServerId") : null;
@@ -58,7 +60,15 @@ export const VeeamServerProvider: React.FC<{ children: ReactNode }> = ({ childre
             }
         }
 
-        fetchServers();
+        // Only fetch Veeam servers when authenticated. The provider wraps the
+        // whole app (including the login page), so without this guard an
+        // unauthenticated request would 401 and trigger a hard reload loop
+        // through the apiClient session-expired redirect.
+        if (token) {
+            fetchServers();
+        } else {
+            setLoading(false);
+        }
 
         // Persist selection on change
         const handleStorage = () => {
@@ -70,7 +80,7 @@ export const VeeamServerProvider: React.FC<{ children: ReactNode }> = ({ childre
         };
         window.addEventListener("storage", handleStorage);
         return () => window.removeEventListener("storage", handleStorage);
-    }, [selectedServerId]);
+    }, [selectedServerId, token]);
 
     // When servers change, if the current selection is no longer valid, reset to first enabled
     useEffect(() => {
