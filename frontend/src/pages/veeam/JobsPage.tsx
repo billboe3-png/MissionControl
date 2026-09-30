@@ -104,6 +104,33 @@ export default function VeeamJobsPage() {
                                     {dates.map((d) => {
                                         const cell = (job.daily || {})[d];
                                         if (!cell) return <td key={d} className="cell-no-data" />;
+                                        const runs = cell.runs?.length ? cell.runs : null;
+                                        if (runs) {
+                                            return (
+                                                <td key={d} className="jobs-matrix-cell">
+                                                    <div className="jobs-matrix-runs">
+                                                        {runs.map((run, i) => {
+                                                            let runCls = "cell-run-success";
+                                                            if (run.result === "Failed") {
+                                                                runCls = "cell-run-failed";
+                                                            } else if (run.result === "Warning") {
+                                                                runCls = "cell-run-warning";
+                                                            }
+                                                            const bytes =
+                                                                run.transferred_bytes ??
+                                                                run.stored_bytes ??
+                                                                run.processed_bytes ??
+                                                                0;
+                                                            return (
+                                                                <span key={i} className={`cell-run ${runCls}`}>
+                                                                    {formatBytes(bytes)}
+                                                                </span>
+                                                            );
+                                                        })}
+                                                    </div>
+                                                </td>
+                                            );
+                                        }
                                         let cls = "cell-success";
                                         let content = formatBytes(
                                             cell.transferred_bytes ?? cell.stored_bytes ?? cell.processed_bytes ?? 0,

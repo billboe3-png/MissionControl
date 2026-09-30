@@ -1116,30 +1116,55 @@ AND js.job_name NOT LIKE '%Security & Compliance Analyzer%'"""
         by_job: dict[str, dict[str, Any]] = {}
         date_set: set[str] = set()
         for r in rows:
-            if len(r) < 9:
+            if len(r) < 8:
                 continue
             job_name, run_date = r[0], r[1]
             if not run_date or str(run_date).strip().lower() == "null":
                 continue
             date_set.add(run_date)
-            cell = {
-                "processed_bytes": self._to_int(r[2]),
-                "read_bytes": self._to_int(r[3]),
-                "stored_bytes": self._to_int(r[4]),
-                "transferred_bytes": self._to_int(r[4]) or self._to_int(r[3]),
-                "session_count": self._to_int(r[5]),
-                "success_count": self._to_int(r[6]),
-                "warning_count": self._to_int(r[7]),
-                "failed_count": self._to_int(r[8]),
+            result_name = self._map_result(self._to_int(r[4], -1))
+            run = {
+                "creation_time": r[2] if r[2] and str(r[2]).strip().lower() != "null" else None,
+                "end_time": r[3] if r[3] and str(r[3]).strip().lower() != "null" else None,
+                "result": result_name or "Success",
+                "processed_bytes": self._to_int(r[5]),
+                "read_bytes": self._to_int(r[6]),
+                "stored_bytes": self._to_int(r[7]),
             }
-            if cell["failed_count"] > 0:
-                cell["result"] = "Failed"
-            elif cell["warning_count"] > 0:
-                cell["result"] = "Warning"
-            else:
-                cell["result"] = "Success"
+            run["transferred_bytes"] = run["stored_bytes"] or run["read_bytes"]
             by_job.setdefault(job_name, {"job_name": job_name, "daily": {}})
-            by_job[job_name]["daily"][run_date] = cell
+            day = by_job[job_name]["daily"].setdefault(run_date, {
+                "processed_bytes": 0,
+                "read_bytes": 0,
+                "stored_bytes": 0,
+                "transferred_bytes": 0,
+                "session_count": 0,
+                "success_count": 0,
+                "warning_count": 0,
+                "failed_count": 0,
+                "result": "Success",
+                "runs": [],
+            })
+            day["processed_bytes"] += run["processed_bytes"]
+            day["read_bytes"] += run["read_bytes"]
+            day["stored_bytes"] += run["stored_bytes"]
+            day["transferred_bytes"] += run["transferred_bytes"]
+            day["session_count"] += 1
+            if run["result"] == "Failed":
+                day["failed_count"] += 1
+            elif run["result"] == "Warning":
+                day["warning_count"] += 1
+            else:
+                day["success_count"] += 1
+            day["runs"].append(run)
+        for job in by_job.values():
+            for cell in job["daily"].values():
+                if cell["failed_count"] > 0:
+                    cell["result"] = "Failed"
+                elif cell["warning_count"] > 0:
+                    cell["result"] = "Warning"
+                else:
+                    cell["result"] = "Success"
         dates = sorted(date_set)
         jobs = sorted(by_job.values(), key=lambda j: j["job_name"])
         return jobs, dates
@@ -1334,13 +1359,10 @@ AND js.job_name NOT LIKE '%Security & Compliance Analyzer%'"""
                 return (
                     "SELECT " + norm + " AS job_name, "
                     "CAST(js.creation_time AS DATE) AS run_date, "
-                    "ISNULL(SUM(bs.processed_size), 0), "
-                    "ISNULL(SUM(bs.read_size), 0), "
-                    "ISNULL(SUM(bs.stored_size), 0), "
-                    "COUNT(*) AS session_count, "
-                    "SUM(CASE WHEN js.result = 0 THEN 1 ELSE 0 END) AS success_count, "
-                    "SUM(CASE WHEN js.result = 1 THEN 1 ELSE 0 END) AS warning_count, "
-                    "SUM(CASE WHEN js.result = 2 THEN 1 ELSE 0 END) AS failed_count "
+                    "js.creation_time, js.end_time, js.result, "
+                    "ISNULL(bs.processed_size, 0), "
+                    "ISNULL(bs.read_size, 0), "
+                    "ISNULL(bs.stored_size, 0) "
                     "FROM [Backup.Model.JobSessions] js "
                     "LEFT JOIN [Backup.Model.BackupJobSessions] bs "
                     "ON bs.id = js.id "
@@ -1348,26 +1370,21 @@ AND js.job_name NOT LIKE '%Security & Compliance Analyzer%'"""
                     + str(window_start)
                     + ", CAST(GETDATE() AS DATE)) " + where_filter
                     + " " + _PARENT_ONLY_MSSQL
-                    + " GROUP BY " + norm + ", CAST(js.creation_time AS DATE) "
-                    "ORDER BY 1, 2 DESC"
+                    + " ORDER BY " + norm + ", 2 DESC, js.creation_time"
                 )
             return (
                 "SELECT " + _NORM_NAME_PG + " AS job_name, "
                 "DATE(js.creation_time) AS run_date, "
-                "COALESCE(SUM(bs.processed_size), 0), "
-                "COALESCE(SUM(bs.read_size), 0), "
-                "COALESCE(SUM(bs.stored_size), 0), "
-                "COUNT(*) AS session_count, "
-                "SUM(CASE WHEN js.result = 0 THEN 1 ELSE 0 END) AS success_count, "
-                "SUM(CASE WHEN js.result = 1 THEN 1 ELSE 0 END) AS warning_count, "
-                "SUM(CASE WHEN js.result = 2 THEN 1 ELSE 0 END) AS failed_count "
+                "js.creation_time, js.end_time, js.result, "
+                "COALESCE(bs.processed_size, 0), "
+                "COALESCE(bs.read_size, 0), "
+                "COALESCE(bs.stored_size, 0) "
                 'FROM "backup.model.jobsessions" js '
                 'LEFT JOIN "backup.model.backupjobsessions" bs ON bs.id = js.id '
                 "WHERE DATE(js.creation_time) >= CURRENT_DATE - ("
                 + str(window_start) + ") " + where_filter + " "
                 + _PARENT_ONLY_PG + " "
-                "GROUP BY 1, DATE(js.creation_time) "
-                "ORDER BY 1, DATE(js.creation_time) DESC"
+                "ORDER BY 1, DATE(js.creation_time) DESC, js.creation_time"
             )
         return ""
 

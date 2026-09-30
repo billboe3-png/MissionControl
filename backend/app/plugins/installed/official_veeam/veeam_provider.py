@@ -47,7 +47,7 @@ def _job_stats_daily_calendar(days: int) -> list[str]:
 
 
 def _ensure_transferred_bytes(jobs: list[dict]) -> list[dict]:
-    """Ensure every daily cell carries ``transferred_bytes``.
+    """Ensure every daily cell (and each of its runs) carries ``transferred_bytes``.
 
     Veeam's console shows "Transferred" as the data actually written to the
     repository (``stored_size``). Older daily cells only expose
@@ -61,6 +61,12 @@ def _ensure_transferred_bytes(jobs: list[dict]) -> list[dict]:
                 stored = cell.get("read_bytes", 0)
             if "transferred_bytes" not in cell:
                 cell["transferred_bytes"] = stored or cell.get("read_bytes", 0)
+            for run in cell.get("runs") or []:
+                run_stored = run.get("stored_bytes", 0)
+                if run_stored is None:
+                    run_stored = run.get("read_bytes", 0)
+                if "transferred_bytes" not in run:
+                    run["transferred_bytes"] = run_stored or run.get("read_bytes", 0)
     return jobs
 
 

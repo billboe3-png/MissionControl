@@ -107,6 +107,16 @@ export interface VeeamJobStatsResponse {
     error: string | null;
 }
 
+export interface VeeamJobDailyRun {
+    creation_time?: string | null;
+    end_time?: string | null;
+    result: string;
+    processed_bytes: number;
+    read_bytes: number;
+    stored_bytes: number;
+    transferred_bytes?: number;
+}
+
 export interface VeeamJobDailyCell {
     processed_bytes: number;
     read_bytes: number;
@@ -117,6 +127,7 @@ export interface VeeamJobDailyCell {
     warning_count: number;
     failed_count: number;
     result: string;
+    runs?: VeeamJobDailyRun[];
 }
 
 export interface VeeamJobDailyRow {

@@ -6007,6 +6007,31 @@ select.form-input {
     font-weight: 600;
 }
 
+.jobs-matrix-runs {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    align-items: flex-start;
+}
+
+.cell-run {
+    line-height: 1.4;
+    white-space: nowrap;
+}
+
+.jobs-matrix-runs .cell-run-success {
+    color: #3fb950;
+}
+
+.jobs-matrix-runs .cell-run-warning {
+    color: #d29922;
+}
+
+.jobs-matrix-runs .cell-run-failed {
+    color: #f85149;
+    font-weight: 600;
+}
+
 .cell-icon {
     font-weight: 700;
     margin-right: 3px;

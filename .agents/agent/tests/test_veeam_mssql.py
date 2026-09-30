@@ -366,8 +366,9 @@ def test_db_session_stats_mssql_parses_rows():
 
 def test_db_job_stats_daily_mssql_parses_rows():
     raw = (
-        "BPFHBAPPSERVER_EXT|2026-09-01|100|10|20|2|2|0|0\n"
-        "BPFHBAPPSERVER_EXT|2026-08-31|200|20|40|1|0|0|1\n"
+        "BPFHBAPPSERVER_EXT|2026-09-01|2026-09-01 00:30:00|2026-09-01 01:15:00|0|100|10|20\n"
+        "BPFHBAPPSERVER_EXT|2026-09-01|2026-09-01 18:00:00|2026-09-01 18:14:37|0|250|20|40\n"
+        "BPFHBAPPSERVER_EXT|2026-08-31|2026-08-31 22:00:00|2026-08-31 22:35:00|2|300|30|60\n"
     )
     p = _StubDbQuery(raw)
     jobs, dates = _run(p._db_job_stats_daily(7, target_id=12, db_type="mssql"))
@@ -375,7 +376,15 @@ def test_db_job_stats_daily_mssql_parses_rows():
     assert jobs is not None and len(jobs) == 1
     daily = jobs[0]["daily"]
     assert daily["2026-09-01"]["session_count"] == 2
+    assert len(daily["2026-09-01"]["runs"]) == 2
+    assert daily["2026-09-01"]["runs"][0]["result"] == "Success"
+    assert daily["2026-09-01"]["runs"][0]["transferred_bytes"] == 20
+    assert daily["2026-09-01"]["runs"][0]["creation_time"] == "2026-09-01 00:30:00"
+    assert daily["2026-09-01"]["runs"][1]["transferred_bytes"] == 40
+    assert daily["2026-09-01"]["stored_bytes"] == 60
     assert daily["2026-09-01"]["result"] == "Success"
+    assert len(daily["2026-08-31"]["runs"]) == 1
+    assert daily["2026-08-31"]["runs"][0]["result"] == "Failed"
     assert daily["2026-08-31"]["result"] == "Failed"
 
 
