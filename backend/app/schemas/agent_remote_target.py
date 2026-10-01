@@ -19,7 +19,7 @@ class RemoteTargetCreate(BaseModel):
     tags: str | None = None
     notes: str | None = None
     target_plugins: str | None = None
-    db_type: str = Field("postgresql", pattern="^(postgresql|mssql)$")
+    db_type: str = Field("postgresql", pattern="^(auto|postgresql|mssql)$")
     column_case: str = Field("pascal", pattern="^(pascal|snake)$")
 
 
@@ -35,7 +35,7 @@ class RemoteTargetUpdate(BaseModel):
     tags: str | None = None
     notes: str | None = None
     target_plugins: str | None = None
-    db_type: str | None = Field(None, pattern="^(postgresql|mssql)$")
+    db_type: str | None = Field(None, pattern="^(auto|postgresql|mssql)$")
     column_case: str | None = Field(None, pattern="^(pascal|snake)$")
 
 

@@ -1026,10 +1026,38 @@ AND js.job_name NOT LIKE '%Security & Compliance Analyzer%'"""
         return out is not None and "1" in out
 
     async def _db_detect(self, target_id: int | None = None) -> dict[str, Any]:
-        """Probe psql binary + SQLCMD binary on the Veeam host."""
+        """Probe psql binary + SQLCMD binary on the Veeam host.
+
+        When exactly one client exists the binary decides. When both exist
+        (Veeam ships a bundled psql.exe next to SQLCMD on MSSQL-backed
+        servers), the candidate is resolved by a connectivity probe so the
+        detected type matches the server's real database.
+        """
         psql_found = await self._relay_path_exists(self._PSQL, target_id)
         sqlcmd_found = bool(await self._sqlcmd_paths(target_id))
-        db_type = "postgresql" if psql_found else "mssql"
+        db_type = None
+        if psql_found and not sqlcmd_found:
+            db_type = "postgresql"
+        elif sqlcmd_found and not psql_found:
+            db_type = "mssql"
+        else:
+            # both (or neither) present — decide by actual connectivity
+            if psql_found:
+                out = await self._run_db_query_via_relay(
+                    "SELECT 1", target_id=target_id, timeout=60,
+                    db_type="postgresql",
+                )
+                if out is not None and "1" in str(out):
+                    db_type = "postgresql"
+            if db_type is None and sqlcmd_found:
+                out = await self._run_db_query_via_relay(
+                    "SELECT 1", target_id=target_id, timeout=60,
+                    db_type="mssql",
+                )
+                if out is not None and "1" in str(out):
+                    db_type = "mssql"
+            if db_type is None:
+                db_type = "mssql"
         return {
             "success": True,
             "db_type": db_type,

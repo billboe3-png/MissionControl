@@ -37,6 +37,12 @@ const selectedPlugins = (raw?: string | null): string[] =>
         .map((p) => p.trim())
         .filter(Boolean);
 
+const DB_TYPE_OPTIONS = [
+    { label: "Auto detect", value: "auto" },
+    { label: "PostgreSQL", value: "postgresql" },
+    { label: "MSSQL", value: "mssql" },
+];
+
 export default function AgentRemoteTargetsTab({ agentId }: Props) {
     const [targets, setTargets] = useState<RemoteTarget[]>([]);
     const [loading, setLoading] = useState(true);
@@ -50,6 +56,7 @@ export default function AgentRemoteTargetsTab({ agentId }: Props) {
         protocol: "psremoting",
         username: "",
         password: "",
+        db_type: "auto",
     });
     const [saving, setSaving] = useState(false);
     const [testing, setTesting] = useState<number | null>(null);
@@ -102,7 +109,7 @@ export default function AgentRemoteTargetsTab({ agentId }: Props) {
             }
             setShowForm(false);
             setEditingTarget(null);
-            setForm({ name: "", hostname: "", protocol: "psremoting", username: "", password: "", target_plugins: "" });
+            setForm({ name: "", hostname: "", protocol: "psremoting", username: "", password: "", target_plugins: "", db_type: "auto" });
             await load();
         } catch (e) {
             setError(e instanceof Error ? e.message : "Save failed");
@@ -121,6 +128,7 @@ export default function AgentRemoteTargetsTab({ agentId }: Props) {
             username: target.username,
             password: "",
             target_plugins: target.target_plugins || "",
+            db_type: target.db_type || "auto",
         });
         setShowForm(true);
     };
@@ -168,7 +176,7 @@ export default function AgentRemoteTargetsTab({ agentId }: Props) {
                     className="btn btn-primary btn-sm"
                     onClick={() => {
                         setEditingTarget(null);
-                        setForm({ name: "", hostname: "", protocol: "psremoting", username: "", password: "", target_plugins: "" });
+                        setForm({ name: "", hostname: "", protocol: "psremoting", username: "", password: "", target_plugins: "", db_type: "auto" });
                         setShowForm(!showForm);
                     }}
                 >
@@ -279,6 +287,25 @@ export default function AgentRemoteTargetsTab({ agentId }: Props) {
                                 Controls which plugins collect data through this target.
                             </small>
                         </div>
+                        {selectedPlugins(form.target_plugins).includes("veeam") && (
+                            <div className="form-row">
+                                <label>Veeam Database</label>
+                                <select
+                                    value={form.db_type || "auto"}
+                                    onChange={(e) => setForm((f) => ({ ...f, db_type: e.target.value }))}
+                                >
+                                    {DB_TYPE_OPTIONS.map((o) => (
+                                        <option key={o.value} value={o.value}>
+                                            {o.label}
+                                        </option>
+                                    ))}
+                                </select>
+                                <small className="form-hint">
+                                    Backing database of the Veeam server. Auto-detect probes the host
+                                    (used when SQLCMD and psql.exe are both present).
+                                </small>
+                            </div>
+                        )}
                     </div>
                     <div className="form-actions">
                         <LoadingButton
@@ -314,6 +341,7 @@ export default function AgentRemoteTargetsTab({ agentId }: Props) {
                                 <th>Port</th>
                                 <th>Username</th>
                                 <th>Plugins</th>
+                                <th>Veeam DB</th>
                                 <th>Status</th>
                                 <th>Last Collected</th>
                                 <th>Actions</th>
@@ -331,6 +359,11 @@ export default function AgentRemoteTargetsTab({ agentId }: Props) {
                                         <td>{t.username}</td>
                                         <td className="muted">
                                             {selectedPlugins(t.target_plugins).join(", ") || "—"}
+                                        </td>
+                                        <td className="muted">
+                                            {selectedPlugins(t.target_plugins).includes("veeam")
+                                                ? (t.db_type || "auto")
+                                                : "—"}
                                         </td>
                                         <td>
                                             <StatusBadge

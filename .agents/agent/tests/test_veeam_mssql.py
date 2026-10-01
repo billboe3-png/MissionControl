@@ -112,6 +112,50 @@ def test_db_detect_still_reports_postgres_when_psql_present():
     assert result["psql_found"] is True
 
 
+# When BOTH psql.exe and SQLCMD exist (Veeam ships a bundled psql.exe on
+# MSSQL-backed servers), binary presence can't decide — the candidate is
+# resolved by a real connectivity probe.
+
+class _StubBothBinaries(_StubRelay):
+    """Both psql and SQLCMD exist; _run_db_query_via_relay answers probes."""
+
+    def __init__(self, pg_ok: bool, mssql_ok: bool):
+        super().__init__()
+        self.pg_ok = pg_ok
+        self.mssql_ok = mssql_ok
+        self.probe_paths = {
+            r"C:\Program Files\PostgreSQL\15\bin\psql.exe": True,
+            r"C:\Program Files\Microsoft SQL Server\Client SDK\ODBC\130\Tools\Binn\SQLCMD.EXE": True,
+        }
+
+    async def _run_db_query_via_relay(
+        self, sql, target_id=None, timeout=120, db_type="auto"
+    ):
+        if db_type == "postgresql" and self.pg_ok:
+            return " 1\n"
+        if db_type == "mssql" and self.mssql_ok:
+            return " 1\n"
+        return None
+
+
+def test_db_detect_both_binaries_picks_mssql_via_connectivity():
+    """psql present but not connectable (no passwordless auth), SQLCMD
+    authenticates — ERFRFDC02's exact case."""
+    p = _StubBothBinaries(pg_ok=False, mssql_ok=True)
+    result = _run(p._db_detect(target_id=4))
+    assert result["success"] is True
+    assert result["db_type"] == "mssql"
+    assert result["psql_found"] is True
+    assert result["sqlcmd_found"] is True
+
+
+def test_db_detect_both_binaries_picks_postgres_when_pg_connects():
+    p = _StubBothBinaries(pg_ok=True, mssql_ok=True)
+    result = _run(p._db_detect(target_id=4))
+    assert result["success"] is True
+    assert result["db_type"] == "postgresql"
+
+
 # ---------- db_type-aware _db_collect (MSSQL schema) ----------
 
 def test_collect_sql_mssql_jobs_uses_bjobs_and_applies():

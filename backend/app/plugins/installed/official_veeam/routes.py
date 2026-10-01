@@ -64,7 +64,7 @@ class VeeamServerConfigBase(BaseModel):
     ssh_username: str = Field("", max_length=200)
     ssh_password: str = Field("", max_length=500)
     data_source: str = Field("both", pattern="^(both|rest|ssh)$")
-    db_type: str = Field("postgresql", pattern="^(postgresql|mssql)$")
+    db_type: str = Field("postgresql", pattern="^(auto|postgresql|mssql)$")
     column_case: str = Field("pascal", pattern="^(pascal|snake)$")
 
 
@@ -85,7 +85,7 @@ class VeeamServerConfigUpdate(BaseModel):
     ssh_username: str | None = Field(None, max_length=200)
     ssh_password: str | None = Field(None, max_length=500)
     data_source: str | None = Field(None, pattern="^(both|rest|ssh)$")
-    db_type: str | None = Field(None, pattern="^(postgresql|mssql)$")
+    db_type: str | None = Field(None, pattern="^(auto|postgresql|mssql)$")
     column_case: str | None = Field(None, pattern="^(pascal|snake)$")
 
 

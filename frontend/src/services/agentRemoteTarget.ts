@@ -14,6 +14,8 @@ export interface RemoteTarget {
     tags: string | null;
     target_plugins: string | null;
     notes: string | null;
+    db_type: string;
+    column_case: string;
     last_collected_at: string | null;
     last_status: string;
     last_error: string | null;
@@ -33,6 +35,8 @@ export interface RemoteTargetCreate {
     tags?: string;
     target_plugins?: string;
     notes?: string;
+    db_type?: string;
+    column_case?: string;
 }
 
 export interface RemoteTargetUpdate {
@@ -47,6 +51,8 @@ export interface RemoteTargetUpdate {
     tags?: string;
     target_plugins?: string;
     notes?: string;
+    db_type?: string;
+    column_case?: string;
 }
 
 export interface RemoteInventory {
