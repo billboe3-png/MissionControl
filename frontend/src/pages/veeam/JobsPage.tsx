@@ -56,6 +56,7 @@ export default function VeeamJobsPage() {
                 title="Veeam Jobs"
                 subtitle={`${selectedServerName ?? "Veeam Server"} v1.0`}
             />
+            {servers.length > 1 && <ServerSelector />}
             <div className="jobs-toolbar">
                 <label className="jobs-days-label" htmlFor="veeam-job-days">
                     Days
@@ -153,7 +154,6 @@ export default function VeeamJobsPage() {
                     </table>
                 </div>
             )}
-            {servers.length > 1 && <ServerSelector />}
-        </>
+            </>
     );
 }
