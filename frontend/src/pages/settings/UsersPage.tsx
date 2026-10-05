@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
 import PageHeader from "../../components/common/PageHeader";
 import { useToast } from "../../contexts/ToastContext";
+import { companiesApi, CompanyData } from "../../services/company";
+import { sitesApi, SiteData } from "../../services/site";
 import { usersApi, UserData } from "../../services/users";
 
 export default function UsersPage() {
@@ -138,20 +140,53 @@ function UserModal({ user, onSave, onCancel }: { user?: UserData; onSave: () => 
     const [displayName, setDisplayName] = useState(user?.display_name ?? "");
     const [password, setPassword] = useState("");
     const [role, setRole] = useState(user?.role ?? "readonly");
+    const [companies, setCompanies] = useState<CompanyData[]>([]);
+    const [sites, setSites] = useState<SiteData[]>([]);
+    const [companyId, setCompanyId] = useState<number | "">(
+        user?.company_id ?? ""
+    );
+    const [siteId, setSiteId] = useState<number | "">(user?.site_id ?? "");
     const [error, setError] = useState<string | null>(null);
     const [saving, setSaving] = useState(false);
+
+    useEffect(() => {
+        Promise.all([companiesApi.list(), sitesApi.list()])
+            .then(([c, s]) => {
+                setCompanies(c);
+                setSites(s);
+                setCompanyId((prev) => (prev === "" ? c[0]?.id ?? "" : prev));
+                setSiteId((prev) => (prev === "" ? s[0]?.id ?? "" : prev));
+            })
+            .catch(() => {
+                /* selectors are optional; form still works without them */
+            });
+    }, []);
+
+    const siteOptions = companyId === "" ? sites : sites.filter((s) => s.company_id === companyId);
 
     const handleSave = async () => {
         if (!email.trim() || !displayName.trim()) { setError("Email and name required"); return; }
         if (!user && !password) { setError("Password required for new user"); return; }
+        if (user && password && password.length < 8) { setError("Password must be at least 8 characters"); return; }
+        if (siteId !== "" && siteOptions.length && !siteOptions.some((s) => s.id === siteId)) {
+            setError("Selected site does not belong to the selected company"); return;
+        }
+
+        const scope = {
+            company_id: companyId === "" ? null : companyId,
+            site_id: siteId === "" ? null : siteId,
+        };
 
         setSaving(true);
         setError(null);
         try {
             if (user) {
-                await usersApi.update(user.id, { display_name: displayName, role });
+                await usersApi.update(user.id, { display_name: displayName, role, ...scope });
+                if (password) {
+                    await usersApi.resetPassword(user.id, password);
+                }
             } else {
-                await usersApi.create({ email, display_name: displayName, password, role });
+                await usersApi.create({ email, display_name: displayName, password, role, ...scope });
             }
             onSave();
         } catch (e: any) {
@@ -178,12 +213,11 @@ function UserModal({ user, onSave, onCancel }: { user?: UserData; onSave: () => 
                         <label>Display Name *</label>
                         <input value={displayName} onChange={(e) => setDisplayName(e.target.value)} />
                     </div>
-                    {!user && (
-                        <div className="form-group">
-                            <label>Password *</label>
-                            <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} />
-                        </div>
-                    )}
+                    <div className="form-group">
+                        <label>{user ? "New Password" : "Password *"}</label>
+                        <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} />
+                        {user && <small className="form-hint">Leave blank to keep the current password.</small>}
+                    </div>
                     <div className="form-group">
                         <label>Role</label>
                         <select value={role} onChange={(e) => setRole(e.target.value)}>
@@ -193,6 +227,32 @@ function UserModal({ user, onSave, onCancel }: { user?: UserData; onSave: () => 
                             <option value="company_admin">Company Admin</option>
                             <option value="global_admin">Global Admin</option>
                         </select>
+                    </div>
+                    <div className="form-group">
+                        <label>Company</label>
+                        <select
+                            value={companyId}
+                            onChange={(e) => {
+                                const next = e.target.value === "" ? "" : Number(e.target.value);
+                                setCompanyId(next);
+                                setSiteId("");
+                            }}
+                        >
+                            <option value="">All companies</option>
+                            {companies.map((c) => (
+                                <option key={c.id} value={c.id}>{c.display_name || c.name}</option>
+                            ))}
+                        </select>
+                    </div>
+                    <div className="form-group">
+                        <label>Site</label>
+                        <select value={siteId} onChange={(e) => setSiteId(e.target.value === "" ? "" : Number(e.target.value))}>
+                            <option value="">All sites</option>
+                            {siteOptions.map((s) => (
+                                <option key={s.id} value={s.id}>{s.name}</option>
+                            ))}
+                        </select>
+                        <small className="form-hint">"All sites" grants access to every site in the company.</small>
                     </div>
                 </div>
                 <div className="modal-footer">

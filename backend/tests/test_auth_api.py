@@ -244,3 +244,155 @@ def test_list_users(client: TestClient, db_session) -> None:
     assert len(data) >= 1
     emails = [u["email"] for u in data]
     assert "listadmin@example.com" in emails
+
+
+# ------------------------------------------------------------------ #
+# Admin Password Reset                                                 #
+# ------------------------------------------------------------------ #
+
+
+def test_admin_can_reset_user_password(client: TestClient, db_session) -> None:
+    """Admin resets a subordinate's password without knowing the old one."""
+    AuthService.create_user(
+        db_session,
+        email="resetadmin@example.com",
+        display_name="Reset Admin",
+        password="password123",
+        role="global_admin",
+    )
+    AuthService.create_user(
+        db_session,
+        email="target@example.com",
+        display_name="Target",
+        password="oldpassword1",
+        role="readonly",
+    )
+    login = client.post(
+        "/api/v1/auth/login",
+        json={"email": "resetadmin@example.com", "password": "password123"},
+    )
+    token = login.json()["access_token"]
+    target_id = next(
+        u["id"]
+        for u in client.get(
+            "/api/v1/auth/users", headers={"Authorization": f"Bearer {token}"}
+        ).json()
+        if u["email"] == "target@example.com"
+    )
+
+    response = client.post(
+        f"/api/v1/auth/users/{target_id}/reset-password",
+        json={"new_password": "brandnewpass9"},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert response.status_code == 200
+
+    # Old password stops working, new password works.
+    assert (
+        client.post(
+            "/api/v1/auth/login",
+            json={"email": "target@example.com", "password": "oldpassword1"},
+        ).status_code
+        == 401
+    )
+    assert (
+        client.post(
+            "/api/v1/auth/login",
+            json={"email": "target@example.com", "password": "brandnewpass9"},
+        ).status_code
+        == 200
+    )
+
+
+def test_reset_password_rejects_short_password(
+    client: TestClient, db_session
+) -> None:
+    AuthService.create_user(
+        db_session,
+        email="shortpw@example.com",
+        display_name="Short PW",
+        password="password123",
+        role="global_admin",
+    )
+    target = AuthService.create_user(
+        db_session,
+        email="shorttarget@example.com",
+        display_name="Short Target",
+        password="password123",
+        role="readonly",
+    )
+    login = client.post(
+        "/api/v1/auth/login",
+        json={"email": "shortpw@example.com", "password": "password123"},
+    )
+    token = login.json()["access_token"]
+
+    response = client.post(
+        f"/api/v1/auth/users/{target.id}/reset-password",
+        json={"new_password": "short"},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert response.status_code == 422
+
+
+def test_reset_password_unknown_user_404(
+    client: TestClient, db_session
+) -> None:
+    AuthService.create_user(
+        db_session,
+        email="ghostadmin@example.com",
+        display_name="Ghost Admin",
+        password="password123",
+        role="global_admin",
+    )
+    login = client.post(
+        "/api/v1/auth/login",
+        json={"email": "ghostadmin@example.com", "password": "password123"},
+    )
+    token = login.json()["access_token"]
+
+    response = client.post(
+        "/api/v1/auth/users/999999/reset-password",
+        json={"new_password": "brandnewpass9"},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert response.status_code == 404
+
+
+def test_reset_password_non_admin_forbidden(
+    client: TestClient, db_session
+) -> None:
+    AuthService.create_user(
+        db_session,
+        email="lowpriv@example.com",
+        display_name="Low Priv",
+        password="password123",
+        role="readonly",
+    )
+    victim = AuthService.create_user(
+        db_session,
+        email="victim@example.com",
+        display_name="Victim",
+        password="password123",
+        role="operator",
+    )
+    login = client.post(
+        "/api/v1/auth/login",
+        json={"email": "lowpriv@example.com", "password": "password123"},
+    )
+    token = login.json()["access_token"]
+
+    response = client.post(
+        f"/api/v1/auth/users/{victim.id}/reset-password",
+        json={"new_password": "brandnewpass9"},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert response.status_code == 403
+
+
+def test_reset_password_requires_auth(raw_client: TestClient) -> None:
+    response = raw_client.post(
+        "/api/v1/auth/users/1/reset-password",
+        json={"new_password": "brandnewpass9"},
+    )
+    assert response.status_code == 401

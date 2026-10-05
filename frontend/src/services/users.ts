@@ -55,4 +55,11 @@ export const usersApi = {
             method: "DELETE",
         });
     },
+
+    async resetPassword(userId: number, new_password: string): Promise<{ status: string }> {
+        return apiClient<{ status: string }>(`${API}/users/${userId}/reset-password`, {
+            method: "POST",
+            json: { new_password },
+        });
+    },
 };

@@ -20,6 +20,7 @@ from app.schemas.auth import (
     LoginResponse,
     PasswordChangeRequest,
     UserCreateRequest,
+    UserPasswordResetRequest,
     UserResponse,
     UserSummary,
     UserUpdateRequest,
@@ -257,6 +258,42 @@ def update_user(
         last_login=user.last_login,
         created_at=user.created_at,
     )
+
+
+@router.post("/users/{user_id}/reset-password")
+def reset_user_password(
+    user_id: int,
+    request: UserPasswordResetRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Reset a user's password (admin only).
+
+    Does not require the target user's current password. Auth is stateless
+    JWT, so no session revocation is possible; existing tokens stay valid
+    until they expire.
+    """
+    require_role(current_user, "company_admin")
+
+    user = db.scalar(select(User).where(User.id == user_id))
+    if user is None:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    if current_user.role != "global_admin":
+        if user.company_id != current_user.company_id:
+            raise HTTPException(status_code=404, detail="User not found")
+        if ROLE_HIERARCHY.get(user.role, 0) >= ROLE_HIERARCHY.get(
+            current_user.role, 0
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Cannot reset passwords for users at or above your own role",
+            )
+
+    user.password_hash = hash_password(request.new_password)
+    db.commit()
+
+    return {"status": "ok"}
 
 
 @router.delete("/users/{user_id}")

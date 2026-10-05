@@ -46,6 +46,12 @@ class UserUpdateRequest(BaseModel):
     site_id: int | None = None
 
 
+class UserPasswordResetRequest(BaseModel):
+    """Administrative password reset for a user."""
+
+    new_password: str = Field(..., min_length=8)
+
+
 class UserSummary(BaseModel):
     """Compact user info for token response."""
 
