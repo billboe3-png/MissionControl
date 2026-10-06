@@ -1,0 +1,112 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+Mission Control Edge Agent — Windows MSI (WiX v3.14)
+
+The MSI is a thin wrapper: it ships the installer/uninstaller PowerShell
+scripts and drives install-agent.ps1 (the authoritative edge-agent installer)
+through an elevated, non-impersonated custom action. The agent bundle itself
+is downloaded from the Mission Control server at install time, so this MSI
+never goes stale when the agent bundle is updated.
+
+Silent usage:
+  msiexec /i MissionControlEdgeAgent-3.0.0-rc1.msi /qn \
+         SERVERURL=https://missioncontrol.optichosting.co.za   \
+         AGENTNAME=PC-01                                        \
+         REGISTRATIONTOKEN=<one-time token, only when re-installing> \
+         SKIPSSLVERIFY=1
+
+Public properties are marked Secure so msiexec /qn passes them through to the
+custom action.
+-->
+<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
+
+  <Product Id="*"
+           Name="Mission Control Edge Agent"
+           Language="1033"
+           Version="3.0.0"
+           Manufacturer="Mission Control"
+           UpgradeCode="82C58E9F-1C12-4B7A-9F3E-7D4A6B2E5C91">
+
+    <Package InstallerVersion="500"
+             Compressed="yes"
+             InstallScope="perMachine"
+             Description="Mission Control Edge Agent — outbound-only agent for remote management"
+             Manufacturer="Mission Control"
+             Keywords="mission;control;agent;msi;remote"
+             Platform="x64" />
+
+    <MajorUpgrade DowngradeErrorMessage="A newer version of [ProductName] is already installed." />
+
+    <MediaTemplate EmbedCab="yes" CompressionLevel="high" />
+
+    <!-- Public, secure properties (honored from msiexec command line). -->
+    <Property Id="SERVERURL"         Value="https://missioncontrol.optichosting.co.za" Secure="yes" />
+    <Property Id="AGENTNAME"          Secure="yes" />
+    <Property Id="REGISTRATIONTOKEN"  Secure="yes" />
+    <Property Id="SKIPSSLVERIFY"      Value="0"  Secure="yes" />
+
+    <!-- No repair/modify; uninstall only, so a corrupt Python venv is not "repaired" silently. -->
+    <Property Id="ARPNOREPAIR"   Value="1" />
+
+    <UIRef Id="WixUI_Minimal" />
+
+    <Directory Id="TARGETDIR" Name="SourceDir">
+      <Directory Id="ProgramFiles64Folder">
+        <Directory Id="INSTALLFOLDER" Name="MC Edge Agent">
+          <Component Id="LauncherFiles" Guid="013801B7-0E71-4A61-8537-4C92E33DD6AE" Win64="yes">
+            <File Id="InstallAgentPs1"   Name="install-agent.ps1"   Source="install-agent.ps1"   KeyPath="yes" />
+            <File Id="UninstallAgentPs1" Name="uninstall-agent.ps1" Source="uninstall-agent.ps1" />
+            <File Id="ReadmeTxt"         Name="README.txt"          Source="README.txt" />
+          </Component>
+        </Directory>
+      </Directory>
+    </Directory>
+
+    <!-- ================================================================ -->
+    <!-- Custom actions: build the install command line                       -->
+    <!-- ================================================================ -->
+
+    <!-- Base switches for the agent installer (may be extended below). -->
+    <CustomAction Id="SetSkipSslBase" Property="MC_SWITCHES" Value="" Execute="immediate" />
+    <CustomAction Id="SetSkipSslOn"   Property="MC_SWITCHES" Value="-SkipSslVerify"
+                  Execute="immediate" />
+
+    <!-- Full install command line (immediate CA; [PROPS] resolved at exec time). -->
+    <CustomAction Id="SetInstallCmd"
+                  Property="InstallCmd"
+                  Value="&quot;powershell.exe&quot; -NoProfile -ExecutionPolicy Bypass -NonInteractive -File &quot;[INSTALLFOLDER]install-agent.ps1&quot; -NonInteractive -ServerUrl &quot;[SERVERURL]&quot; -AgentName &quot;[AGENTNAME]&quot; -RegistrationToken &quot;[REGISTRATIONTOKEN]&quot; [MC_SWITCHES]"
+                  Execute="immediate" />
+
+    <!-- Copy the command into the deferred CA's CustomActionData. -->
+    <CustomAction Id="SetInstallCmdData" Property="RunInstallCmd" Value="[InstallCmd]" Execute="immediate" />
+
+    <!-- Deferred, elevated (SYSTEM) CA — runs the authoritative installer. -->
+    <CustomAction Id="RunInstallCmd" BinaryKey="WixCA" DllEntry="WixQuietExec"
+                  Execute="deferred" Impersonate="no" Return="check" />
+
+    <!-- Uninstall command: remove scheduled task + runtime dir. -->
+    <CustomAction Id="SetUninstallCmd"
+                  Property="UninstallCmd"
+                  Value="&quot;powershell.exe&quot; -NoProfile -ExecutionPolicy Bypass -NonInteractive -File &quot;[INSTALLFOLDER]uninstall-agent.ps1&quot; -InstallDir &quot;C:\MissionControlAgent&quot;"
+                  Execute="immediate" />
+    <CustomAction Id="SetUninstallCmdData" Property="RunUninstallCmd" Value="[UninstallCmd]" Execute="immediate" />
+    <CustomAction Id="RunUninstallCmd" BinaryKey="WixCA" DllEntry="WixQuietExec"
+                  Execute="deferred" Impersonate="no" Return="check" />
+
+    <InstallExecuteSequence>
+      <Custom Action="SetSkipSslBase" After="CostFinalize" />
+      <Custom Action="SetSkipSslOn" After="SetSkipSslBase">SKIPSSLVERIFY = 1</Custom>
+      <Custom Action="SetInstallCmd" After="InstallFiles">NOT REMOVE</Custom>
+      <Custom Action="SetInstallCmdData" After="SetInstallCmd">NOT REMOVE</Custom>
+      <Custom Action="RunInstallCmd" After="SetInstallCmdData">NOT REMOVE</Custom>
+      <Custom Action="SetUninstallCmd" After="InstallInitialize">REMOVE</Custom>
+      <Custom Action="SetUninstallCmdData" After="SetUninstallCmd">REMOVE</Custom>
+      <Custom Action="RunUninstallCmd" After="SetUninstallCmdData">REMOVE</Custom>
+    </InstallExecuteSequence>
+
+    <Feature Id="Complete" Title="Mission Control Edge Agent" Level="1">
+      <ComponentRef Id="LauncherFiles" />
+    </Feature>
+
+  </Product>
+</Wix>
