@@ -340,10 +340,16 @@ PYEOF
 # Virtualenv + dependencies                                          #
 # ------------------------------------------------------------------ #
 setup_venv() {
-    if [[ -x "$WORKDIR/venv/bin/python" ]]; then
+    if [[ -x "$WORKDIR/venv/bin/python" ]] && "$WORKDIR/venv/bin/python" -c 'import yaml' >/dev/null 2>&1; then
         log "Reusing existing virtualenv at $WORKDIR/venv"
         VENV_PY="$WORKDIR/venv/bin/python"
         return 0
+    fi
+    # A venv that exists but can't import the core deps is leftover from an
+    # interrupted previous run (e.g. ensurepip missing) — rebuild it fresh.
+    if [[ -e "$WORKDIR/venv" ]]; then
+        warn "Removing incomplete virtualenv from a previous run..."
+        rm -rf "$WORKDIR/venv"
     fi
     ensure_venv
     log "Creating virtualenv..."
