@@ -1,5 +1,4 @@
 import { useVeeamServer } from "../../contexts/VeeamServerContext";
-import { VeeamServerConfig } from "../../contexts/VeeamServerContext";
 
 interface ServerSelectorProps {
     className?: string;
@@ -14,15 +13,8 @@ export function ServerSelector({ className, style }: ServerSelectorProps) {
         return null;
     }
 
-    const selectedServer = servers.find((s) => s.id === selectedServerId);
-
     return (
-        <div
-            style={{
-                ...style,
-                ...(className && { className }),
-            }}
-        >
+        <div className={className} style={{ marginBottom: "0.75rem", ...style }}>
             <select
                 value={selectedServerId ?? ""}
                 onChange={(e) => setSelectedServerId(Number(e.target.value) || null)}

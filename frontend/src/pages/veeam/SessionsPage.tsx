@@ -1,8 +1,6 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useVeeamServer } from "../../contexts/VeeamServerContext";
-import { ServerSelector } from "../../components/veeam/ServerSelector";
-import PageHeader from "../../components/common/PageHeader";
-import StatusBadge from "../../components/common/StatusBadge";
+import VeeamPageShell from "../../components/veeam/VeeamPageShell";
 import {
     veeamApi,
     VeeamSession,
@@ -12,35 +10,30 @@ export default function VeeamSessionsPage() {
     const [sessions, setSessions] = useState<VeeamSession[]>([]);
     const [error, setError] = useState<string | null>(null);
     const [loading, setLoading] = useState(false);
-    const { servers, selectedServerId } = useVeeamServer();
+    const { selectedServerId } = useVeeamServer();
 
-    useEffect(() => {
-        // Servers fetched by VeeamServerProvider
-    }, [selectedServerId]);
-
-    useEffect(() => {
+    const load = useCallback(() => {
         setLoading(true);
-        veeamApi.listSessions(selectedServerId).then((s) => {
-            setSessions(s);
-        })
-        .catch((e) => setError(e.message))
-        .finally(() => setLoading(false));
+        setError(null);
+        veeamApi
+            .listSessions(selectedServerId)
+            .then(setSessions)
+            .catch((e) => setError(e.message))
+            .finally(() => setLoading(false));
     }, [selectedServerId]);
 
-    const selectedServerName = servers.length > 0 ? servers.find(s => s.id === selectedServerId)?.name : "Veeam Server";
-
-    if (loading) return <div className="loading-bar" />;
-    if (error) return <div className="error-banner">{error}</div>;
+    useEffect(() => {
+        load();
+    }, [load]);
 
     return (
-        <>
-            <PageHeader
-                title="Veeam Sessions"
-                subtitle={`${selectedServerName ?? "Veeam Server"} v1.0`}
-            />
+        <VeeamPageShell title="Veeam Sessions" onRefresh={load} refreshing={loading}>
             {error && <div className="error-banner">{error}</div>}
             {loading && <div className="loading-bar" />}
-            {!error && !loading && (
+            {!error && sessions.length === 0 && !loading && (
+                <div className="data-table-empty">No sessions found.</div>
+            )}
+            {!error && sessions.length > 0 && (
                 <table className="data-table">
                     <thead>
                         <tr>
@@ -77,7 +70,6 @@ export default function VeeamSessionsPage() {
                     </tbody>
                 </table>
             )}
-        {servers.length > 1 && <ServerSelector />}
-        </>
+        </VeeamPageShell>
     );
 }

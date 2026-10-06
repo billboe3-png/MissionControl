@@ -5917,13 +5917,40 @@ select.form-input {
 
 /* ── Jobs Matrix View ─────────────────────────────────── */
 
-.jobs-controls {
+.jobs-toolbar {
     display: flex;
-    justify-content: space-between;
     align-items: center;
-    margin-bottom: 1rem;
-    padding: 0.5rem 0;
+    gap: 1rem;
+    flex-wrap: wrap;
+    margin: 0 0 1rem;
 }
+
+.jobs-days-label,
+.jobs-system-label {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-size: 0.85rem;
+    color: #8b949e;
+    cursor: pointer;
+    user-select: none;
+}
+
+.jobs-days-select {
+    padding: 0.3rem 0.5rem;
+    border-radius: 4px;
+    border: 1px solid #30363d;
+    background: #0d1117;
+    color: #c9d1d9;
+    font-size: 0.85rem;
+    cursor: pointer;
+}
+
+.jobs-system-toggle {
+    accent-color: #3fb950;
+    cursor: pointer;
+}
+
 
 .jobs-matrix-wrapper {
     overflow-x: auto;

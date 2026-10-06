@@ -1,7 +1,6 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useVeeamServer } from "../../contexts/VeeamServerContext";
-import { ServerSelector } from "../../components/veeam/ServerSelector";
-import PageHeader from "../../components/common/PageHeader";
+import VeeamPageShell from "../../components/veeam/VeeamPageShell";
 import StatusBadge from "../../components/common/StatusBadge";
 import {
     veeamApi,
@@ -12,33 +11,31 @@ export default function VeeamHealthPage() {
     const [health, setHealth] = useState<VeeamHealth | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [loading, setLoading] = useState(false);
-    const { servers, selectedServerId } = useVeeamServer();
+    const { selectedServerId } = useVeeamServer();
 
-    useEffect(() => {
-        // Servers fetched by VeeamServerProvider
-    }, [selectedServerId]);
-
-    useEffect(() => {
+    const load = useCallback(() => {
         setLoading(true);
-        veeamApi.getHealth(selectedServerId).then((h) => {
-            setHealth(h);
-        })
-        .catch((e) => setError(e.message))
-        .finally(() => setLoading(false));
+        setError(null);
+        veeamApi
+            .getHealth(selectedServerId)
+            .then(setHealth)
+            .catch((e) => setError(e.message))
+            .finally(() => setLoading(false));
     }, [selectedServerId]);
 
-    const selectedServerName = servers.length > 0 ? servers.find(s => s.id === selectedServerId)?.name : "Veeam Server";
-
-    if (loading) return <div className="loading-bar" />;
-    if (error) return <div className="error-banner">{error}</div>;
-    if (!health) return null;
+    useEffect(() => {
+        load();
+    }, [load]);
 
     return (
-        <>
-            <PageHeader
-                title="Veeam Health"
-                subtitle={`${selectedServerName ?? "Veeam Server"} v${health.version ?? "?"}`}
-            />
+        <VeeamPageShell
+            title="Veeam Health"
+            version={health?.version ?? "?"}
+            onRefresh={load}
+            refreshing={loading}
+        >
+            {error && <div className="error-banner">{error}</div>}
+            {loading && <div className="loading-bar" />}
             {health && (
                 <div className="veeam-connection-status">
                     <StatusBadge
@@ -48,8 +45,6 @@ export default function VeeamHealthPage() {
                     <span>{health.healthy ? "Server reachable" : health.error}</span>
                 </div>
             )}
-
-        {servers.length > 1 && <ServerSelector />}
-        </>
+        </VeeamPageShell>
     );
 }

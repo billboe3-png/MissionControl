@@ -1,7 +1,6 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useVeeamServer } from "../../contexts/VeeamServerContext";
-import { ServerSelector } from "../../components/veeam/ServerSelector";
-import PageHeader from "../../components/common/PageHeader";
+import VeeamPageShell from "../../components/veeam/VeeamPageShell";
 import { formatBytes } from "../../services/veeam";
 import {
     veeamApi,
@@ -25,13 +24,13 @@ export default function VeeamJobsPage() {
     const [dates, setDates] = useState<string[]>([]);
     const [error, setError] = useState<string | null>(null);
     const [loading, setLoading] = useState(false);
-    const { servers, selectedServerId } = useVeeamServer();
+    const { selectedServerId } = useVeeamServer();
 
-    useEffect(() => {
+    const load = useCallback((refresh: boolean = false) => {
         setLoading(true);
         setError(null);
         veeamApi
-            .getJobStatsDaily(days, selectedServerId, showSystem)
+            .getJobStatsDaily(days, selectedServerId, showSystem, refresh)
             .then((r) => {
                 if (!r.success) {
                     setError(r.error ?? "Failed to load job stats");
@@ -44,19 +43,16 @@ export default function VeeamJobsPage() {
             .finally(() => setLoading(false));
     }, [days, showSystem, selectedServerId]);
 
-    const selectedServerName =
-        servers.length > 0 ? servers.find((s) => s.id === selectedServerId)?.name : "Veeam Server";
-
-    if (loading) return <div className="loading-bar" />;
-    if (error) return <div className="error-banner">{error}</div>;
+    useEffect(() => {
+        load(false);
+    }, [load]);
 
     return (
-        <>
-            <PageHeader
-                title="Veeam Jobs"
-                subtitle={`${selectedServerName ?? "Veeam Server"} v1.0`}
-            />
-            {servers.length > 1 && <ServerSelector />}
+        <VeeamPageShell
+            title="Veeam Jobs"
+            onRefresh={() => load(true)}
+            refreshing={loading}
+        >
             <div className="jobs-toolbar">
                 <label className="jobs-days-label" htmlFor="veeam-job-days">
                     Days
@@ -83,9 +79,12 @@ export default function VeeamJobsPage() {
                     Show system jobs
                 </label>
             </div>
-            {jobs.length === 0 ? (
+            {error && <div className="error-banner">{error}</div>}
+            {loading && <div className="loading-bar" />}
+            {!error && jobs.length === 0 && !loading && (
                 <div className="data-table-empty">No job data available.</div>
-            ) : (
+            )}
+            {!error && jobs.length > 0 && (
                 <div className="jobs-matrix-wrapper">
                     <table className="jobs-matrix">
                         <thead>
@@ -154,6 +153,6 @@ export default function VeeamJobsPage() {
                     </table>
                 </div>
             )}
-            </>
+        </VeeamPageShell>
     );
 }
