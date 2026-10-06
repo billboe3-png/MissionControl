@@ -59,6 +59,7 @@ REGISTRATION_TOKEN="${MC_REGISTRATION_TOKEN:-}"
 AGENT_NAME="${MC_AGENT_NAME:-}"
 WORKDIR="${MC_WORKDIR:-/opt/mission-control-agent}"
 VERIFY_SSL="${MC_VERIFY_SSL:-false}"
+CREDENTIALS_FILE="$WORKDIR/.credentials"
 
 log()  { printf '\033[1;34m[+] %s\033[0m\n' "$*"; }
 warn() { printf '\033[1;33m[!] %s\033[0m\n' "$*"; }
@@ -169,11 +170,52 @@ ensure_python() {
 }
 
 # ------------------------------------------------------------------ #
+# Ensure python3-venv / ensurepip is present                          #
+# ------------------------------------------------------------------ #
+venv_supported() {
+    local py="$1"
+    "$py" -m venv --help >/dev/null 2>&1 || return 1
+    "$py" -c 'import ensurepip' >/dev/null 2>&1
+}
+
+ensure_venv() {
+    if venv_supported "$PYTHON"; then
+        return 0
+    fi
+    warn "python3-venv / ensurepip missing; installing it via $PKG_MGR..."
+    local pyver
+    pyver="$(basename "$PYTHON")"   # python3, python3.12, python3.11, ...
+    case "$PKG_MGR" in
+        apt)
+            export DEBIAN_FRONTEND=noninteractive
+            apt-get install -y -qq "$pyver-venv" 2>/dev/null \
+                || apt-get install -y -qq python3-venv 2>/dev/null \
+                || apt-get install -y -qq python3.12-venv
+            ;;
+        dnf|yum)
+            "$PKG_MGR" install -y python3-virtualenv 2>/dev/null \
+                || "$PKG_MGR" install -y "$pyver-virtualenv"
+            ;;
+    esac
+    venv_supported "$PYTHON" || fail "venv/ensurepip support unavailable for $PYTHON. Install python3-venv (Debian/Ubuntu) or python3-virtualenv (RHEL) and retry."
+    ok "venv support ready"
+}
+
+# ------------------------------------------------------------------ #
 # Self-registration (mode A)                                         #
 # ------------------------------------------------------------------ #
 register_agent() {
+    # Reuse credentials saved on a previous (possibly interrupted) run
+    if [[ -f "$CREDENTIALS_FILE" ]]; then
+        log "Reusing credentials from $CREDENTIALS_FILE"
+        AGENT_ID="${AGENT_ID:-$(sed -n 's/^AGENT_ID=//p' "$CREDENTIALS_FILE")}"
+        API_KEY="${API_KEY:-$(sed -n 's/^API_KEY=//p' "$CREDENTIALS_FILE")}"
+    fi
+
     if [[ -n "$AGENT_ID" && -n "$API_KEY" ]]; then
         log "Using pre-provisioned agent ID $AGENT_ID / API key"
+        mkdir -p "$WORKDIR"
+        save_credentials
         return 0
     fi
 
@@ -191,9 +233,18 @@ register_agent() {
     local url="${SERVER_URL}${REGISTER_URL_PATH}"
     log "Registering agent with $url (name: $AGENT_NAME)..."
 
-    local resp
-    local curl_args=(-k -L --fail --silent --show-error -X POST -H "Content-Type: application/json" -d "$payload")
-    resp="$(curl "${curl_args[@]}" "$url")" || fail "Registration failed against $url"
+    local resp http_code
+    local curl_args=(-k -L --silent --show-error -o /tmp/mc-register-resp.json -w '%{http_code}' -X POST -H "Content-Type: application/json" -d "$payload")
+    http_code="$(curl "${curl_args[@]}" "$url")" || fail "Registration request failed against $url"
+    resp="$(cat /tmp/mc-register-resp.json)"
+
+    if [[ "$http_code" != "201" ]]; then
+        if printf '%s' "$resp" | grep -q "registration_token" 2>/dev/null; then
+            fail "Server says '$AGENT_NAME' is already registered. Re-run with the existing agent:  --agent-id <ID> --api-key mc_agent_...  (or $0 --help)"
+        fi
+        fail "Registration failed (HTTP $http_code): $resp"
+    fi
+
     log "Server response: $resp"
 
     AGENT_ID="$(printf '%s' "$resp" | grep -oP '"agent_id":\s*\K[0-9]+' | head -1 || true)"
@@ -201,8 +252,28 @@ register_agent() {
 
     [[ -n "$AGENT_ID" ]] || fail "Could not parse agent_id from registration response."
     [[ -n "$API_KEY" ]] || fail "Could not parse api_key from registration response."
+
     ok "Agent registered — ID: $AGENT_ID"
+    save_credentials
     return 0
+}
+
+# ------------------------------------------------------------------ #
+# Persist credentials so re-runs don't force a second registration  #
+# ------------------------------------------------------------------ #
+save_credentials() {
+    if [[ -z "$AGENT_ID" || -z "$API_KEY" ]]; then
+        return 0
+    fi
+    mkdir -p "$WORKDIR"
+    cat > "$CREDENTIALS_FILE" <<EOF
+# Mission Control agent credentials (chmod 600)
+# Do not share this file. Created by install-agent-linux.sh $SCRIPT_VERSION.
+AGENT_ID=$AGENT_ID
+API_KEY=$API_KEY
+EOF
+    chmod 600 "$CREDENTIALS_FILE"
+    ok "Credentials saved to $CREDENTIALS_FILE (chmod 600)"
 }
 
 # ------------------------------------------------------------------ #
@@ -274,8 +345,13 @@ setup_venv() {
         VENV_PY="$WORKDIR/venv/bin/python"
         return 0
     fi
+    ensure_venv
     log "Creating virtualenv..."
-    "$PYTHON" -m venv "$WORKDIR/venv" || fail "Failed to create virtualenv (python3-venv missing?)"
+    if ! "$PYTHON" -m venv "$WORKDIR/venv"; then
+        warn "Initial venv creation failed; ensuring python3-venv and retrying..."
+        ensure_venv
+        "$PYTHON" -m venv "$WORKDIR/venv" || fail "Failed to create virtualenv (python3-venv missing?)"
+    fi
     VENV_PY="$WORKDIR/venv/bin/python"
     "$VENV_PY" -m pip install --quiet --upgrade pip
 
