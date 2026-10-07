@@ -5951,6 +5951,10 @@ select.form-input {
     cursor: pointer;
 }
 
+.jobs-export-btn {
+    margin-left: auto;
+}
+
 
 .jobs-matrix-wrapper {
     overflow-x: auto;

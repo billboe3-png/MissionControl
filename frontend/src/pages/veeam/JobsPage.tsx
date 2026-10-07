@@ -4,6 +4,7 @@ import VeeamPageShell from "../../components/veeam/VeeamPageShell";
 import { formatBytes } from "../../services/veeam";
 import {
     veeamApi,
+    VeeamJobDailyCell,
     VeeamJobDailyRow,
 } from "../../services/veeam";
 
@@ -17,6 +18,24 @@ function dateHeader(d: string): string {
     return `${day}/${m} (${dow})`;
 }
 
+function jobCellValue(cell: VeeamJobDailyCell | undefined): string {
+    if (!cell) return "";
+    if (cell.runs?.length) {
+        return cell.runs
+            .map((r) => {
+                const bytes =
+                    r.transferred_bytes ?? r.stored_bytes ?? r.processed_bytes ?? 0;
+                return `${r.result}: ${formatBytes(bytes)}`;
+            })
+            .join("; ");
+    }
+    const bytes =
+        cell.transferred_bytes ?? cell.stored_bytes ?? cell.processed_bytes ?? 0;
+    if (cell.failed_count > 0) return `Failed (${formatBytes(bytes)})`;
+    if (cell.warning_count > 0) return `Warning (${formatBytes(bytes)})`;
+    return formatBytes(bytes);
+}
+
 export default function VeeamJobsPage() {
     const [jobs, setJobs] = useState<VeeamJobDailyRow[]>([]);
     const [days, setDays] = useState<DayPreset>(8);
@@ -24,7 +43,34 @@ export default function VeeamJobsPage() {
     const [dates, setDates] = useState<string[]>([]);
     const [error, setError] = useState<string | null>(null);
     const [loading, setLoading] = useState(false);
-    const { selectedServerId } = useVeeamServer();
+    const { selectedServerId, servers } = useVeeamServer();
+
+    const serverName =
+        servers.length > 0
+            ? servers.find((s) => s.id === selectedServerId)?.name ?? "Veeam Server"
+            : "Veeam Server";
+
+    const exportExcel = async () => {
+        if (jobs.length === 0) return;
+        const XLSX = await import("xlsx");
+        const header = ["Veeam Task", "Run Time", ...dates.map(dateHeader)];
+        const rows = jobs.map((job) => [
+            job.job_name,
+            "",
+            ...dates.map((d) => jobCellValue(job.daily?.[d])),
+        ]);
+        const aoa: (string | number)[][] = [
+            [`${serverName} - Veeam Jobs (${days} days)`],
+            header,
+            ...rows,
+        ];
+        const ws = XLSX.utils.aoa_to_sheet(aoa);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, "Jobs");
+        const stamp = new Date().toISOString().slice(0, 10);
+        const safeName = serverName.replace(/[\\/:*?"<>|]/g, "_");
+        XLSX.writeFile(wb, `veeam-jobs-${safeName}-${days}d-${stamp}.xlsx`);
+    };
 
     const load = useCallback((refresh: boolean = false) => {
         setLoading(true);
@@ -78,6 +124,15 @@ export default function VeeamJobsPage() {
                     />
                     Show system jobs
                 </label>
+                <button
+                    type="button"
+                    className="btn btn-secondary jobs-export-btn"
+                    onClick={exportExcel}
+                    disabled={loading || jobs.length === 0}
+                    title={`Export ${serverName} jobs to Excel`}
+                >
+                    Export Excel
+                </button>
             </div>
             {error && <div className="error-banner">{error}</div>}
             {loading && <div className="loading-bar" />}
