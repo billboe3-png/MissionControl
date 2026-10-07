@@ -18,22 +18,39 @@ function dateHeader(d: string): string {
     return `${day}/${m} (${dow})`;
 }
 
-function jobCellValue(cell: VeeamJobDailyCell | undefined): string {
-    if (!cell) return "";
-    if (cell.runs?.length) {
-        return cell.runs
-            .map((r) => {
-                const bytes =
-                    r.transferred_bytes ?? r.stored_bytes ?? r.processed_bytes ?? 0;
-                return `${r.result}: ${formatBytes(bytes)}`;
-            })
-            .join("; ");
-    }
+function formatBytesFixed1(bytes: number): string {
+    const units = ["B", "KB", "MB", "GB", "TB", "PB"];
+    const unitIndex = Math.min(
+        Math.floor(Math.log(Math.max(bytes, 1)) / Math.log(1024)),
+        units.length - 1,
+    );
+    const value = bytes / Math.pow(1024, unitIndex);
+    return `${value.toFixed(1)} ${units[unitIndex]}`;
+}
+
+function cellExportValue(
+    cell: VeeamJobDailyCell | undefined,
+): { text: string; bytes: number } {
+    if (!cell) return { text: "", bytes: 0 };
+    const cellBytes =
+        cell.transferred_bytes ?? cell.stored_bytes ?? cell.processed_bytes;
     const bytes =
-        cell.transferred_bytes ?? cell.stored_bytes ?? cell.processed_bytes ?? 0;
-    if (cell.failed_count > 0) return `Failed (${formatBytes(bytes)})`;
-    if (cell.warning_count > 0) return `Warning (${formatBytes(bytes)})`;
-    return formatBytes(bytes);
+        cellBytes ??
+        (cell.runs?.length
+            ? cell.runs.reduce(
+                  (sum, r) =>
+                      sum +
+                      (r.transferred_bytes ?? r.stored_bytes ?? r.processed_bytes ?? 0),
+                  0,
+              )
+            : 0);
+    const failed =
+        (cell.failed_count ?? 0) > 0 ||
+        (cell.runs?.length
+            ? cell.runs.some((r) => r.result === "Failed")
+            : false);
+    if (failed) return { text: "X", bytes: 0 };
+    return { text: formatBytesFixed1(bytes), bytes };
 }
 
 export default function VeeamJobsPage() {
@@ -53,17 +70,24 @@ export default function VeeamJobsPage() {
     const exportExcel = async () => {
         if (jobs.length === 0) return;
         const XLSX = await import("xlsx");
-        const header = ["Veeam Task", "Run Time", ...dates.map(dateHeader)];
+        const header = ["VEEAM TASK", "Run Time", ...dates.map(dateHeader)];
         const rows = jobs.map((job) => [
             job.job_name,
             "",
-            ...dates.map((d) => jobCellValue(job.daily?.[d])),
+            ...dates.map((d) => cellExportValue(job.daily?.[d]).text),
         ]);
-        const aoa: (string | number)[][] = [
-            [`${serverName} - Veeam Jobs (${days} days)`],
-            header,
-            ...rows,
+        const totalRow = [
+            "TOTAL",
+            "",
+            ...dates.map((d) => {
+                const total = jobs.reduce(
+                    (sum, job) => sum + cellExportValue(job.daily?.[d]).bytes,
+                    0,
+                );
+                return total > 0 ? formatBytesFixed1(total) : "";
+            }),
         ];
+        const aoa: (string | number)[][] = [header, ...rows, totalRow];
         const ws = XLSX.utils.aoa_to_sheet(aoa);
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, "Jobs");
