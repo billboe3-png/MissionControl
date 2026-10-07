@@ -40,12 +40,13 @@ export function ServerSelector({ className, style }: ServerSelectorProps) {
                         <option
                             key={server.id}
                             value={server.id}
+                            disabled={!server.enabled}
                             style={{
                                 background: isSelected ? "#1a3a5c" : "#161b22",
                                 color: isSelected ? "#b8d4f0" : "#8b949e",
                             }}
                         >
-                            {server.name}
+                            {server.enabled ? server.name : `${server.name} (disabled)`}
                         </option>
                     );
                 })}

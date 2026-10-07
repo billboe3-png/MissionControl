@@ -96,7 +96,7 @@ def test_create_with_veeam_registers_server(client, db_session):
     assert row.enabled is True
     assert row.agent_id == agent["agent_id"]
     assert row.db_type == "postgresql"
-    assert row.column_case == "pascal"
+    assert row.column_case == "auto"
 
 
 def test_create_veeam_target_propagates_db_type_and_column_case(client, db_session):
@@ -129,7 +129,7 @@ def test_update_removing_veeam_disables_server(client, db_session):
     assert row.enabled is False
 
 
-def test_delete_target_disables_server(client, db_session):
+def test_delete_target_removes_server(client, db_session):
     from app.plugins.installed.official_veeam.models import VeeamBackupServer
 
     agent = _register_agent(client, "Registry Delete Agent")
@@ -140,8 +140,8 @@ def test_delete_target_disables_server(client, db_session):
     assert resp.status_code == 204
     row = db_session.query(VeeamBackupServer).filter(
         VeeamBackupServer.target_id == target["id"]
-    ).one()
-    assert row.enabled is False
+    ).first()
+    assert row is None
 
 
 class TestRemoteTargetVeeamDbType:
@@ -149,7 +149,7 @@ class TestRemoteTargetVeeamDbType:
         agent = _register_agent(client, "DbType Default Agent")
         target = _create_target(client, agent["agent_id"])
         assert target["db_type"] == "postgresql"
-        assert target["column_case"] == "pascal"
+        assert target["column_case"] == "auto"
 
     def test_create_with_mssql_round_trips(self, client):
         agent = _register_agent(client, "DbType Mssql Agent")

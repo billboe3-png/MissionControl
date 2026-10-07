@@ -73,25 +73,28 @@ def sync_profile_to_server(db: Session, profile: IntegrationProfile) -> None:
 
     row = existing if existing is not None else server
 
-    if row.url is None and (row.agent_id is None or row.target_id is None):
+    if row.url is None:
         from app.models.db.agent_remote_target import AgentRemoteTarget
 
         ssh_host = (profile.ssh_host or "").strip()
-        candidate = None
+        candidates = []
         for t in db.query(AgentRemoteTarget).filter(
             AgentRemoteTarget.enabled.is_(True)
         ):
             plugins = {
                 p.strip() for p in (t.target_plugins or "").split(",") if p.strip()
             }
-            if "veeam" not in plugins:
-                continue
-            if not ssh_host:
-                candidate = t
-                break
-            if t.hostname == ssh_host:
-                candidate = t
-                break
+            if "veeam" in plugins:
+                candidates.append(t)
+
+        # Only a target whose hostname is exactly the profile's SSH host may be
+        # linked. Guessing "the first veeam-enabled target" relayed one server's
+        # queries to another machine and reported that machine's repositories
+        # under the wrong server name.
+        candidate = next(
+            (t for t in candidates if ssh_host and t.hostname == ssh_host), None
+        )
+
         if candidate is not None:
             row.agent_id = candidate.agent_id
             row.target_id = candidate.id
@@ -99,6 +102,17 @@ def sync_profile_to_server(db: Session, profile: IntegrationProfile) -> None:
             row.legacy_ssh_port = candidate.port
             row.legacy_ssh_username = candidate.username
             row.legacy_ssh_password_encrypted = candidate.password_encrypted
+        elif ssh_host and row.target_id is not None:
+            linked = db.get(AgentRemoteTarget, row.target_id)
+            if linked is not None and linked.hostname != ssh_host:
+                logger.warning(
+                    "Veeam profile %s: linked target %s is %s but the profile SSH "
+                    "host is %s; unlinking so the relay does not run against the "
+                    "wrong host",
+                    profile.name, row.target_id, linked.hostname, ssh_host,
+                )
+                row.agent_id = None
+                row.target_id = None
 
     db.commit()
     logger.info("Synced veeam integration profile %s to veeam_backup_servers", profile.id)
@@ -111,10 +125,52 @@ def delete_profile_server(db: Session, profile_name: str) -> None:
         select(VeeamBackupServer).where(VeeamBackupServer.name == profile_name)
     ).scalar_one_or_none()
     if server is not None:
-        db.delete(server)
+        _purge_server_row(db, server)
         db.commit()
         logger.info("Removed veeam_backup_servers row for profile %s", profile_name)
         reset_veeam_clients()
+
+
+def _stale_target_row(db: Session, row: VeeamBackupServer) -> bool:
+    """True when the row points at a remote target that no longer exists."""
+    if row.target_id is None:
+        return False
+    from app.models.db.agent_remote_target import AgentRemoteTarget
+
+    return db.get(AgentRemoteTarget, row.target_id) is None
+
+
+def _purge_server_row(db: Session, row: VeeamBackupServer) -> int:
+    """Delete a server row together with every cached dataset collected for it.
+
+    Returns the deleted row id. Child tables carry ``ondelete=CASCADE`` in
+    Postgres, but the rows are removed explicitly here so the purge also works
+    on SQLite (tests) where FK enforcement is off by default.
+    """
+    from app.plugins.installed.official_veeam.models import (
+        VeeamJob,
+        VeeamJobRun,
+        VeeamLicense,
+        VeeamRepository,
+        VeeamRestorePoint,
+        VeeamSnapshot,
+    )
+
+    row_id = row.id
+    for model in (
+        VeeamSnapshot,
+        VeeamJobRun,
+        VeeamJob,
+        VeeamRepository,
+        VeeamRestorePoint,
+        VeeamLicense,
+    ):
+        db.query(model).filter(model.server_id == row_id).delete(
+            synchronize_session=False
+        )
+    db.delete(row)
+    db.flush()
+    return row_id
 
 
 def sync_target_to_server(db: Session, target) -> None:
@@ -139,7 +195,8 @@ def sync_target_to_server(db: Session, target) -> None:
     if not (target.enabled and "veeam" in plugins and protocol_is_ssh):
         if row is not None:
             row.enabled = False
-        db.commit()
+            db.commit()
+            reset_veeam_clients()
         return
 
     if row is None:
@@ -148,7 +205,17 @@ def sync_target_to_server(db: Session, target) -> None:
             select(VeeamBackupServer).where(VeeamBackupServer.name == name)
         ).scalar_one_or_none()
         if clash is not None and clash.target_id != target.id:
-            name = f"[{target.name}] #{target.id}"
+            if _stale_target_row(db, clash):
+                # Host was deleted (or moved to another agent) but its row
+                # survived: drop it and its cached data so the recreated host
+                # reclaims the clean name under a brand new server id.
+                stale_id = _purge_server_row(db, clash)
+                logger.info(
+                    "Purged orphaned veeam server %s (%s) for recreated target %s",
+                    stale_id, name, target.id,
+                )
+            else:
+                name = f"[{target.name}] #{target.id}"
         row = VeeamBackupServer(
             name=name,
             edition="community",
@@ -159,8 +226,8 @@ def sync_target_to_server(db: Session, target) -> None:
             legacy_ssh_port=target.port,
             legacy_ssh_username=target.username,
             legacy_ssh_password_encrypted=target.password_encrypted,
-            db_type=getattr(target, "db_type", "postgresql"),
-            column_case=getattr(target, "column_case", "pascal"),
+            db_type=getattr(target, "db_type", None) or "auto",
+            column_case=getattr(target, "column_case", None) or "auto",
             enabled=True,
             status="unknown",
         )
@@ -172,22 +239,42 @@ def sync_target_to_server(db: Session, target) -> None:
         row.legacy_ssh_port = target.port
         row.legacy_ssh_username = target.username
         row.legacy_ssh_password_encrypted = target.password_encrypted
-        row.db_type = getattr(target, "db_type", "postgresql")
-        row.column_case = getattr(target, "column_case", "pascal")
+        # Never clobber db_type/column_case on re-sync. The registry row can hold
+        # a lazily detected value (or a deliberate operator override) that is more
+        # accurate than the remote target's stored default, and copying a stale
+        # target value has already broken a working MSSQL registration once. Only
+        # fill them in when they are still unset.
+        if not row.db_type:
+            row.db_type = getattr(target, "db_type", None) or "auto"
+        if not row.column_case:
+            row.column_case = getattr(target, "column_case", None) or "auto"
         row.enabled = True
     db.commit()
+    reset_veeam_clients()
 
 
 def remove_target_server(db: Session, target_id: int) -> None:
-    """Disable the veeam_backup_servers row linked to a deleted remote target."""
+    """Delete the veeam_backup_servers row linked to a deleted remote target.
+
+    The row and every dataset cached for it (jobs, sessions, repositories,
+    restore points, licenses, snapshots) are removed, so a host that is
+    re-registered - possibly under a different agent - starts from a clean
+    slate with a new server id instead of inheriting dead data.
+    """
     from app.plugins.installed.official_veeam.models import VeeamBackupServer
 
     row = db.execute(
         select(VeeamBackupServer).where(VeeamBackupServer.target_id == target_id)
     ).scalar_one_or_none()
-    if row is not None:
-        row.enabled = False
-        db.commit()
+    if row is None:
+        return
+    row_id = _purge_server_row(db, row)
+    db.commit()
+    logger.info(
+        "Removed veeam_backup_servers row %s for deleted target %s",
+        row_id, target_id,
+    )
+    reset_veeam_clients()
 
 
 def reset_veeam_clients() -> None:
