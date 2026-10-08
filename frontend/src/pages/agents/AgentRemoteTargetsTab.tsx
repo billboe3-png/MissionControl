@@ -7,6 +7,7 @@ import {
     RemoteTarget,
     RemoteTargetCreate,
 } from "../../services/agentRemoteTarget";
+import { agentsApi, Agent } from "../../services/agents";
 
 interface Props {
     agentId: number;
@@ -61,6 +62,12 @@ export default function AgentRemoteTargetsTab({ agentId }: Props) {
     const [saving, setSaving] = useState(false);
     const [testing, setTesting] = useState<number | null>(null);
 
+    const [agents, setAgents] = useState<Agent[]>([]);
+    const [movingTarget, setMovingTarget] = useState<RemoteTarget | null>(null);
+    const [moveNewAgentId, setMoveNewAgentId] = useState("");
+    const [moveProfiles, setMoveProfiles] = useState(true);
+    const [moving, setMoving] = useState(false);
+
     const load = async () => {
         try {
             const targetsData = await agentRemoteTargetApi.listTargets(agentId);
@@ -74,6 +81,10 @@ export default function AgentRemoteTargetsTab({ agentId }: Props) {
 
     useEffect(() => {
         if (agentId) load();
+        agentsApi
+            .list()
+            .then((r) => setAgents(r.items || []))
+            .catch(() => setAgents([]));
     }, [agentId]);
 
     const handleProtocolChange = (protocol: string) => {
@@ -163,6 +174,26 @@ export default function AgentRemoteTargetsTab({ agentId }: Props) {
             await load();
         } catch (e) {
             setError(e instanceof Error ? e.message : "Toggle failed");
+        }
+    };
+
+    const handleMove = async () => {
+        if (!movingTarget || !moveNewAgentId) return;
+        setMoving(true);
+        setError(null);
+        try {
+            await agentRemoteTargetApi.moveTarget(agentId, movingTarget.id, {
+                new_agent_id: Number(moveNewAgentId),
+                move_profiles: moveProfiles,
+            });
+            setMovingTarget(null);
+            setMoveNewAgentId("");
+            setMoveProfiles(true);
+            await load();
+        } catch (e) {
+            setError(e instanceof Error ? e.message : "Move failed");
+        } finally {
+            setMoving(false);
         }
     };
 
@@ -325,6 +356,65 @@ export default function AgentRemoteTargetsTab({ agentId }: Props) {
                 </div>
             )}
 
+            {movingTarget && (
+                <div className="target-form card">
+                    <h4>Move '{movingTarget.name}' to another agent</h4>
+                    <div className="form-grid">
+                        <div className="form-row">
+                            <label>Destination agent</label>
+                            <select
+                                value={moveNewAgentId}
+                                onChange={(e) => setMoveNewAgentId(e.target.value)}
+                            >
+                                <option value="">Select an agent...</option>
+                                {agents
+                                    .filter((a) => a.id !== agentId)
+                                    .map((a) => (
+                                        <option key={a.id} value={a.id}>
+                                            {a.name} ({a.status})
+                                        </option>
+                                    ))}
+                            </select>
+                            <small className="form-hint">
+                                The target moves to the selected agent and its plugins are
+                                enabled there for collection.
+                            </small>
+                        </div>
+                        <div className="form-row">
+                            <label
+                                style={{ display: "flex", alignItems: "center", gap: 6 }}
+                            >
+                                <input
+                                    type="checkbox"
+                                    checked={moveProfiles}
+                                    onChange={(e) => setMoveProfiles(e.target.checked)}
+                                />
+                                <span>Also move matching integration profiles</span>
+                            </label>
+                            <small className="form-hint">
+                                Moves profiles whose SSH host matches this target's hostname
+                                so credentials follow the target.
+                            </small>
+                        </div>
+                    </div>
+                    <div className="form-actions">
+                        <LoadingButton
+                            loading={moving}
+                            className="btn btn-primary"
+                            onClick={handleMove}
+                        >
+                            Move
+                        </LoadingButton>
+                        <button
+                            className="btn btn-secondary"
+                            onClick={() => setMovingTarget(null)}
+                        >
+                            Cancel
+                        </button>
+                    </div>
+                </div>
+            )}
+
             {targets.length === 0 && !showForm ? (
                 <div className="empty-state">
                     <p>No remote targets configured.</p>
@@ -402,6 +492,16 @@ export default function AgentRemoteTargetsTab({ agentId }: Props) {
                                                     onClick={() => handleEdit(t)}
                                                 >
                                                     Edit
+                                                </button>
+                                                <button
+                                                    className="btn btn-sm btn-secondary"
+                                                    onClick={() => {
+                                                        setMovingTarget(t);
+                                                        setMoveNewAgentId("");
+                                                        setMoveProfiles(true);
+                                                    }}
+                                                >
+                                                    Move
                                                 </button>
                                                 <button
                                                     className="btn btn-sm btn-danger"

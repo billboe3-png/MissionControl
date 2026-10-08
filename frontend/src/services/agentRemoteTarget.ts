@@ -55,6 +55,11 @@ export interface RemoteTargetUpdate {
     column_case?: string;
 }
 
+export interface RemoteTargetMove {
+    new_agent_id: number;
+    move_profiles?: boolean;
+}
+
 export interface RemoteInventory {
     agent_id: number;
     agent_name: string;
@@ -117,6 +122,17 @@ export const agentRemoteTargetApi = {
         return apiClient(
             `${API}/${agentId}/remote-targets/${targetId}/test`,
             { method: "POST" }
+        );
+    },
+
+    async moveTarget(
+        agentId: number,
+        targetId: number,
+        payload: RemoteTargetMove
+    ): Promise<RemoteTarget> {
+        return apiClient<RemoteTarget>(
+            `${API}/${agentId}/remote-targets/${targetId}/move`,
+            { method: "POST", json: payload }
         );
     },
 

@@ -39,6 +39,13 @@ class RemoteTargetUpdate(BaseModel):
     column_case: str | None = Field(None, pattern="^(pascal|snake)$")
 
 
+class RemoteTargetMoveRequest(BaseModel):
+    """Request body for moving a remote target to a different agent."""
+
+    new_agent_id: int
+    move_profiles: bool = True
+
+
 class RemoteTargetResponse(BaseModel):
     id: int
     agent_id: int

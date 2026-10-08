@@ -7,6 +7,7 @@ CRUD endpoints for managing remote targets that agents relay data from.
 import logging
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.core.auth_dependency import get_current_user
@@ -19,6 +20,7 @@ from app.repositories.agent_remote_target_repository import (
 from app.schemas.agent_remote_target import (
     AgentRemoteTargetsResponse,
     RemoteTargetCreate,
+    RemoteTargetMoveRequest,
     RemoteTargetResponse,
     RemoteTargetUpdate,
 )
@@ -186,6 +188,89 @@ async def update_remote_target(
     from app.plugins.installed.official_veeam.bridge import sync_target_to_server
 
     sync_target_to_server(db, updated)
+    return RemoteTargetResponse.model_validate(updated)
+
+
+@router.post(
+    "/{agent_id}/remote-targets/{target_id}/move",
+    response_model=RemoteTargetResponse,
+)
+async def move_remote_target(
+    agent_id: int,
+    target_id: int,
+    payload: RemoteTargetMoveRequest,
+    db: Session = Depends(get_db),
+    _user=Depends(get_current_user),
+) -> RemoteTargetResponse:
+    """Move a remote target to a different agent.
+
+    Cascades the target's plugins into the destination agent's
+    server-enabled list, refreshes the Veeam server registry row,
+    reassigns any MikroTik relay pairing, and optionally moves
+    integration profiles whose ssh_host matches the target hostname.
+    """
+    target = AgentRemoteTargetRepository.get_by_id(db, target_id)
+    if target is None or target.agent_id != agent_id:
+        raise HTTPException(status_code=404, detail="Target not found")
+
+    new_agent = db.query(Agent).filter(Agent.id == payload.new_agent_id).first()
+    if new_agent is None:
+        raise HTTPException(status_code=404, detail="Destination agent not found")
+
+    if payload.new_agent_id == agent_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Target already belongs to this agent",
+        )
+
+    old_agent_id = target.agent_id
+
+    updated = AgentRemoteTargetRepository.update(
+        db, target_id, agent_id=payload.new_agent_id
+    )
+    if updated is None:
+        raise HTTPException(status_code=404, detail="Target not found")
+
+    # The config manifest gates collection on agents.enabled_plugins;
+    # without this merge the destination agent would silently skip the
+    # target's plugins.
+    if updated.target_plugins:
+        wanted = [p.strip() for p in updated.target_plugins.split(",") if p.strip()]
+        enabled = [
+            p.strip() for p in (new_agent.enabled_plugins or "").split(",") if p.strip()
+        ]
+        merged = enabled + [p for p in wanted if p not in enabled]
+        new_agent.enabled_plugins = ",".join(merged)
+        db.commit()
+
+    from app.plugins.installed.official_veeam.bridge import sync_target_to_server
+
+    sync_target_to_server(db, updated)
+
+    # Keep the MikroTik relay pairing consistent; otherwise the relay
+    # self-heals by creating a duplicate target on the old agent.
+    from app.plugins.installed.official_mikrotik.models import MikroTikServer
+
+    db.query(MikroTikServer).filter(
+        MikroTikServer.remote_target_id == target_id
+    ).update(
+        {MikroTikServer.relay_agent_id: payload.new_agent_id},
+        synchronize_session=False,
+    )
+    db.commit()
+
+    if payload.move_profiles:
+        from app.models.db.integration_profile import IntegrationProfile
+
+        db.query(IntegrationProfile).filter(
+            IntegrationProfile.agent_id == old_agent_id,
+            func.lower(IntegrationProfile.ssh_host) == updated.hostname.lower(),
+        ).update(
+            {IntegrationProfile.agent_id: payload.new_agent_id},
+            synchronize_session=False,
+        )
+        db.commit()
+
     return RemoteTargetResponse.model_validate(updated)
 
 
