@@ -617,6 +617,7 @@ class IntegrationService:
             integration_type=profile.integration_type,
             description=profile.description,
             enabled=profile.enabled,
+            agent_id=profile.agent_id,
             base_url=profile.base_url,
             username=profile.username,
             tenant_id=profile.tenant_id,
