@@ -1,6 +1,7 @@
 """Mission Control Agent - SSH connector."""
 
 import asyncio
+import base64
 import json
 import logging
 from typing import Any
@@ -70,6 +71,7 @@ class SSHConnector(RemoteConnector):
                 repr(exc),
                 traceback.format_exc(),
             )
+            client.close()
             raise
         return client
 
@@ -79,12 +81,14 @@ class SSHConnector(RemoteConnector):
 
             def _exec():
                 client = self._get_client()
-                stdin, stdout, stderr = client.exec_command(command, timeout=timeout)  # noqa: RUF059
-                exit_code = stdout.channel.recv_exit_status()
-                out = stdout.read().decode(errors="replace")
-                err = stderr.read().decode(errors="replace")
-                client.close()
-                return exit_code, out, err
+                try:
+                    _, stdout, stderr = client.exec_command(command, timeout=timeout)
+                    exit_code = stdout.channel.recv_exit_status()
+                    out = stdout.read().decode(errors="replace")
+                    err = stderr.read().decode(errors="replace")
+                    return exit_code, out, err
+                finally:
+                    client.close()
 
             loop = asyncio.get_event_loop()
             exit_code, stdout, stderr = await asyncio.wait_for(
@@ -157,6 +161,67 @@ class SSHConnector(RemoteConnector):
         return {"error": result["stderr"]}
 
     async def collect_hyperv_inventory(self) -> dict | None:
+        """Collect Hyper-V inventory via PowerShell over SSH (Windows hosts)."""
+        script = (
+            "if (Get-Command Get-VM -ErrorAction SilentlyContinue) { "
+            "  $vms = Get-VM | Select-Object Name, State, CPUUsage, "
+            "    MemoryAssigned, MemoryStartup, Uptime, Status, Generation, "
+            "    VMId, ComputerName | ConvertTo-Json -Depth 3; "
+            "  $sw = Get-VMSwitch | Select-Object Name, SwitchType | "
+            "    ConvertTo-Json; "
+            "  @{ vm_count=(Get-VM).Count; vms=$vms; switches=$sw } | "
+            "  ConvertTo-Json -Depth 3 "
+            "} else { 'null' }"
+        )
+        encoded = base64.b64encode(script.encode("utf-16le")).decode("ascii")
+        result = await self._run_cmd(
+            f"powershell -NoProfile -NonInteractive -EncodedCommand {encoded}",
+            timeout=30,
+        )
+        if result["success"]:
+            try:
+                data = json.loads(result["stdout"])
+                if data and data.get("vm_count", 0) > 0:
+                    vms_raw = data.get("vms", "[]")
+                    switches_raw = data.get("switches", "[]")
+                    vms = json.loads(vms_raw) if isinstance(vms_raw, str) else vms_raw
+                    switches = (
+                        json.loads(switches_raw)
+                        if isinstance(switches_raw, str)
+                        else switches_raw
+                    )
+                    if isinstance(vms, dict):
+                        vms = [vms]
+                    if isinstance(switches, dict):
+                        switches = [switches]
+                    return {
+                        "vm_count": data["vm_count"],
+                        "vms": [
+                            {
+                                "name": v.get("Name", ""),
+                                "state": v.get("State", "Unknown"),
+                                "cpu_usage": v.get("CPUUsage", 0),
+                                "memory_mb": round(
+                                    (v.get("MemoryAssigned") or 0) / (1024 * 1024), 0
+                                ),
+                                "memory_startup_mb": round(
+                                    (v.get("MemoryStartup") or 0) / (1024 * 1024), 0
+                                ),
+                                "uptime": str(v.get("Uptime", "")),
+                                "status": v.get("Status", ""),
+                                "generation": v.get("Generation", 0),
+                                "vm_id": v.get("VMId", ""),
+                                "computer_name": v.get("ComputerName", ""),
+                            }
+                            for v in vms
+                        ],
+                        "switches": [
+                            {"name": s.get("Name", ""), "type": s.get("SwitchType", "")}
+                            for s in switches
+                        ],
+                    }
+            except (json.JSONDecodeError, TypeError):
+                pass
         return None
 
     async def collect_proxmox_inventory(self) -> dict | None:
