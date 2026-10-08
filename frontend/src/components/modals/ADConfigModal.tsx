@@ -30,6 +30,7 @@ export default function ADConfigModal({
     const [loading, setLoading] = useState(false);
 
     const isEditing = profile !== null;
+    const relayMode = agentId !== null;
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -40,12 +41,14 @@ export default function ADConfigModal({
                 name,
                 domain,
                 base_dn: baseDn || undefined,
-                username,
                 use_ssl: useSsl,
                 timeout: parseInt(timeout, 10) || 30,
                 agent_id: agentId,
             };
-            if (password) payload.password = password;
+            if (!relayMode) {
+                payload.username = username;
+                if (password) payload.password = password;
+            }
 
             if (isEditing) {
                 await integrationsApi.update(profile!.id, payload);
@@ -112,31 +115,41 @@ export default function ADConfigModal({
                         />
                     </div>
 
-                    <div className="form-row">
+                    {relayMode ? (
                         <div className="form-group">
-                            <label htmlFor="ad-username">Username</label>
-                            <input
-                                id="ad-username"
-                                type="text"
-                                className="form-input"
-                                value={username}
-                                onChange={(e) => setUsername(e.target.value)}
-                                required
-                            />
+                            <p className="muted-text">
+                                Connection uses the remote target marked with the Active Directory
+                                checkbox (Agents &rarr; Remote Targets). Credentials are stored on
+                                that target, not here.
+                            </p>
                         </div>
-                        <div className="form-group">
-                            <label htmlFor="ad-password">Password</label>
-                            <input
-                                id="ad-password"
-                                type="password"
-                                className="form-input"
-                                value={password}
-                                onChange={(e) => setPassword(e.target.value)}
-                                placeholder={isEditing ? "Leave blank to keep existing" : ""}
-                                required={!isEditing}
-                            />
+                    ) : (
+                        <div className="form-row">
+                            <div className="form-group">
+                                <label htmlFor="ad-username">Username</label>
+                                <input
+                                    id="ad-username"
+                                    type="text"
+                                    className="form-input"
+                                    value={username}
+                                    onChange={(e) => setUsername(e.target.value)}
+                                    required
+                                />
+                            </div>
+                            <div className="form-group">
+                                <label htmlFor="ad-password">Password</label>
+                                <input
+                                    id="ad-password"
+                                    type="password"
+                                    className="form-input"
+                                    value={password}
+                                    onChange={(e) => setPassword(e.target.value)}
+                                    placeholder={isEditing ? "Leave blank to keep existing" : ""}
+                                    required={!isEditing}
+                                />
+                            </div>
                         </div>
-                    </div>
+                    )}
 
                     <div className="form-row">
                         <div className="form-group">
