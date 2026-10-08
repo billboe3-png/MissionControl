@@ -298,7 +298,11 @@ export default function IntegrationsPage() {
                                                         <div className="integration-row-info">
                                                             <strong>{profile.name}</strong>
                                                             <div className="integration-row-meta">
-                                                                {profile.agent_id ? <span>Agent #{profile.agent_id}</span> : <span>Global</span>}
+                                                                {profile.agent_id ? (
+                                                                    <span>{profile.agent_name || `Agent #${profile.agent_id}`}</span>
+                                                                ) : (
+                                                                    <span>Global</span>
+                                                                )}
                                                                 {!profile.agent_id && profile.username && <span>{profile.username}</span>}
                                                                 {profile.base_url && (
                                                                     <span className="integration-meta-url">{profile.base_url}</span>

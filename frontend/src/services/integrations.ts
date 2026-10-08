@@ -9,6 +9,7 @@ export interface IntegrationProfile {
     description: string | null;
     enabled: boolean;
     agent_id: number | null;
+    agent_name?: string | null;
     base_url: string | null;
     username: string | null;
     tenant_id: string | null;

@@ -12,9 +12,10 @@ import logging
 from datetime import UTC, datetime
 
 from fastapi import HTTPException, status
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, object_session
 
 from app.core.security import CredentialCipher
+from app.models.db.agent import Agent
 from app.models.db.integration_profile import IntegrationProfile
 from app.plugins.installed.official_unifi.bridge import (
     delete_profile_controllers as _unifi_delete_controllers,
@@ -611,6 +612,12 @@ class IntegrationService:
         self, profile: IntegrationProfile
     ) -> IntegrationProfileResponse:
         """Convert an ORM profile to a response with masked secrets."""
+        agent_name = None
+        if profile.agent_id:
+            session = object_session(profile)
+            if session is not None:
+                agent = session.get(Agent, profile.agent_id)
+                agent_name = agent.name if agent else None
         return IntegrationProfileResponse(
             id=profile.id,
             name=profile.name,
@@ -618,6 +625,7 @@ class IntegrationService:
             description=profile.description,
             enabled=profile.enabled,
             agent_id=profile.agent_id,
+            agent_name=agent_name,
             base_url=profile.base_url,
             username=profile.username,
             tenant_id=profile.tenant_id,

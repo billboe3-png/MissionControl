@@ -95,6 +95,7 @@ class IntegrationProfileResponse(BaseModel):
     description: str | None = None
     enabled: bool
     agent_id: int | None = None
+    agent_name: str | None = None
 
     base_url: str | None = None
     username: str | None = None
