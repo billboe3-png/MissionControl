@@ -16,6 +16,7 @@ import winrm
 from winrm.exceptions import InvalidCredentialsError
 
 from .base_provider import HyperVProvider
+from .replication import REPLICATION_SCRIPT, replication_from_result
 
 logger = logging.getLogger(__name__)
 
@@ -491,68 +492,5 @@ class HyperVPowerShellProvider(HyperVProvider):
 
     async def get_replication(self) -> dict:
         """Get Hyper-V VM replication status from all VMs."""
-        script = (
-            "$repl = Get-VMReplication -ErrorAction SilentlyContinue; "
-            "if (-not $repl) { "
-            "  Write-Output (@{connected=$true;replicating=0;total=0;items=@()} | ConvertTo-Json -Compress); "
-            "  return "
-            "} "
-            "$items = $repl | ForEach-Object { "
-            "  $health = 'Unknown'; "
-            "  try { $health = $_.ReplicationHealth.ToString() } catch {} "
-            "  $state = 'Unknown'; "
-            "  try { $state = $_.State.ToString() } catch {} "
-            "  $freq = 0; "
-            "  try { $freq = $_.ReplicationFrequencySec } catch {} "
-            "  $lastTime = ''; "
-            "  try { $lastTime = $_.LastReplicationTime.ToString('yyyy-MM-dd HH:mm:ss') } catch {} "
-            "  $resultCode = 0; "
-            "  try { $resultCode = $_.LastReplicationResultCode } catch {} "
-            "  $bytesSent = 0; "
-            "  try { $bytesSent = $_.ReplicationBytesSent } catch {} "
-            "  $bytesReceived = 0; "
-            "  try { $bytesReceived = $_.ReplicationBytesReceived } catch {} "
-            "  [PSCustomObject]@{ "
-            "    VMName=$_.VMName; "
-            "    ReplicaServer=$_.ReplicaServer; "
-            "    ReplicaServerPort=$_.ReplicaServerPort; "
-            "    State=$state; "
-            "    Health=$health; "
-            "    ReplicationFrequencySec=$freq; "
-            "    LastReplicationTime=$lastTime; "
-            "    LastReplicationResultCode=$resultCode; "
-            "    ReplicationBytesSent=$bytesSent; "
-            "    ReplicationBytesReceived=$bytesReceived; "
-            "  } "
-            "} "
-            "$replicating = ($repl | Where-Object { $_.State -eq 'Replicating' }).Count; "
-            "Write-Output (@{connected=$true;replicating=$replicating;total=$repl.Count;items=$items} | ConvertTo-Json -Compress)"
-        )
-        result = await self._exec(script)
-        if not result["success"]:
-            return {"connected": False, "error": result["stderr"], "replicating": 0, "total": 0, "items": []}
-        data = _parse_json_output(result["stdout"])
-        if data is None:
-            return {"connected": True, "replicating": 0, "total": 0, "items": []}
-        items = []
-        for r in data.get("items", []):
-            if isinstance(r, dict):
-                health = r.get("Health", "Unknown")
-                items.append({
-                    "vm_name": r.get("VMName", ""),
-                    "replica_server": r.get("ReplicaServer", ""),
-                    "replica_port": r.get("ReplicaServerPort", 443),
-                    "state": r.get("State", "Unknown"),
-                    "health": health,
-                    "frequency_seconds": r.get("ReplicationFrequencySec", 0),
-                    "last_replication_time": r.get("LastReplicationTime", ""),
-                    "last_result_code": r.get("LastReplicationResultCode", 0),
-                    "bytes_sent": r.get("ReplicationBytesSent", 0),
-                    "bytes_received": r.get("ReplicationBytesReceived", 0),
-                })
-        return {
-            "connected": True,
-            "replicating": data.get("replicating", 0),
-            "total": data.get("total", 0),
-            "items": items,
-        }
+        result = await self._exec(REPLICATION_SCRIPT)
+        return replication_from_result(result)

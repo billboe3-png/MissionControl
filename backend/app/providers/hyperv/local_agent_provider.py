@@ -6,6 +6,7 @@ plugin inventory stored in Agent.inventory_json, with no WinRM/SSH hop.
 Write operations are not supported for the local host through this path.
 """
 
+import inspect
 import json
 import logging
 import platform
@@ -19,6 +20,7 @@ from .agent_provider import (
     _vm_command,
 )
 from .base_provider import HyperVProvider
+from .replication import REPLICATION_SCRIPT, replication_from_result
 
 logger = logging.getLogger(__name__)
 
@@ -167,6 +169,14 @@ class LocalAgentHyperVProvider(HyperVProvider):
         }
 
     # ------------------------------------------------------------------ #
+    # Replication (queried live on the local host via the agent)          #
+    # ------------------------------------------------------------------ #
+
+    async def get_replication(self) -> dict:
+        result = await self._run_query(REPLICATION_SCRIPT)
+        return replication_from_result(result)
+
+    # ------------------------------------------------------------------ #
     # Write operations via agent command queue                            #
     # ------------------------------------------------------------------ #
 
@@ -178,7 +188,10 @@ class LocalAgentHyperVProvider(HyperVProvider):
                 "error": "No agent dispatch available for local host operations",
             }
         try:
-            return await self._dispatch_cmd(command_str)
+            result = self._dispatch_cmd(command_str)
+            if inspect.isawaitable(result):
+                result = await result
+            return result
         except Exception as exc:  # pragma: no cover
             logger.exception("Local agent dispatch failed")
             return {"success": False, "error": str(exc)}
@@ -189,7 +202,9 @@ class LocalAgentHyperVProvider(HyperVProvider):
         command_id = dispatch.get("command_id")
         if not dispatch.get("success") or command_id is None or self._wait_cmd is None:
             return dispatch
-        result = await self._wait_cmd(command_id)
+        result = self._wait_cmd(command_id)
+        if inspect.isawaitable(result):
+            result = await result
         state = result.get("state")
         if result.get("success"):
             return {
@@ -205,6 +220,25 @@ class LocalAgentHyperVProvider(HyperVProvider):
             "error": result.get("error_message") or "VM action failed",
         }
 
+    async def _run_query(self, command_str: str) -> dict:
+        """Dispatch a read-only PowerShell query and wait for its stdout."""
+        dispatch = await self._dispatch(command_str)
+        command_id = dispatch.get("command_id")
+        if not dispatch.get("success") or command_id is None or self._wait_cmd is None:
+            return {
+                "success": False,
+                "stdout": "",
+                "stderr": dispatch.get("error") or "No agent dispatch available for local host operations",
+            }
+        result = self._wait_cmd(command_id)
+        if inspect.isawaitable(result):
+            result = await result
+        return {
+            "success": bool(result.get("success")),
+            "stdout": result.get("stdout") or "",
+            "stderr": result.get("stderr") or result.get("error_message") or "",
+        }
+
     async def start_vm(self, vm_id: str) -> dict:
         return await self._dispatch_and_wait(_vm_action_command(vm_id, "Start-VM", "Running", 120))
 
@@ -212,7 +246,9 @@ class LocalAgentHyperVProvider(HyperVProvider):
         return await self._dispatch_and_wait(_vm_action_command(vm_id, "Stop-VM", "Off", 90, force=force))
 
     async def restart_vm(self, vm_id: str) -> dict:
-        return await self._dispatch_and_wait(_vm_action_command(vm_id, "Restart-VM", "Running", 120))
+        return await self._dispatch_and_wait(
+            _vm_action_command(vm_id, "Restart-VM", "Running", 120, force=True)
+        )
 
     async def pause_vm(self, vm_id: str) -> dict:
         return await self._dispatch_and_wait(_vm_action_command(vm_id, "Suspend-VM", "Paused", 30))

@@ -10,11 +10,17 @@ dispatch commands to the agent via the server's command queue.
 
 from __future__ import annotations
 
+import inspect
 import json
 import logging
 import re
 
 from .base_provider import HyperVProvider
+from .replication import (
+    REPLICATION_SCRIPT,
+    powershell_relay_command,
+    replication_from_result,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -206,11 +212,18 @@ class AgentHyperVProvider(HyperVProvider):
         return raw
 
     async def _dispatch(self, command_str: str) -> dict:
-        """Dispatch a PowerShell command to the managing agent."""
+        """Dispatch a PowerShell command to the managing agent.
+
+        The agent relays the command to the remote Windows target over SSH,
+        whose login shell is cmd.exe — so the script is sent as a base64
+        ``-EncodedCommand`` (shell-agnostic), never raw.
+        """
         if not self._dispatch_cmd:
             return {"success": False, "error": "No agent dispatch available for this host"}
         try:
-            result = await self._dispatch_cmd(command_str)
+            result = self._dispatch_cmd(powershell_relay_command(command_str))
+            if inspect.isawaitable(result):
+                result = await result
             return result
         except Exception as e:
             logger.exception("Agent dispatch failed for target %s", self._target_id)
@@ -222,7 +235,9 @@ class AgentHyperVProvider(HyperVProvider):
         command_id = dispatch.get("command_id")
         if not dispatch.get("success") or command_id is None or self._wait_cmd is None:
             return dispatch
-        result = await self._wait_cmd(command_id)
+        result = self._wait_cmd(command_id)
+        if inspect.isawaitable(result):
+            result = await result
         state = result.get("state")
         if result.get("success"):
             return {
@@ -236,6 +251,25 @@ class AgentHyperVProvider(HyperVProvider):
             "command_id": command_id,
             "state": state,
             "error": result.get("error_message") or "VM action failed",
+        }
+
+    async def _run_query(self, command_str: str) -> dict:
+        """Dispatch a read-only PowerShell query and wait for its stdout."""
+        dispatch = await self._dispatch(command_str)
+        command_id = dispatch.get("command_id")
+        if not dispatch.get("success") or command_id is None or self._wait_cmd is None:
+            return {
+                "success": False,
+                "stdout": "",
+                "stderr": dispatch.get("error") or "No agent dispatch available for this host",
+            }
+        result = self._wait_cmd(command_id)
+        if inspect.isawaitable(result):
+            result = await result
+        return {
+            "success": bool(result.get("success")),
+            "stdout": result.get("stdout") or "",
+            "stderr": result.get("stderr") or result.get("error_message") or "",
         }
 
     def _get_switch_list(self) -> list[dict]:
@@ -353,7 +387,12 @@ class AgentHyperVProvider(HyperVProvider):
         return await self._dispatch_and_wait(_vm_action_command(vm_id, "Stop-VM", "Off", 90, force=force))
 
     async def restart_vm(self, vm_id: str) -> dict:
-        return await self._dispatch_and_wait(_vm_action_command(vm_id, "Restart-VM", "Running", 120))
+        # Restart-VM without -Force waits for a graceful guest shutdown, which
+        # never completes on guests lacking Hyper-V integration services (the
+        # action hangs past the agent timeout). -Force does a hard reset.
+        return await self._dispatch_and_wait(
+            _vm_action_command(vm_id, "Restart-VM", "Running", 120, force=True)
+        )
 
     async def pause_vm(self, vm_id: str) -> dict:
         return await self._dispatch_and_wait(_vm_action_command(vm_id, "Suspend-VM", "Paused", 30))
@@ -448,3 +487,11 @@ class AgentHyperVProvider(HyperVProvider):
             ],
             "cluster_summary": "Agent-relayed host",
         }
+
+    # ------------------------------------------------------------------ #
+    # Replication (queried live on the target via the agent)              #
+    # ------------------------------------------------------------------ #
+
+    async def get_replication(self) -> dict:
+        result = await self._run_query(REPLICATION_SCRIPT)
+        return replication_from_result(result)
