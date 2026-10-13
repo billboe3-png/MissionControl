@@ -577,3 +577,34 @@ class TestSyncPreservesDbSettings:
         )
         assert row.db_type == "auto"
         assert row.column_case == "auto"
+
+
+def test_servers_with_data_flags_only_successful_snapshots(db_session):
+    import json as _json
+
+    from app.plugins.installed.official_veeam.models import VeeamSnapshot
+    from app.plugins.installed.official_veeam.routes import _servers_with_data
+
+    ok = VeeamBackupServer(
+        name="[OK]", edition="community", data_source="both",
+        agent_id=1, target_id=1, enabled=True, status="unknown",
+    )
+    bad = VeeamBackupServer(
+        name="[Bad]", edition="community", data_source="both",
+        agent_id=2, target_id=2, enabled=True, status="unknown",
+    )
+    db_session.add_all([ok, bad])
+    db_session.commit()
+
+    db_session.add(VeeamSnapshot(
+        server_id=ok.id, dataset="job_stats_daily:8:jobs",
+        payload=_json.dumps({"success": True, "jobs": []}),
+    ))
+    db_session.add(VeeamSnapshot(
+        server_id=bad.id, dataset="job_stats_daily:8:jobs",
+        payload=_json.dumps({"success": False, "jobs": [], "error": "bridge down"}),
+    ))
+    db_session.commit()
+
+    assert _servers_with_data(db_session) == {ok.id}
+

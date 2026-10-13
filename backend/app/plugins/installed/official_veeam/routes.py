@@ -65,7 +65,7 @@ class VeeamServerConfigBase(BaseModel):
     ssh_password: str = Field("", max_length=500)
     data_source: str = Field("both", pattern="^(both|rest|ssh)$")
     db_type: str = Field("postgresql", pattern="^(auto|postgresql|mssql)$")
-    column_case: str = Field("pascal", pattern="^(pascal|snake)$")
+    column_case: str = Field("pascal", pattern="^(auto|pascal|snake)$")
 
 
 class VeeamServerConfigCreate(VeeamServerConfigBase):
@@ -86,11 +86,15 @@ class VeeamServerConfigUpdate(BaseModel):
     ssh_password: str | None = Field(None, max_length=500)
     data_source: str | None = Field(None, pattern="^(both|rest|ssh)$")
     db_type: str | None = Field(None, pattern="^(auto|postgresql|mssql)$")
-    column_case: str | None = Field(None, pattern="^(pascal|snake)$")
+    column_case: str | None = Field(None, pattern="^(auto|pascal|snake)$")
 
 
 class VeeamServerConfigResponse(VeeamServerConfigBase):
     id: int
+    # True when at least one cached snapshot for this server was collected
+    # successfully. Lets clients pick a server that actually returns data
+    # instead of defaulting to an unreachable/lowest-id one.
+    has_data: bool = False
 
     url: str | None = None
     username: str | None = None
@@ -527,10 +531,27 @@ async def get_capacity_tier(
 # ------------------------------------------------------------------ #
 
 
+def _servers_with_data(db: Session) -> set[int]:
+    """Server ids that have at least one successfully collected snapshot."""
+    ids: set[int] = set()
+    for server_id, payload in db.execute(
+        select(VeeamSnapshot.server_id, VeeamSnapshot.payload)
+    ).all():
+        try:
+            if json.loads(payload).get("success"):
+                ids.add(server_id)
+        except (ValueError, TypeError):
+            continue
+    return ids
+
+
 @router.get("/servers/config", response_model=list[VeeamServerConfigResponse])
 async def list_server_configs(db: Session = Depends(get_db)) -> list[VeeamBackupServer]:
     """List all Veeam server configurations."""
     servers = db.query(VeeamBackupServer).order_by(VeeamBackupServer.id).all()
+    with_data = _servers_with_data(db)
+    for server in servers:
+        server.has_data = server.id in with_data
     return servers
 
 

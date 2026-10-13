@@ -17,6 +17,7 @@ export interface VeeamServerConfig {
     data_source: string;
     db_type: string;
     column_case: string;
+    has_data: boolean;
 }
 
 export interface VeeamServerContextValue {
@@ -120,7 +121,11 @@ export const VeeamServerProvider: React.FC<{ children: ReactNode }> = ({ childre
         }
         const selected = servers.find((s) => s.id === selectedServerId);
         if (selected && selected.enabled) return;
-        const firstEnabled = servers.find((s) => s.enabled);
+        // No (valid) selection yet: prefer an enabled server that actually has
+        // collected data, so pages don't open on a host whose DB bridge is
+        // down. Fall back to the first enabled server.
+        const firstWithData = servers.find((s) => s.enabled && s.has_data);
+        const firstEnabled = firstWithData ?? servers.find((s) => s.enabled);
         const next = firstEnabled ? firstEnabled.id : null;
         setSelectedServerId((current) => (current === next ? current : next));
     }, [servers, selectedServerId]);
