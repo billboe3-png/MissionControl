@@ -216,6 +216,20 @@ def _failed(kind: str, error: str) -> dict[str, Any]:
     return {"success": False, "error": error}
 
 
+def _cached_success(row: VeeamSnapshot) -> dict[str, Any] | None:
+    """Return the cached payload only when it is a *successful* collection.
+
+    A cached failure is not data: re-serving it (as "stale") would hide the
+    live error behind a misleading timestamp and let one transient outage
+    poison the cache for a server that never actually returned anything.
+    """
+    try:
+        payload = json.loads(row.payload)
+    except (ValueError, TypeError):
+        return None
+    return payload if payload.get("success") else None
+
+
 async def _serve(
     db: Session,
     provider: Any,
@@ -237,6 +251,7 @@ async def _serve(
             VeeamSnapshot.dataset == dataset_key,
         )
     ).scalar_one_or_none()
+    cached = _cached_success(row) if row is not None else None
 
     if refresh:
         payload = await method(**params)
@@ -244,29 +259,31 @@ async def _serve(
             _upsert_snapshot(db, server.id, dataset_key, payload)
             db.commit()
             return payload
-        if row is not None:
-            stale = dict(json.loads(row.payload))
-            stale["error"] = f"Data may be stale — last collected {row.collected_at.isoformat()}"
+        if cached is not None:
+            stale = dict(cached)
+            stale["error"] = (
+                f"Data may be stale — last collected {row.collected_at.isoformat()}"
+            )
             return stale
-        _upsert_snapshot(db, server.id, dataset_key, payload)
-        db.commit()
+        # No good cache to fall back to: surface the live failure. Failed
+        # payloads are never persisted, so a broken server keeps reporting its
+        # real error instead of a phantom snapshot.
         return payload
 
-    if row is not None and _snapshot_age(row) < SNAPSHOT_TTL_SECONDS:
-        return json.loads(row.payload)
+    if cached is not None and _snapshot_age(row) < SNAPSHOT_TTL_SECONDS:
+        return cached
 
     payload = await method(**params)
     if payload.get("success", False):
         _upsert_snapshot(db, server.id, dataset_key, payload)
         db.commit()
         return payload
-    if row is not None:
-        stale = dict(json.loads(row.payload))
-        stale["error"] = f"Data may be stale — last collected {row.collected_at.isoformat()}"
+    if cached is not None:
+        stale = dict(cached)
+        stale["error"] = (
+            f"Data may be stale — last collected {row.collected_at.isoformat()}"
+        )
         return stale
-
-    _upsert_snapshot(db, server.id, dataset_key, payload)
-    db.commit()
     return payload
 
 

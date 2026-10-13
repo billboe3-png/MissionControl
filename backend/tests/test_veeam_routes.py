@@ -383,6 +383,55 @@ def test_stale_snapshot_failure_returns_cached_with_error(
     assert "may be stale" in data["error"]
 
 
+def test_cached_failure_not_served_as_stale(
+    veeam_client, veeam_server, fake_provider, monkeypatch, db_session,
+):
+    # A previous *failed* collection must not be re-served as "stale data".
+    _seed_snapshot(
+        db_session, veeam_server.id, "jobs",
+        {"success": False, "jobs": [], "count": 0,
+         "server_names": [], "error": "old failure"},
+        datetime.now(UTC) - timedelta(hours=2),
+    )
+
+    async def failing():
+        return {"success": False, "jobs": [], "count": 0,
+                "server_names": [], "error": "Veeam DB bridge unavailable"}
+
+    monkeypatch.setattr(fake_provider, "get_jobs", failing)
+    response = veeam_client.get("/api/v1/plugins/veeam/jobs")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["error"] == "Veeam DB bridge unavailable"
+    assert "may be stale" not in (data.get("error") or "")
+
+    # The poisoned cache is left untouched and never overwritten by the
+    # failed live payload.
+    from sqlalchemy import select
+    row = db_session.execute(
+        select(VeeamSnapshot).where(VeeamSnapshot.dataset == "jobs")
+    ).scalar_one()
+    assert json.loads(row.payload)["error"] == "old failure"
+
+
+def test_failed_live_payload_is_not_cached(
+    veeam_client, veeam_server, fake_provider, monkeypatch, db_session,
+):
+    async def failing():
+        return {"success": False, "jobs": [], "count": 0,
+                "server_names": [], "error": "relay down"}
+
+    monkeypatch.setattr(fake_provider, "get_jobs", failing)
+    response = veeam_client.get("/api/v1/plugins/veeam/jobs")
+    assert response.status_code == 200
+    assert response.json()["success"] is False
+
+    from sqlalchemy import select
+    assert db_session.execute(
+        select(VeeamSnapshot).where(VeeamSnapshot.dataset == "jobs")
+    ).scalar_one_or_none() is None
+
+
 def test_with_server_restore_points_passes_vm_id(veeam_client, fake_provider, monkeypatch):
     captured = {}
 
