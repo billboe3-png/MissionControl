@@ -242,15 +242,22 @@ def _upsert_target_server(db: Session, target) -> bool:
         row.legacy_ssh_port = target.port
         row.legacy_ssh_username = target.username
         row.legacy_ssh_password_encrypted = target.password_encrypted
-        # Never clobber db_type/column_case on re-sync. The registry row can hold
-        # a lazily detected value (or a deliberate operator override) that is more
-        # accurate than the remote target's stored default, and copying a stale
-        # target value has already broken a working MSSQL registration once. Only
-        # fill them in when they are still unset.
-        if not row.db_type:
-            row.db_type = getattr(target, "db_type", None) or "auto"
-        if not row.column_case:
-            row.column_case = getattr(target, "column_case", None) or "auto"
+        # The remote target is the source of truth for a community server's DB
+        # settings (it is the only place these are configured for SSH servers).
+        # An explicit non-"auto" choice propagates to the registry row so target
+        # edits take effect on the next sync/restart; "auto"/empty never
+        # clobbers a concrete value the row already holds.
+        target_db_type = getattr(target, "db_type", None)
+        if target_db_type and target_db_type != "auto":
+            row.db_type = target_db_type
+        elif not row.db_type:
+            row.db_type = "auto"
+
+        target_column_case = getattr(target, "column_case", None)
+        if target_column_case and target_column_case != "auto":
+            row.column_case = target_column_case
+        elif not row.column_case:
+            row.column_case = "auto"
         row.enabled = True
     return True
 

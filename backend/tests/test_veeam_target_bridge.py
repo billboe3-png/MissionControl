@@ -60,15 +60,14 @@ def test_sync_propagates_db_type_and_column_case(db_session):
     assert row.column_case == "snake"
 
 
-def test_sync_does_not_overwrite_db_type_on_existing_row(db_session):
-    """Re-sync must not rewrite db_type/column_case of an existing row.
+def test_sync_propagates_explicit_target_db_type_on_existing_row(db_session):
+    """An explicit target db_type/column_case takes effect on re-sync.
 
-    Propagation happens once, when the row is created. Afterwards the registry
-    row is authoritative: it holds the lazily detected value, and copying a
-    stale target value has already corrupted a working MSSQL registration.
-    Host/credential refresh must still happen on re-sync.
+    The remote target is the source of truth for community servers, so an
+    operator switching it (e.g. postgresql -> mssql) must propagate to the
+    registry row. Host/credential refresh still happens too.
     """
-    _, target = _make_target(db_session, db_type="postgresql", column_case="auto")
+    _, target = _make_target(db_session, db_type="postgresql", column_case="pascal")
     sync_target_to_server(db_session, target)
 
     row = db_session.query(VeeamBackupServer).filter(
@@ -76,13 +75,9 @@ def test_sync_does_not_overwrite_db_type_on_existing_row(db_session):
     ).one()
     assert row.db_type == "postgresql"
 
-    # Detection (or an operator override) resolves the real type.
-    row.db_type = "mssql"
-    row.column_case = "snake"
-    db_session.commit()
-
-    target.db_type = "postgresql"
-    target.column_case = "auto"
+    # Operator switches the remote target to MSSQL + snake.
+    target.db_type = "mssql"
+    target.column_case = "snake"
     target.hostname = "10.9.9.10"
     db_session.commit()
     sync_target_to_server(db_session, target)
@@ -92,6 +87,30 @@ def test_sync_does_not_overwrite_db_type_on_existing_row(db_session):
     assert row.column_case == "snake"
     assert row.legacy_ssh_host == "10.9.9.10"
     assert row.enabled is True
+
+
+def test_sync_auto_target_does_not_clobber_row(db_session):
+    """A target left on "auto" never overwrites a concrete row value."""
+    _, target = _make_target(db_session, db_type="mssql", column_case="snake")
+    sync_target_to_server(db_session, target)
+
+    row = db_session.query(VeeamBackupServer).filter(
+        VeeamBackupServer.target_id == target.id
+    ).one()
+    assert row.db_type == "mssql"
+
+    # Row holds a resolved value; the target is later reset to auto.
+    row.db_type = "postgresql"
+    row.column_case = "pascal"
+    db_session.commit()
+    target.db_type = "auto"
+    target.column_case = "auto"
+    db_session.commit()
+    sync_target_to_server(db_session, target)
+
+    db_session.refresh(row)
+    assert row.db_type == "postgresql"
+    assert row.column_case == "pascal"
 
 
 def test_sync_disables_row_when_veeam_unchecked(db_session):
@@ -483,11 +502,12 @@ def test_profile_without_ssh_host_keeps_target_derived_link(db_session):
     assert row.agent_id == target.agent_id
 
 
-class TestSyncPreservesDbSettings:
-    """Re-syncing a target must not overwrite a resolved db_type/column_case.
+class TestSyncPropagatesTargetDbSettings:
+    """Re-syncing a target propagates its explicit db_type/column_case.
 
-    A stale target db_type once rewrote a working MSSQL registration to
-    postgresql, which broke its SQL queries.
+    The remote target is the source of truth for community (SSH) servers — it
+    is the only place these are configured — so operator edits must take
+    effect. An "auto" target value leaves a concrete row value untouched.
     """
 
     def _target(self, db_session, api_key="k" * 64, **overrides):
@@ -525,7 +545,7 @@ class TestSyncPreservesDbSettings:
         db_session.refresh(target)
         return target
 
-    def test_resync_keeps_resolved_db_type_and_column_case(self, db_session):
+    def test_resync_propagates_target_db_type_and_column_case(self, db_session):
         from app.plugins.installed.official_veeam.bridge import sync_target_to_server
         from app.plugins.installed.official_veeam.models import VeeamBackupServer
 
@@ -540,12 +560,14 @@ class TestSyncPreservesDbSettings:
         assert row.db_type == "postgresql"
         assert row.column_case == "pascal"
 
-        # The row has since been auto-detected / overridden to MSSQL + snake.
+        # The row has since been auto-detected differently.
         row.db_type = "mssql"
         row.column_case = "snake"
         db_session.commit()
 
-        # Host/credential refresh still happens...
+        # The operator updates the target's DB settings (and host/creds).
+        target.db_type = "mssql"
+        target.column_case = "snake"
         target.hostname = "10.9.9.10"
         target.username = "svc2"
         db_session.commit()
@@ -555,7 +577,31 @@ class TestSyncPreservesDbSettings:
         assert row.legacy_ssh_host == "10.9.9.10"
         assert row.legacy_ssh_username == "svc2"
         assert row.enabled is True
-        # ...but the detected db settings survive the re-sync.
+        assert row.db_type == "mssql"
+        assert row.column_case == "snake"
+
+    def test_auto_target_settings_do_not_clobber_row(self, db_session):
+        from app.plugins.installed.official_veeam.bridge import sync_target_to_server
+        from app.plugins.installed.official_veeam.models import VeeamBackupServer
+
+        target = self._target(db_session, api_key="h" * 64, name="AUTOKEEP")
+        sync_target_to_server(db_session, target)
+
+        row = (
+            db_session.query(VeeamBackupServer)
+            .filter(VeeamBackupServer.target_id == target.id)
+            .one()
+        )
+        row.db_type = "mssql"
+        row.column_case = "snake"
+        db_session.commit()
+
+        target.db_type = "auto"
+        target.column_case = "auto"
+        db_session.commit()
+        sync_target_to_server(db_session, target)
+
+        db_session.refresh(row)
         assert row.db_type == "mssql"
         assert row.column_case == "snake"
 
