@@ -92,9 +92,21 @@ export const VeeamServerProvider: React.FC<{ children: ReactNode }> = ({ childre
         };
         window.addEventListener(VEEAM_SERVER_MISSING_EVENT, handleMissing);
 
+        // The server list is fetched once per mount. If that call fails (e.g.
+        // the backend is briefly unreachable during a deploy) the selector and
+        // every Veeam page stay empty until a full reload. Retry whenever the
+        // tab regains focus so a transient failure self-heals.
+        const handleVisible = () => {
+            if (document.visibilityState === "visible") {
+                void fetchServers();
+            }
+        };
+        document.addEventListener("visibilitychange", handleVisible);
+
         return () => {
             window.removeEventListener("storage", handleStorage);
             window.removeEventListener(VEEAM_SERVER_MISSING_EVENT, handleMissing);
+            document.removeEventListener("visibilitychange", handleVisible);
         };
     }, [fetchServers, token]);
 
