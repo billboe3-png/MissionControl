@@ -173,14 +173,18 @@ def _purge_server_row(db: Session, row: VeeamBackupServer) -> int:
     return row_id
 
 
-def sync_target_to_server(db: Session, target) -> None:
-    """Upsert a community veeam_backup_servers row from a remote target.
+def _upsert_target_server(db: Session, target) -> bool:
+    """Create/refresh the veeam_backup_servers row for a remote target.
 
     Enabled when the target is enabled, its target_plugins include "veeam",
     and its protocol is ssh. The agent relay/community path only works over
     SSH, so a psremoting/winrm target never registers a row; if an existing
     row is re-synced against a non-SSH target it is disabled (same path as
     removing the veeam plugin).
+
+    Returns True when a row was created, updated or disabled. The caller owns
+    the transaction (no commit and no client reset happen here) so a backfill
+    can upsert many rows in a single commit.
     """
     from app.plugins.installed.official_veeam.models import VeeamBackupServer
 
@@ -195,9 +199,8 @@ def sync_target_to_server(db: Session, target) -> None:
     if not (target.enabled and "veeam" in plugins and protocol_is_ssh):
         if row is not None:
             row.enabled = False
-            db.commit()
-            reset_veeam_clients()
-        return
+            return True
+        return False
 
     if row is None:
         name = f"[{target.name}]"
@@ -249,8 +252,40 @@ def sync_target_to_server(db: Session, target) -> None:
         if not row.column_case:
             row.column_case = getattr(target, "column_case", None) or "auto"
         row.enabled = True
+    return True
+
+
+def sync_target_to_server(db: Session, target) -> None:
+    """Upsert a community veeam_backup_servers row from a remote target.
+
+    Thin wrapper over ``_upsert_target_server`` that commits the change and
+    rebuilds the live plugin's clients so the UI sees it without a restart.
+    """
+    if not _upsert_target_server(db, target):
+        return
     db.commit()
     reset_veeam_clients()
+
+
+def backfill_target_servers(db: Session) -> int:
+    """Mirror every remote target into the veeam registry.
+
+    Remote targets created before the bridge existed (or outside the
+    remote-target router) never got a ``veeam_backup_servers`` row, so the
+    Veeam UI listed no servers even though hosts had the Veeam plugin enabled.
+    Startup calls this to materialize those rows in one commit. Returns the
+    number of rows created/updated/disabled.
+    """
+    from app.models.db.agent_remote_target import AgentRemoteTarget
+
+    changed = 0
+    for target in db.query(AgentRemoteTarget).all():
+        if _upsert_target_server(db, target):
+            changed += 1
+    if changed:
+        db.commit()
+        logger.info("Backfilled %d veeam_backup_servers row(s) from targets", changed)
+    return changed
 
 
 def remove_target_server(db: Session, target_id: int) -> None:

@@ -271,6 +271,39 @@ def test_sync_disables_row_when_protocol_changed_to_non_ssh(db_session):
     assert row.enabled is False
 
 
+def test_backfill_creates_rows_for_preexisting_targets(db_session):
+    """Targets created before the bridge existed must appear in the registry.
+
+    Live symptom: hosts had the Veeam plugin enabled but veeam_backup_servers
+    was empty, so the Veeam UI listed no servers.
+    """
+    from app.plugins.installed.official_veeam.bridge import backfill_target_servers
+
+    _, veeam_a = _make_target(
+        db_session, name="Host A", plugins="veeam",
+        api_key="mc_agent_vbridgeBackfillAAAA1",
+    )
+    _, veeam_b = _make_target(
+        db_session, name="Host B", plugins="veeam,hyperv",
+        api_key="mc_agent_vbridgeBackfillBBBB2",
+    )
+    _make_target(
+        db_session, name="No Veeam", plugins="hyperv",
+        api_key="mc_agent_vbridgeBackfillCCCC3",
+    )
+
+    changed = backfill_target_servers(db_session)
+    assert changed == 2
+
+    rows = db_session.query(VeeamBackupServer).all()
+    assert {r.target_id for r in rows} == {veeam_a.id, veeam_b.id}
+    assert all(r.enabled for r in rows)
+
+    # Idempotent: a second pass adds no new rows.
+    backfill_target_servers(db_session)
+    assert db_session.query(VeeamBackupServer).count() == 2
+
+
 def test_first_server_prefers_enterprise(db_session):
     from app.plugins.installed.official_veeam.models import VeeamBackupServer
     from app.plugins.installed.official_veeam.routes import _first_server

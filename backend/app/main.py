@@ -340,6 +340,21 @@ async def _startup_banner():
     except Exception:
         print("  Setup Required: UNKNOWN (database not reachable)")
 
+    # Mirror existing remote targets into the Veeam server registry before the
+    # plugin loads. Targets that enabled the Veeam plugin before the bridge
+    # existed never got a veeam_backup_servers row, so the Veeam UI listed no
+    # servers. Runs before plugin setup so the new rows build API clients too.
+    try:
+        from app.plugins.installed.official_veeam.bridge import backfill_target_servers
+
+        db = SessionLocal()
+        try:
+            backfill_target_servers(db)
+        finally:
+            db.close()
+    except Exception as exc:
+        logger.debug("Veeam target backfill skipped: %s", exc)
+
     # Load and start server plugins
     try:
         from app.plugins.registry import plugin_registry
