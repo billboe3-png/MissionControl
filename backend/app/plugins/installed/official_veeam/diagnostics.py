@@ -2,10 +2,12 @@
 Multi-stage connection diagnostics for Veeam servers.
 """
 
+import json
 import logging
 from typing import Any
 
 from app.plugins.installed.official_veeam.db_probe import detect_db_type
+from app.plugins.installed.official_veeam.ssh_executor import build_ssh_executor
 
 logger = logging.getLogger("plugin.veeam.diagnostics")
 
@@ -163,3 +165,150 @@ async def run_connection_diagnostics(provider: Any) -> dict[str, Any]:
             "error": str(exc),
             "recommendations": ["Review server configuration and logs."],
         }
+
+
+async def _relay(executor: Any, op: str, params: dict[str, Any] | None = None) -> dict[str, Any]:
+    """Run a ``veeam:*`` relay op and parse the agent's JSON response.
+
+    Mirrors the provider relay: transport failure -> error; the agent wraps its
+    result as a JSON object on stdout, so parse it and surface the payload
+    (which carries the real ``success`` for DB-critical operations).
+    """
+    try:
+        result = await executor.run(op, params=params, timeout=120)
+    except Exception as exc:  # pragma: no cover - defensive
+        return {"success": False, "error": str(exc)}
+
+    if not result.get("success"):
+        return {
+            "success": False,
+            "error": result.get("error") or result.get("stderr") or "Agent relay command failed",
+        }
+
+    output = result.get("output") or ""
+    try:
+        parsed = json.loads(output)
+    except (json.JSONDecodeError, TypeError):
+        return {"success": False, "error": "Agent returned an invalid response", "raw": str(output)[:2000]}
+
+    if not isinstance(parsed, dict):
+        return {"success": False, "error": "Agent returned a non-object response"}
+    return parsed
+
+
+async def run_server_diagnostics(db: Any, server: Any) -> dict[str, Any]:
+    """Diagnose why a Veeam server's data bridge works — or fails.
+
+    Stages:
+    1. ``agent``   — ``veeam:test`` through the agent relay (reachability +
+       REST/PowerShell/DB capability flags).
+    2. ``db_detect`` — locate psql/sqlcmd and infer the DB engine/ports.
+    3. ``db_query``  — a live ``SELECT 1`` probe through the bridge.
+
+    Never raises; always returns a JSON-serialisable dict with a derived
+    ``recommendations`` list.
+    """
+    server_info = {
+        "id": getattr(server, "id", None),
+        "name": getattr(server, "name", None),
+        "edition": getattr(server, "edition", None),
+        "data_source": getattr(server, "data_source", None),
+        "db_type": getattr(server, "db_type", None),
+        "column_case": getattr(server, "column_case", None),
+        "agent_id": getattr(server, "agent_id", None),
+        "target_id": getattr(server, "target_id", None),
+        "enabled": getattr(server, "enabled", None),
+    }
+    recommendations: list[str] = []
+    result: dict[str, Any] = {
+        "success": False,
+        "server": server_info,
+        "agent": {"success": False, "error": "Not tested"},
+        "db_detect": {
+            "db_type": None,
+            "psql_found": False,
+            "sqlcmd_found": False,
+            "pg_port": False,
+            "mssql_port": False,
+            "error": "Not tested",
+        },
+        "db_query": {"success": False, "output": "", "stderr": "", "exit_code": None, "error": "Not tested"},
+        "recommendations": recommendations,
+        "error": None,
+    }
+
+    if server_info["agent_id"] is None or server_info["target_id"] is None:
+        msg = "No agent/remote target linked to this server"
+        result["agent"] = {"success": False, "error": msg}
+        result["error"] = msg
+        recommendations.append("Link this Veeam server to a remote target (host) so the agent can relay DB queries.")
+        return result
+
+    try:
+        executor = build_ssh_executor(db, server)
+    except Exception as exc:
+        logger.warning("Diagnostics: could not build executor: %s", exc)
+        result["agent"] = {"success": False, "error": str(exc)}
+        result["error"] = str(exc)
+        recommendations.append("Check the server's agent/target configuration.")
+        return result
+
+    # 1. Agent link + capability probe
+    agent_res = await _relay(executor, "veeam:test")
+    result["agent"] = agent_res
+    if not agent_res.get("success"):
+        result["error"] = agent_res.get("error")
+        recommendations.append(
+            "Agent relay failed — confirm the agent is online and can reach the host over SSH."
+        )
+        return result
+
+    # 2. DB client detection
+    detect = await detect_db_type(executor)
+    result["db_detect"] = detect
+    if detect.get("error"):
+        recommendations.append(f"Database detection failed: {detect['error']}")
+
+    psql_found = bool(detect.get("psql_found"))
+    sqlcmd_found = bool(detect.get("sqlcmd_found"))
+    if not psql_found and not sqlcmd_found:
+        recommendations.append(
+            "Neither psql.exe nor sqlcmd.exe was found on the host — Veeam Backup & Replication may not be installed there."
+        )
+    elif psql_found and not detect.get("pg_port"):
+        recommendations.append("psql is present but PostgreSQL is not listening on port 5432.")
+    elif sqlcmd_found and not detect.get("mssql_port"):
+        recommendations.append("sqlcmd is present but SQL Server is not listening on port 1433.")
+
+    configured = server_info["db_type"]
+    detected = detect.get("db_type")
+    if configured in (None, "", "auto"):
+        db_type = detected or "postgresql"
+    else:
+        db_type = configured
+        if detected and detected != configured:
+            recommendations.append(
+                f"Configured DB type is '{configured}' but the host looks like '{detected}' — "
+                f"this mismatch is the likely cause. Update this server's db_type to '{detected}'."
+            )
+
+    # 3. Live connectivity probe
+    query = await _relay(executor, "veeam:db:query", {"sql": "SELECT 1", "db_type": db_type})
+    result["db_query"] = query
+    if query.get("success"):
+        result["success"] = True
+    else:
+        detail = query.get("error") or query.get("stderr") or "unknown error"
+        if not agent_res.get("db_available", True):
+            recommendations.append(
+                "The agent reached the host but the Veeam database is not reachable."
+            )
+        recommendations.append(
+            f"DB query failed ({db_type}): {detail}. Check the database name (VeeamBackup), instance/port, and credentials."
+        )
+        result["error"] = detail
+
+    if result["success"]:
+        recommendations.append("Database bridge is healthy — jobs/sessions data should load.")
+
+    return result

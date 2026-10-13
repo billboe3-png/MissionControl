@@ -2,9 +2,14 @@
 Tests for Veeam multi-stage connection diagnostics.
 """
 
+import json
+
 import pytest
 
-from app.plugins.installed.official_veeam.diagnostics import run_connection_diagnostics
+from app.plugins.installed.official_veeam.diagnostics import (
+    run_connection_diagnostics,
+    run_server_diagnostics,
+)
 from app.plugins.installed.official_veeam.models import VeeamBackupServer
 
 
@@ -235,3 +240,272 @@ async def test_diagnostics_community_mode_ignores_rest_noise():
     result = await run_connection_diagnostics(provider)
     assert result["success"] is True
     assert not any("REST" in r for r in result["recommendations"])
+
+
+class RelayExecutor:
+    """Fake AgentSshExecutor whose `run` hands back SshResult-style dicts."""
+
+    def __init__(self, results=None):
+        self.results = results or {}
+        self.ops = []
+
+    async def run(self, op, params=None, timeout=120):
+        self.ops.append((op, params))
+        return self.results.get(
+            op,
+            {"success": True, "output": "{}", "stderr": "", "exit_code": 0, "error": None},
+        )
+
+
+def fake_build_for(executor, monkeypatch):
+    def _build(_db, _server):
+        return executor
+
+    monkeypatch.setattr(
+        "app.plugins.installed.official_veeam.diagnostics.build_ssh_executor",
+        _build,
+    )
+    return executor
+
+
+def diag_server(**kw):
+    defaults = {
+        "name": "v1", "edition": "enterprise", "data_source": "both", "db_type": "postgresql",
+        "column_case": "pascal", "agent_id": 10, "target_id": 20, "enabled": True,
+    }
+    defaults.update(kw)
+    return VeeamBackupServer(**defaults)
+
+
+@pytest.mark.anyio
+async def test_server_diagnostics_success(monkeypatch):
+    executor = fake_build_for(
+        RelayExecutor(
+            {
+                "veeam:test": {
+                    "success": True,
+                    "output": json.dumps(
+                        {"success": True, "db_available": True, "rest_available": True,
+                         "powershell_available": True}
+                    ),
+                    "stderr": "", "exit_code": 0, "error": None,
+                },
+                "veeam:db:detect": {
+                    "success": True,
+                    "output": json.dumps(
+                        {"db_type": "postgresql", "psql_found": True, "sqlcmd_found": False,
+                         "pg_port": True, "mssql_port": False}
+                    ),
+                    "stderr": "", "exit_code": 0, "error": None,
+                },
+                "veeam:db:query": {
+                    "success": True,
+                    "output": json.dumps({"success": True, "output": "1", "stderr": "", "exit_code": 0}),
+                    "stderr": "", "exit_code": 0, "error": None,
+                },
+            }
+        ),
+        monkeypatch,
+    )
+    result = await run_server_diagnostics(db=None, server=diag_server())
+
+    assert result["success"] is True
+    assert result["server"]["id"] is None
+    assert result["agent"]["db_available"] is True
+    assert result["db_detect"]["psql_found"] is True
+    assert result["db_detect"]["db_type"] == "postgresql"
+    assert result["db_query"]["success"] is True
+    assert any("healthy" in r for r in result["recommendations"])
+    assert ("veeam:test", None) in executor.ops
+    assert ("veeam:db:query", {"sql": "SELECT 1", "db_type": "postgresql"}) in executor.ops
+
+
+@pytest.mark.anyio
+async def test_server_diagnostics_no_agent_target(monkeypatch):
+    def _build(_db, _server):
+        raise AssertionError("should not build executor without agent/target")
+
+    monkeypatch.setattr(
+        "app.plugins.installed.official_veeam.diagnostics.build_ssh_executor", _build
+    )
+    result = await run_server_diagnostics(db=None, server=diag_server(agent_id=None, target_id=None))
+
+    assert result["success"] is False
+    assert "No agent/remote target" in result["error"]
+    assert any("Link this Veeam server" in r for r in result["recommendations"])
+
+
+@pytest.mark.anyio
+async def test_server_diagnostics_agent_offline(monkeypatch):
+    fake_build_for(
+        RelayExecutor(
+            {"veeam:test": {"success": False, "error": "Agent 'a1' is offline",
+                            "output": "", "stderr": "", "exit_code": 1}}
+        ),
+        monkeypatch,
+    )
+    result = await run_server_diagnostics(db=None, server=diag_server())
+
+    assert result["success"] is False
+    assert result["agent"]["error"] == "Agent 'a1' is offline"
+    assert any("Agent relay failed" in r for r in result["recommendations"])
+
+
+@pytest.mark.anyio
+async def test_server_diagnostics_db_unavailable(monkeypatch):
+    fake_build_for(
+        RelayExecutor(
+            {
+                "veeam:test": {
+                    "success": True,
+                    "output": json.dumps(
+                        {"success": True, "db_available": False,
+                         "rest_available": False, "powershell_available": False}
+                    ),
+                    "stderr": "", "exit_code": 0, "error": None,
+                },
+                "veeam:db:detect": {
+                    "success": True,
+                    "output": json.dumps(
+                        {"db_type": "postgresql", "psql_found": True, "sqlcmd_found": False,
+                         "pg_port": True, "mssql_port": False}
+                    ),
+                    "stderr": "", "exit_code": 0, "error": None,
+                },
+                "veeam:db:query": {
+                    "success": True,
+                    "output": json.dumps({"success": False, "error": "DB query failed",
+                                          "stderr": "", "exit_code": 1}),
+                    "stderr": "", "exit_code": 0, "error": None,
+                },
+            }
+        ),
+        monkeypatch,
+    )
+    result = await run_server_diagnostics(db=None, server=diag_server())
+
+    assert result["success"] is False
+    assert result["db_query"]["success"] is False
+    assert result["error"] == "DB query failed"
+    assert any("not reachable" in r for r in result["recommendations"])
+    assert any("DB query failed" in r for r in result["recommendations"])
+
+
+@pytest.mark.anyio
+async def test_server_diagnostics_no_db_clients_found(monkeypatch):
+    fake_build_for(
+        RelayExecutor(
+            {
+                "veeam:test": {
+                    "success": True,
+                    "output": json.dumps(
+                        {"success": True, "db_available": True,
+                         "rest_available": True, "powershell_available": True}
+                    ),
+                    "stderr": "", "exit_code": 0, "error": None,
+                },
+                "veeam:db:detect": {
+                    "success": True,
+                    "output": json.dumps(
+                        {"db_type": None, "psql_found": False, "sqlcmd_found": False,
+                         "pg_port": False, "mssql_port": False}
+                    ),
+                    "stderr": "", "exit_code": 0, "error": None,
+                },
+                "veeam:db:query": {
+                    "success": True,
+                    "output": json.dumps({"success": False, "error": "DB query failed",
+                                          "stderr": "", "exit_code": 1}),
+                    "stderr": "", "exit_code": 0, "error": None,
+                },
+            }
+        ),
+        monkeypatch,
+    )
+    result = await run_server_diagnostics(db=None, server=diag_server())
+
+    assert result["success"] is False
+    assert any("neither psql.exe nor sqlcmd.exe" in r.lower() for r in result["recommendations"])
+
+
+@pytest.mark.anyio
+async def test_server_diagnostics_build_raises(monkeypatch):
+    def _build(_db, _server):
+        raise ValueError("boom")
+
+    monkeypatch.setattr(
+        "app.plugins.installed.official_veeam.diagnostics.build_ssh_executor", _build
+    )
+    result = await run_server_diagnostics(db=None, server=diag_server())
+
+    assert result["success"] is False
+    assert "boom" in result["error"]
+    assert any("agent/target configuration" in r for r in result["recommendations"])
+
+
+@pytest.mark.anyio
+async def test_server_diagnostics_uses_configured_db_type(monkeypatch):
+    executor = fake_build_for(
+        RelayExecutor(
+            {
+                "veeam:test": {
+                    "success": True,
+                    "output": json.dumps({"success": True, "db_available": True}),
+                    "stderr": "", "exit_code": 0, "error": None,
+                },
+                "veeam:db:detect": {
+                    "success": True,
+                    "output": json.dumps(
+                        {"db_type": "mssql", "psql_found": False, "sqlcmd_found": True,
+                         "pg_port": False, "mssql_port": True}
+                    ),
+                    "stderr": "", "exit_code": 0, "error": None,
+                },
+                "veeam:db:query": {
+                    "success": True,
+                    "output": json.dumps({"success": True, "output": "1", "stderr": "", "exit_code": 0}),
+                    "stderr": "", "exit_code": 0, "error": None,
+                },
+            }
+        ),
+        monkeypatch,
+    )
+    result = await run_server_diagnostics(db=None, server=diag_server(db_type="auto"))
+
+    assert result["success"] is True
+    query_call = [op for op in executor.ops if op[0] == "veeam:db:query"]
+    assert query_call[0][1] == {"sql": "SELECT 1", "db_type": "mssql"}
+
+
+@pytest.mark.anyio
+async def test_server_diagnostics_db_type_mismatch_recommendation(monkeypatch):
+    fake_build_for(
+        RelayExecutor(
+            {
+                "veeam:test": {
+                    "success": True,
+                    "output": json.dumps({"success": True, "db_available": True}),
+                    "stderr": "", "exit_code": 0, "error": None,
+                },
+                "veeam:db:detect": {
+                    "success": True,
+                    "output": json.dumps(
+                        {"db_type": "mssql", "psql_found": True, "sqlcmd_found": True,
+                         "pg_port": True, "mssql_port": True}
+                    ),
+                    "stderr": "", "exit_code": 0, "error": None,
+                },
+                "veeam:db:query": {
+                    "success": True,
+                    "output": json.dumps({"success": False, "error": "Veeam DB query failed",
+                                          "stderr": "", "exit_code": 1}),
+                    "stderr": "", "exit_code": 0, "error": None,
+                },
+            }
+        ),
+        monkeypatch,
+    )
+    result = await run_server_diagnostics(db=None, server=diag_server(db_type="postgresql"))
+
+    assert result["success"] is False
+    assert any("Update this server's db_type to 'mssql'" in r for r in result["recommendations"])

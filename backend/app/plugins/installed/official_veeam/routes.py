@@ -581,6 +581,21 @@ async def get_server_config(server_id: int, db: Session = Depends(get_db)) -> Ve
     return server
 
 
+@router.get("/servers/config/{server_id}/diagnostics")
+async def server_diagnostics(server_id: int, db: Session = Depends(get_db)) -> dict[str, Any]:
+    """Run staged diagnostics for a Veeam server's data bridge.
+
+    Never raises: each stage (agent probe, DB client detection, live SELECT 1)
+    is captured and surfaced with derived recommendations.
+    """
+    server = db.query(VeeamBackupServer).filter(VeeamBackupServer.id == server_id).first()
+    if not server:
+        raise HTTPException(status_code=404, detail="Server not found")
+    from app.plugins.installed.official_veeam.diagnostics import run_server_diagnostics
+
+    return await run_server_diagnostics(db, server)
+
+
 @router.post("/servers/config", response_model=VeeamServerConfigResponse, status_code=status.HTTP_201_CREATED)
 async def create_server_config(
     config: VeeamServerConfigCreate,

@@ -513,3 +513,47 @@ def test_server_id_selects_that_server(veeam_client, veeam_server, monkeypatch, 
     assert selected["id"] == second.id
     assert selected["name"] == "v2"
     assert response.json() == CANNED["get_jobs"]
+
+
+def test_diagnostics_returns_404_for_unknown_server(veeam_client):
+    response = veeam_client.get("/api/v1/plugins/veeam/servers/config/9999/diagnostics")
+    assert response.status_code == 404
+    assert response.json() == {"detail": "Server not found"}
+
+
+def test_diagnostics_endpoint_no_agent_returns_shape(veeam_client, veeam_server):
+    """A config row without an agent/target yields a structured failure."""
+    response = veeam_client.get(
+        f"/api/v1/plugins/veeam/servers/config/{veeam_server.id}/diagnostics"
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert set(data) >= {"success", "server", "agent", "db_detect", "db_query", "recommendations"}
+    assert data["server"]["id"] == veeam_server.id
+    assert data["server"]["name"] == "v1"
+    assert data["success"] is False
+    assert data["agent"]["error"] == "No agent/remote target linked to this server"
+    assert data["recommendations"]
+    assert data["db_query"]["error"] == "Not tested"
+
+
+def test_diagnostics_endpoint_matches_server_id(veeam_client, db_session):
+    """Unlinked rows produce the no-relay failure; agent_id/target_id surface."""
+    server = VeeamBackupServer(
+        name="v-agent", edition="enterprise", data_source="both",
+        agent_id=404, target_id=505, enabled=True,
+    )
+    db_session.add(server)
+    db_session.commit()
+    db_session.refresh(server)
+
+    response = veeam_client.get(
+        f"/api/v1/plugins/veeam/servers/config/{server.id}/diagnostics"
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert data["server"]["agent_id"] == 404
+    assert data["server"]["target_id"] == 505
+    assert data["server"]["db_type"] == "postgresql"
+    assert data["success"] is False
+    assert data["agent"]["error"] == "Agent not found"

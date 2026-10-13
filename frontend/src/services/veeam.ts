@@ -219,6 +219,49 @@ export interface VeeamConnectionTest {
     error: string | null;
 }
 
+export interface VeeamDbDetect {
+    db_type: string | null;
+    psql_found: boolean;
+    sqlcmd_found: boolean;
+    pg_port: boolean;
+    mssql_port: boolean;
+    error: string | null;
+}
+
+export interface VeeamServerDiagnostics {
+    success: boolean;
+    server: {
+        id: number | null;
+        name: string | null;
+        edition: string | null;
+        data_source: string | null;
+        db_type: string | null;
+        column_case: string | null;
+        agent_id: number | null;
+        target_id: number | null;
+        enabled: boolean | null;
+    };
+    agent: {
+        success: boolean;
+        error: string | null;
+        db_available?: boolean;
+        rest_available?: boolean;
+        powershell_available?: boolean;
+        version?: string | null;
+        [key: string]: unknown;
+    };
+    db_detect: VeeamDbDetect;
+    db_query: {
+        success: boolean;
+        output: string;
+        stderr: string;
+        exit_code: number | null;
+        error: string | null;
+    };
+    recommendations: string[];
+    error: string | null;
+}
+
 export interface VeeamJobAction {
     success: boolean;
     message: string | null;
@@ -287,6 +330,10 @@ export const veeamApi = {
     async testConnection(serverId?: number | null): Promise<VeeamConnectionTest> {
         const qs = serverId != null ? `?server_id=${serverId}` : '';
         return veeamClient<VeeamConnectionTest>(`${API}/test${qs}`);
+    },
+
+    async diagnoseServer(serverId: number): Promise<VeeamServerDiagnostics> {
+        return veeamClient<VeeamServerDiagnostics>(`${API}/servers/config/${serverId}/diagnostics`);
     },
 
     async listJobs(serverId?: number | null, refresh: boolean = false): Promise<{ jobs: VeeamJob[]; totalCount: number }> {
