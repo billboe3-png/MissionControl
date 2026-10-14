@@ -76,6 +76,7 @@ def test_auto_detect_uses_sqlcmd_when_no_psql():
 
 def test_postgres_still_builds_psql_powershell():
     p = _StubRelay()
+    p.probe_paths = {r"C:\Program Files\PostgreSQL\15\bin\psql.exe": True}
     out = _run(
         p._run_db_query_via_relay("SELECT id", target_id=2, db_type="postgresql")
     )
@@ -87,10 +88,48 @@ def test_postgres_still_builds_psql_powershell():
     assert "-h 127.0.0.1" in script
 
 
+def test_postgres_uses_discovered_pg17_when_pg15_absent():
+    """Newer Veeam ships PostgreSQL 16/17; the relay must use whichever
+    psql.exe client is actually installed (EPHKSDC01 only has PG17)."""
+    p = _StubRelay()
+    p.probe_paths = {r"C:\Program Files\PostgreSQL\17\bin\psql.exe": True}
+    out = _run(
+        p._run_db_query_via_relay("SELECT 1", target_id=29, db_type="postgresql")
+    )
+    assert out is not None
+    script = p.captured[-1]["script"]
+    assert r"C:\Program Files\PostgreSQL\17\bin\psql.exe" in script
+    assert r"C:\Program Files\PostgreSQL\15\bin\psql.exe" not in script
+
+
+def test_postgres_prefers_legacy_pg15_when_present():
+    p = _StubRelay()
+    p.probe_paths = {
+        r"C:\Program Files\PostgreSQL\15\bin\psql.exe": True,
+        r"C:\Program Files\PostgreSQL\17\bin\psql.exe": True,
+    }
+    out = _run(
+        p._run_db_query_via_relay("SELECT 1", target_id=25, db_type="postgresql")
+    )
+    assert out is not None
+    script = p.captured[-1]["script"]
+    assert r"C:\Program Files\PostgreSQL\15\bin\psql.exe" in script
+    assert r"C:\Program Files\PostgreSQL\17\bin\psql.exe" not in script
+
+
+def test_postgres_returns_none_when_no_psql_found():
+    p = _StubRelay()
+    out = _run(
+        p._run_db_query_via_relay("SELECT 1", target_id=99, db_type="postgresql")
+    )
+    assert out is None
+
+
 def test_postgres_psql_command_passes_detected_port():
     """Veeam may bind its bundled PostgreSQL to a non-default port (EBENCDC
     uses 5433), so psql must be told the real port instead of assuming 5432."""
     p = _StubRelay()
+    p.probe_paths = {r"C:\Program Files\PostgreSQL\15\bin\psql.exe": True}
     out = _run(
         p._run_db_query_via_relay("SELECT 1", target_id=25, db_type="postgresql")
     )
@@ -133,6 +172,16 @@ def test_db_detect_still_reports_postgres_when_psql_present():
         r"C:\Program Files\PostgreSQL\15\bin\psql.exe": True,
     }
     result = _run(p._db_detect(target_id=12))
+    assert result["db_type"] == "postgresql"
+    assert result["psql_found"] is True
+
+
+def test_db_detect_reports_postgres_with_pg17_when_pg15_absent():
+    """EPHKSDC01 ships only PostgreSQL 17 - detection must not look only
+    at the legacy 15 path and conclude no psql client is present."""
+    p = _StubRelay()
+    p.probe_paths = {r"C:\Program Files\PostgreSQL\17\bin\psql.exe": True}
+    result = _run(p._db_detect(target_id=29))
     assert result["db_type"] == "postgresql"
     assert result["psql_found"] is True
 

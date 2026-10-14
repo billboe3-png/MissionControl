@@ -23,6 +23,9 @@
 | 2026-08 | Agent plugins for network devices | MikroTik and D-Link use agent-side plugins with namespace dispatch (`mikrotik`, `dlink`) |
 | 2026-08 | Alembic for all schema changes | Every plugin brings its own migrations; `alembic upgrade head` required before tests |
 | 2026-08 | Fernet secret key for CI | `alembic/env.py` loads Settings before conftest; fake keys fail validation |
+| 2026-10-14 | Agent-side DB tool discovery | The Veeam agent relay must locate `psql.exe`/`sqlcmd.exe` on the target regardless of installed version/path — never hardcode a version-specific path (the EPHKSDC01 failure was a hardcoded PostgreSQL 15 path on a PostgreSQL 17 host) |
+| 2026-10-14 | Windows PostgreSQL relay auth via `pg_ident.conf` UPN form | The relay runs non-interactively as `DOMAIN\user`; PostgreSQL `sspi` maps need a `pg_ident.conf` entry in **UPN** form (`user@DOMAIN`, e.g. `Administrator@KOSTER`) — the `DOMAIN\user` form does not match |
+| 2026-10-14 | Backend tests run against in-memory SQLite | `backend/tests/conftest.py` builds its own SQLite DB, so the suite can run inside `missioncontrol-backend-1` without touching production PostgreSQL |
 
 ---
 
@@ -112,6 +115,16 @@
 - Veeam dashboard for CORHQVEEMA live with real data
 - Agent bundle `v0.0.15`, `veeam_backup_servers.timeout=120`
 
+### Veeam Agent-Relay Reliability (EPHKSDC01) — 2026-10-14
+- **Symptom**: Jobs page showed "Veeam DB bridge unavailable" for `EPHKSDC01` even though the agent was online.
+- **Root cause 1 (code)**: `.agents/agent/plugins/veeam_plugin.py` hardcoded `C:\Program Files\PostgreSQL\15\bin\psql.exe`; the host has only **PostgreSQL 17**, so the relayed PowerShell failed with "The term ... is not recognized".
+  - Fix: agent-side, version-agnostic discovery — `_PSQL_CANDIDATES` (PG 15,16,17,18,14,13,12; PG15 kept first to preserve EBENCDC), `_psql_paths(target_id)` / `_resolve_psql_path(target_id)` (per-target cache), `_resolve_psql_path_via_remote(remote_manager, target_id)` for the Windows-local `_collect_jobs_via_relay`. Used by `_db_detect`, `_run_db_query_via_relay`, and `_collect_jobs_via_relay`.
+- **Root cause 2 (host auth)**: PostgreSQL `sspi map=veeam` rejected the relay identity `KOSTER\Administrator` → `FATAL: SSPI authentication failed for user "postgres"`. `pg_ident.conf` matched only UPN-format entries (`admin_barry@KOSTER`, `"SYSTEM@NT AUTHORITY"`).
+  - Fix (user-approved option 1): append `veeam Administrator@KOSTER postgres` to `C:\Program Files\PostgreSQL\17\data\pg_ident.conf` (backup `pg_ident.conf.bak`) and `pg_ctl reload`. The `DOMAIN\user` form (`KOSTER\Administrator`) does **not** work.
+- **Validation**: `SELECT current_user` → `postgres`; provider `collect_dataset(... "job_stats_daily")` → `success: true` with real jobs (`EPHKSDC01_EXT`, `EPHKSDC01_EXT\EPHKSDC01_NAS`); `collect_all` refreshed all 8 `veeam_snapshots` datasets for server 29.
+- **Deploy**: agent bundle `v0.0.45` (agent 20 self-updated); `.agents/agent/tests/test_veeam_mssql.py` **42 passed**.
+- Also in this change: `column_case` now accepts `auto` in `agent_remote_target` (ORM model + API schema), matching `bridge.py`.
+
 ### MikroTik Agent-Relay
 - Backend plugin: `official_mikrotik` with routes at `/api/v1/plugins/mikrotik/`
 - Agent plugin: `.agents/agent/plugins/mikrotik_plugin.py`
@@ -153,6 +166,7 @@
 | Target | IP | Type | Agent | Credentials |
 |--------|-----|------|-------|-------------|
 | CORHQVEEMA | — | Veeam | Agent 2 (prod-01) | Veeam creds |
+| EPHKSDC01 | 192.168.12.2 | Veeam (PostgreSQL 17) | Agent 20 (Eagles Pride Koster) | Windows SSPI via relay user `Administrator` (mapped in `pg_ident.conf` as `Administrator@KOSTER`); server id 29, target id 17 |
 | MikroTik | 10.161.0.14 | RouterOS 7.24 | Agent 6 (zabbix-proxy) | SSH |
 | D-Link | 10.161.0.12 | DGS-1210 | Agent 6 (zabbix-proxy) | admin / RandomCrap304! |
 | Zabbix proxy | 10.161.0.10 | Zabbix | Agent 6 (zabbix-proxy) | — |
@@ -193,6 +207,8 @@
 
 ## Verified CI Status (latest)
 
+- **Known good baseline (2026-10-14)** — tag `v3.0.0-rc1-known-good` on `release/v3.0.0-rc1`: Veeam agent-relay EPHKSDC01 fix (version-agnostic `psql` discovery) + `column_case` `auto` support + documentation sync. Agent tests **42 passed**; backend Veeam / `agent_remote_target` suites **PASS**; ruff clean on changed files; frontend build green; live EPHKSDC01 validation **`success: true`** (all 8 `veeam_snapshots` refresh).
+  - Harness caveat: running the backend suite **inside the production `missioncontrol-backend-1` container** can hang on lifespan / real-integration tests (`test_veeam_plugin.py`, `test_veeam_routes.py`) — use targeted files there, or a clean test env for the full suite.
 - Latest full backend run on `release/v3.0.0-rc1` (`3332a8b`): **1700 passed / 2 failed (Python-3.11-venv-only env checks) / 1 skipped**
 - The 2 failures (`test_startup_config::test_valid_returns_dict`, `test_marketplace::test_check_all_compatible`) assert Python**3.12+**; server venv is **3.11.15** → they pass in CI (both workflows pin `PYTHON_VERSION: 3.12`). Never "fix" them.
 - Tenancy/authz hardening shipped `9b80d6f..7d31f5b` (`edf06a6` + `578c0ac` + `7d31f5b`); ruff clean on all 15 changed files; targeted **160 passed**.

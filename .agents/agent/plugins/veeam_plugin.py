@@ -953,6 +953,15 @@ class VeeamPlugin(AgentPlugin):
     # ------------------------------------------------------------------
 
     _PSQL = r"C:\Program Files\PostgreSQL\15\bin\psql.exe"
+    _PSQL_CANDIDATES = [
+        r"C:\Program Files\PostgreSQL\15\bin\psql.exe",
+        r"C:\Program Files\PostgreSQL\16\bin\psql.exe",
+        r"C:\Program Files\PostgreSQL\17\bin\psql.exe",
+        r"C:\Program Files\PostgreSQL\18\bin\psql.exe",
+        r"C:\Program Files\PostgreSQL\14\bin\psql.exe",
+        r"C:\Program Files\PostgreSQL\13\bin\psql.exe",
+        r"C:\Program Files\PostgreSQL\12\bin\psql.exe",
+    ]
     _SQLCMD_CANDIDATES = (
         r"C:\Program Files\Microsoft SQL Server\Client SDK\ODBC"
         r"\170\Tools\Binn\SQLCMD.EXE",
@@ -1029,6 +1038,12 @@ AND js.job_name NOT LIKE '%Security & Compliance Analyzer%'"""
                 + " -i $sqlPath -s '|' -h -1 -W 2>&1 | Out-String\n"
             )
         elif db_type == "postgresql":
+            psql = await self._resolve_psql_path(target_id)
+            if not psql:
+                logger.error(
+                    "Veeam DB query requires psql but no psql.exe found on host"
+                )
+                return None
             ps_script = (
                 "$sql = @'\n" + sql + "\n'@\n"
                 "$sqlPath = 'C:\\temp\\mc_query.sql'\n"
@@ -1036,7 +1051,7 @@ AND js.job_name NOT LIKE '%Security & Compliance Analyzer%'"""
                 "[System.IO.File]::WriteAllText($sqlPath, $sql, "
                 "[System.Text.Encoding]::UTF8)\n"
                 + self._pg_port_resolve_ps()
-                + "& '" + self._PSQL + "' -h 127.0.0.1 -p $pgPort -U "
+                + "& '" + psql + "' -h 127.0.0.1 -p $pgPort -U "
                 + self._DB_USER + " -d " + self._DB_NAME
                 + " -t -A -f $sqlPath 2>&1 | Out-String\n"
             )
@@ -1099,6 +1114,30 @@ AND js.job_name NOT LIKE '%Security & Compliance Analyzer%'"""
                 present.append(candidate)
         return present
 
+    async def _psql_paths(self, target_id: int | None = None) -> list[str]:
+        """Return the psql candidate paths that exist on the host.
+
+        PostgreSQL is not always installed at the legacy 15 location Veeam
+        used to bundle; newer builds ship 16/17. Probe each candidate so the
+        relay picks whichever client is actually present.
+        """
+        present = []
+        for candidate in self._PSQL_CANDIDATES:
+            if await self._relay_path_exists(candidate, target_id):
+                present.append(candidate)
+        return present
+
+    async def _resolve_psql_path(self, target_id: int | None = None) -> str | None:
+        """Return the first present psql.exe path, cached per target."""
+        cache = getattr(self, "_psql_path_cache", None)
+        if cache is None:
+            cache = {}
+            self._psql_path_cache = cache
+        if target_id not in cache:
+            paths = await self._psql_paths(target_id)
+            cache[target_id] = paths[0] if paths else None
+        return cache[target_id]
+
     async def _relay_path_exists(self, path: str, target_id: int | None = None) -> bool:
         """Check whether a filesystem path exists on the relayed remote host."""
         script = (
@@ -1136,7 +1175,7 @@ AND js.job_name NOT LIKE '%Security & Compliance Analyzer%'"""
         servers), the candidate is resolved by a connectivity probe so the
         detected type matches the server's real database.
         """
-        psql_found = await self._relay_path_exists(self._PSQL, target_id)
+        psql_found = bool(await self._resolve_psql_path(target_id))
         sqlcmd_found = bool(await self._sqlcmd_paths(target_id))
         db_type = None
         if psql_found and not sqlcmd_found:
@@ -1906,7 +1945,12 @@ AND js.job_name NOT LIKE '%Security & Compliance Analyzer%'"""
             "GROUP BY 1 "
             "ORDER BY MAX(js.creation_time) DESC"
         )
-        psql = r"C:\Program Files\PostgreSQL\15\bin\psql.exe"
+        psql = await self._resolve_psql_path_via_remote(remote_manager, target_id)
+        if not psql:
+            logger.error(
+                "Veeam DB relay failed: no psql.exe found on host %s", target_id
+            )
+            return []
         ps_script = (
             self._pg_port_resolve_ps()
             + f"& '{psql}' -h 127.0.0.1 -p $pgPort -U postgres "
@@ -1924,6 +1968,36 @@ AND js.job_name NOT LIKE '%Security & Compliance Analyzer%'"""
             logger.error("Veeam DB relay failed: stderr=%s", result.get("stderr", ""))
             return []
         return self._parse_db_rows(result.get("stdout", "")) or []
+
+    async def _resolve_psql_path_via_remote(
+        self, remote_manager, target_id: int | None
+    ) -> str | None:
+        """Discover the host's psql.exe path via a direct remote-manager call.
+
+        Used by the Windows-local jobs relay fallback, which talks to the
+        target through ``remote_manager`` rather than ``_run_script_via_relay``.
+        """
+        candidates = "','".join(self._PSQL_CANDIDATES)
+        script = (
+            "(@('" + candidates + "') | Where-Object { Test-Path $_ }) "
+            "-join \"`n\""
+        )
+        encoded = self._encode_powershell(script)
+        command = (
+            "powershell -NoProfile -NonInteractive -EncodedCommand " + encoded
+        )
+        try:
+            result = await remote_manager.execute_on_target(
+                target_id=target_id, command=command, timeout=60,
+            )
+        except Exception as exc:  # noqa: BLE001 - relay probe is best-effort
+            logger.warning("psql discovery failed on target %s: %s", target_id, exc)
+            return None
+        for line in (result.get("stdout") or "").splitlines():
+            line = line.strip()
+            if line.lower().endswith("psql.exe"):
+                return line
+        return None
 
     @staticmethod
     def _encode_powershell(script: str) -> str:

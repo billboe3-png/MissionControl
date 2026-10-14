@@ -401,6 +401,12 @@ Ideas that are intentionally not implemented because they are outside the curren
 - **Backend container stability**: Veeam circular import issue caused crashes; requires monitoring.
 - **RC1 CI**: Must keep backend tests (1700+ passed) and frontend build green. Full backend suite on `release/v3.0.0-rc1` is **1700 passed / 2 env-only fails / 1 skipped** — the 2 fails are Python-3.12-version assertions that only fail on the server's Python-3.11 venv (pass in CI which pins 3.12); do not "fix" them.
 
+### Resolved — 2026-10-14
+
+- **Veeam agent-relay on EPHKSDC01** (`fix(veeam-agent)`): the relay hardcoded `C:\Program Files\PostgreSQL\15\bin\psql.exe`, so a host with only **PostgreSQL 17** failed with *"The term ... is not recognized"*. Root cause = fixed path, not the host. Fix: version-agnostic agent-side discovery (`_PSQL_CANDIDATES`, `_psql_paths`, `_resolve_psql_path`, `_resolve_psql_path_via_remote`) used by `_db_detect`, `_run_db_query_via_relay`, and `_collect_jobs_via_relay`; PG15 still preferred when present (preserves EBENCDC behaviour).
+- **EPHKSDC01 Windows PostgreSQL SSPI auth**: the relay logs in as `KOSTER\Administrator`, which had no `pg_ident.conf` mapping. Fix was a `pg_ident.conf` entry in **UPN form** — `veeam Administrator@KOSTER postgres` (+ `pg_ctl reload`). The `DOMAIN\user` form (`KOSTER\Administrator`) does **not** match; the file's convention is `user@DOMAIN`.
+- **Live validation**: `EPHKSDC01` (server id 29, PostgreSQL 17, agent 20 / target 17) returned real `job_stats_daily` (`success: true`); all 8 `veeam_snapshots` datasets refreshed.
+
 ---
 
 ## 25. Current Priorities
@@ -411,6 +417,7 @@ Ideas that are intentionally not implemented because they are outside the curren
 4. **End-to-end validation** — Test CLI, MAC, VLAN, WebUI for both MikroTik and D-Link via agent relay
 5. **Documentation sync** — Ensure all docs match actual repository state
 6. **RC1 readiness** — Stabilize, validate, deploy
+7. **Veeam agent-relay validation** — EPHKSDC01 (PostgreSQL 17) validated end-to-end on 2026-10-14; extend verification to the remaining Veeam relay targets
 
 ---
 
@@ -443,3 +450,29 @@ The project is worked on from multiple PCs. To avoid confusion:
 - **Server repo**: `/opt/MissionControl` — this is where commits and pushes happen
 - **If uncertain about state**: Ask the project owner or check the server repo
 - **Never overwrite another developer's changes** without explicit authorization
+
+---
+
+## 28. Known Good Baseline
+
+**Tag:** `v3.0.0-rc1-known-good` · **Branch:** `release/v3.0.0-rc1` · **Recorded:** 2026-10-14
+
+This commit is marked **known-good**. It is a validated, CI-green snapshot of the RC1 branch and should be used as the rollback / comparison baseline.
+
+Verified at this baseline:
+
+- **Agent tests** — `.agents/agent/tests/test_veeam_mssql.py`: **42 passed**
+- **Backend tests** — Veeam / `agent_remote_target` suites: **PASS** (in-memory SQLite conftest; see note below)
+- **ruff** — clean on all changed files
+- **Frontend** — `tsc` + `vite build` green
+- **Live validation** — `EPHKSDC01` (Veeam, PostgreSQL 17) returns real `job_stats_daily` data (`success: true`) through the agent relay; all 8 `veeam_snapshots` datasets refreshed for server id 29.
+
+Included changes:
+
+- Agent-side, version-agnostic `psql.exe` discovery (replaces the hardcoded PostgreSQL 15 path).
+- `column_case` may now be `auto` (`agent_remote_target` ORM model + API schema), matching `bridge.py` behaviour.
+- Documentation sync (this file, `PROJECT_MEMORY.md`, `README.md`).
+
+> **Backend test harness note:** `backend/tests/conftest.py` uses an **in-memory SQLite** database for the `db_session` / `client` fixtures, so the backend suite can be run safely inside `missioncontrol-backend-1` without touching the production PostgreSQL database: `docker exec missioncontrol-backend-1 python -m pytest tests/ -q`.
+>
+> Caveat: because that container has **real integrations configured**, tests that enter the FastAPI lifespan (`TestClient(app)`) can hang on live network/relay timeouts (e.g. `test_veeam_plugin.py`, `test_veeam_routes.py`). Run targeted files when using the production container, and use a clean test environment for the full suite.

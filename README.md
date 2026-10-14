@@ -1,4 +1,4 @@
-﻿<p align="center">
+<p align="center">
   <img src="docs/assets/mission-control-logo.png" alt="Mission Control Logo" width="200"/>
 </p>
 
@@ -26,6 +26,10 @@
   <a href="#documentation">Documentation</a> •
   <a href="#contributing">Contributing</a>
 </p>
+
+---
+
+> **Status:** Community Edition **v3.0.0-RC1** — validated baseline tagged `v3.0.0-rc1-known-good` (2026-10-14). Agent-relayed integrations (Veeam) have been verified end-to-end against live infrastructure.
 
 ---
 
@@ -81,6 +85,11 @@ Open **http://localhost:5173** in your browser. The default admin credentials ar
 ---
 
 ## Features
+
+### Agent-First Integrations
+- All remote operations run through the Agent — the server never bypasses the network boundary
+- Agent-relayed plugins: **Veeam** (PostgreSQL / SQL Server), **MikroTik** (RouterOS), **D-Link**
+- Version-agnostic agent-side tool discovery (locates the installed `psql` / `sqlcmd` on the target)
 
 ### Agent Management
 - Heartbeat-driven agent monitoring with automatic reconnection

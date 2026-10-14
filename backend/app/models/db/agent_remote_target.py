@@ -106,8 +106,8 @@ class AgentRemoteTarget(Base):
     column_case: Mapped[str] = mapped_column(
         String(20),
         nullable=False,
-        default="pascal",
-        comment="Veeam SQL column case: pascal or snake (MSSQL).",
+        default="auto",
+        comment="Veeam SQL column case: auto, pascal or snake (MSSQL).",
     )
 
     last_collected_at: Mapped[datetime | None] = mapped_column(
