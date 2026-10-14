@@ -955,7 +955,12 @@ AND js.job_name NOT LIKE '%Security & Compliance Analyzer%'"""
         if db_type == "mssql":
             detected = await self._sqlcmd_paths(target_id)
             sqlcmd = self._resolve_sqlcmd_path(detected)
-        if db_type == "mssql" and sqlcmd:
+            if not sqlcmd:
+                logger.error(
+                    "Veeam DB query requires MSSQL but sqlcmd not found on host %s",
+                    self._SQL_INSTANCE,
+                )
+                return None
             ps_script = (
                 "$sql = @'\n" + sql + "\n'@\n"
                 "$sqlPath = 'C:\\temp\\mc_query.sql'\n"
@@ -966,17 +971,21 @@ AND js.job_name NOT LIKE '%Security & Compliance Analyzer%'"""
                 + "' -d " + self._DB_NAME
                 + " -i $sqlPath -s '|' -h -1 -W 2>&1 | Out-String\n"
             )
-        else:
+        elif db_type == "postgresql":
             ps_script = (
                 "$sql = @'\n" + sql + "\n'@\n"
                 "$sqlPath = 'C:\\temp\\mc_query.sql'\n"
                 "New-Item -ItemType Directory -Force -Path 'C:\\temp' | Out-Null\n"
                 "[System.IO.File]::WriteAllText($sqlPath, $sql, "
                 "[System.Text.Encoding]::UTF8)\n"
-                "& '" + self._PSQL + "' -h 127.0.0.1 -U "
+                + self._pg_port_resolve_ps()
+                + "& '" + self._PSQL + "' -h 127.0.0.1 -p $pgPort -U "
                 + self._DB_USER + " -d " + self._DB_NAME
                 + " -t -A -f $sqlPath 2>&1 | Out-String\n"
             )
+        else:
+            logger.error("Unknown db_type for SQL query: %s", db_type)
+            return None
         result = await self._run_script_via_relay(
             ps_script, timeout=timeout, target_id=target_id
         )
@@ -987,6 +996,43 @@ AND js.job_name NOT LIKE '%Security & Compliance Analyzer%'"""
             )
             return None
         return str(result.get("stdout", "") or "")
+
+    @staticmethod
+    def _pg_port_resolve_ps() -> str:
+        """PowerShell that sets ``$pgPort`` to the host's PostgreSQL port.
+
+        Veeam may bind its bundled PostgreSQL to a non-default port (some
+        servers use 5433), so ``psql`` must be told the real port instead of
+        assuming 5432. Prefers the running PostgreSQL service's registry
+        ``Port`` value, then the listening port owned by ``postgres``
+        processes, then falls back to 5432.
+        """
+        return (
+            "$pgPort = 0\n"
+            "try {\n"
+            "  Get-ChildItem 'HKLM:\\SOFTWARE\\PostgreSQL\\Services' "
+            "-ErrorAction SilentlyContinue | ForEach-Object {\n"
+            "    $svc = $_.PSChildName\n"
+            "    $p = (Get-ItemProperty $_.PSPath "
+            "-ErrorAction SilentlyContinue).Port\n"
+            "    if ($p -and (Get-Service -Name $svc "
+            "-ErrorAction SilentlyContinue).Status -eq 'Running') "
+            "{ $pgPort = [int]$p }\n"
+            "  }\n"
+            "} catch {}\n"
+            "if (-not $pgPort) {\n"
+            "  try {\n"
+            "    $pg = Get-Process postgres -ErrorAction SilentlyContinue\n"
+            "    if ($pg) {\n"
+            "      $l = Get-NetTCPConnection -State Listen "
+            "-ErrorAction SilentlyContinue | Where-Object "
+            "{ $_.OwningProcess -in $pg.Id } | Select-Object -First 1\n"
+            "      if ($l) { $pgPort = [int]$l.LocalPort }\n"
+            "    }\n"
+            "  } catch {}\n"
+            "}\n"
+            "if (-not $pgPort) { $pgPort = 5432 }\n"
+        )
 
     async def _sqlcmd_paths(self, target_id: int | None = None) -> list[str]:
         """Return the SQLCMD candidate paths that exist on the host."""
@@ -1799,7 +1845,9 @@ AND js.job_name NOT LIKE '%Security & Compliance Analyzer%'"""
         )
         psql = r"C:\Program Files\PostgreSQL\15\bin\psql.exe"
         ps_script = (
-            f"& '{psql}' -h 127.0.0.1 -U postgres -d VeeamBackup -t -A -c \"{sql}\""
+            self._pg_port_resolve_ps()
+            + f"& '{psql}' -h 127.0.0.1 -p $pgPort -U postgres "
+            + f"-d VeeamBackup -t -A -c \"{sql}\""
         )
         encoded = self._encode_powershell(ps_script)
         ps_command = f"powershell -NoProfile -NonInteractive -EncodedCommand {encoded}"

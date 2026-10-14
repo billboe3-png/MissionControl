@@ -87,6 +87,31 @@ def test_postgres_still_builds_psql_powershell():
     assert "-h 127.0.0.1" in script
 
 
+def test_postgres_psql_command_passes_detected_port():
+    """Veeam may bind its bundled PostgreSQL to a non-default port (EBENCDC
+    uses 5433), so psql must be told the real port instead of assuming 5432."""
+    p = _StubRelay()
+    out = _run(
+        p._run_db_query_via_relay("SELECT 1", target_id=25, db_type="postgresql")
+    )
+    assert out is not None
+    script = p.captured[-1]["script"]
+    assert "-p $pgPort" in script
+    # Port is discovered from the running PostgreSQL service on the host.
+    assert "PostgreSQL\\Services" in script
+    assert "$pgPort = 5432" in script
+    # Resolution must precede the psql invocation.
+    assert script.index("$pgPort = 0") < script.index("psql.exe")
+
+
+def test_pg_port_resolve_ps_has_registry_and_listener_fallbacks():
+    block = VeeamPlugin._pg_port_resolve_ps()
+    assert "HKLM:\\SOFTWARE\\PostgreSQL\\Services" in block
+    assert "Get-NetTCPConnection" in block
+    assert "Select-Object -First 1" in block
+    assert "$pgPort = 5432" in block
+
+
 def test_db_detect_finds_sqlcmd_at_odbc130_when_no_psql():
     p = _StubRelay()
     # No psql binary, but SQLCMD present at ODBC\130 -> db_type mssql + sqlcmd_found.
