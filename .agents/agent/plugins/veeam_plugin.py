@@ -94,9 +94,9 @@ def _daily_reason_sql(db_type: str) -> str:
             "AND c.reason IS NOT NULL AND CONVERT(nvarchar(max), c.reason) <> '' "
             "AND CONVERT(nvarchar(max), c.reason) NOT LIKE 'Processing %' "
             "ORDER BY c.creation_time DESC"
-            "), LEFT(REPLACE(REPLACE(REPLACE(REPLACE("
+            "), ISNULL(LEFT(REPLACE(REPLACE(REPLACE(REPLACE("
             "CONVERT(nvarchar(max), js.reason), CHAR(13), ' '), CHAR(10), ' '), "
-            "CHAR(9), ' '), '|', ' '), 500)), 500) AS reason"
+            "CHAR(9), ' '), '|', ' '), 500), '')), 500) AS reason"
         )
     return (
         "left(COALESCE(("
@@ -1255,6 +1255,8 @@ AND js.job_name NOT LIKE '%Security & Compliance Analyzer%'"""
             date_set.add(run_date)
             result_name = self._map_result(self._to_int(r[4], -1))
             reason = r[8].strip() if len(r) > 8 and r[8] else ""
+            if reason.lower() == "null":
+                reason = ""
             run = {
                 "creation_time": r[2] if r[2] and str(r[2]).strip().lower() != "null" else None,
                 "end_time": r[3] if r[3] and str(r[3]).strip().lower() != "null" else None,

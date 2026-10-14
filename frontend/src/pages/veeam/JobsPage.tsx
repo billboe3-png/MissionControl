@@ -56,7 +56,7 @@ function cellExportValue(
 
 function runTooltip(run: VeeamJobDailyRun): string {
     const when = run.end_time ?? run.creation_time ?? "";
-    const reason = (run.reason ?? "").trim();
+    const reason = run.result !== "Success" ? (run.reason ?? "").trim() : "";
     const lines = [run.result];
     if (when) lines.push(when);
     if (reason) lines.push(reason);
