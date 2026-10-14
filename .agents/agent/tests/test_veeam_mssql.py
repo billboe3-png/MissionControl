@@ -457,6 +457,36 @@ def test_db_job_stats_daily_mssql_parses_rows():
     assert daily["2026-08-31"]["result"] == "Failed"
 
 
+def test_collect_sql_job_stats_daily_includes_sanitized_reason():
+    pg = VeeamPlugin._db_collect_sql("job_stats_daily", "postgresql", days=7)
+    assert "COALESCE(js.reason::text, '')" in pg
+    assert "chr(10)" in pg and "chr(13)" in pg
+    assert "'|', ' '" in pg
+    assert "NOT LIKE 'Processing %'" in pg
+    assert 'FROM "backup.model.jobsessions" c' in pg
+    assert "LIMIT 1" in pg
+    mssql = VeeamPlugin._db_collect_sql("job_stats_daily", "mssql", days=7)
+    assert "CONVERT(nvarchar(max), js.reason)" in mssql
+    assert "CHAR(13)" in mssql and "CHAR(10)" in mssql
+    assert "'|', ' '" in mssql
+    assert "NOT LIKE 'Processing %'" in mssql
+    assert "FROM [Backup.Model.JobSessions] c" in mssql
+    assert "TOP 1" in mssql
+
+
+def test_db_job_stats_daily_mssql_parses_reason():
+    raw = (
+        "BPFHBAPPSERVER_EXT|2026-08-31|2026-08-31 22:00:00|2026-08-31 22:35:00|2|300|30|60|Backup repository is not accessible.\n"
+        "BPFHBAPPSERVER_EXT|2026-09-01|2026-09-01 00:30:00|2026-09-01 01:15:00|0|100|10|20|\n"
+    )
+    p = _StubDbQuery(raw)
+    jobs, _ = _run(p._db_job_stats_daily(7, target_id=12, db_type="mssql"))
+    daily = jobs[0]["daily"]
+    assert daily["2026-08-31"]["runs"][0]["reason"] == "Backup repository is not accessible."
+    assert daily["2026-08-31"]["runs"][0]["result"] == "Failed"
+    assert daily["2026-09-01"]["runs"][0]["reason"] is None
+
+
 def test_execute_relay_stats_pass_db_type_to_helpers():
     p = _StubDbQueryNoPs("")
     result = _run(p._execute_relay(

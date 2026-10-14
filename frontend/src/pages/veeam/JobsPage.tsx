@@ -6,6 +6,7 @@ import {
     veeamApi,
     VeeamJobDailyCell,
     VeeamJobDailyRow,
+    VeeamJobDailyRun,
 } from "../../services/veeam";
 
 const DAY_PRESETS = [8, 14, 90] as const;
@@ -51,6 +52,15 @@ function cellExportValue(
             : false);
     if (failed) return { text: "X", bytes: 0 };
     return { text: formatBytesFixed1(bytes), bytes };
+}
+
+function runTooltip(run: VeeamJobDailyRun): string {
+    const when = run.end_time ?? run.creation_time ?? "";
+    const reason = (run.reason ?? "").trim();
+    const lines = [run.result];
+    if (when) lines.push(when);
+    if (reason) lines.push(reason);
+    return lines.join("\n");
 }
 
 export default function VeeamJobsPage() {
@@ -201,7 +211,11 @@ export default function VeeamJobsPage() {
                                                                 run.processed_bytes ??
                                                                 0;
                                                             return (
-                                                                <span key={i} className={`cell-run ${runCls}`}>
+                                                                <span
+                                                                    key={i}
+                                                                    className={`cell-run ${runCls}`}
+                                                                    title={runTooltip(run)}
+                                                                >
                                                                     {formatBytes(bytes)}
                                                                 </span>
                                                             );

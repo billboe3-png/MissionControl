@@ -60,6 +60,63 @@ _PARENT_ONLY_PG = (
 )
 
 
+def _daily_reason_sql(db_type: str) -> str:
+    """Return the ``reason`` column expression for the daily job-stats query.
+
+    A failed backup job's parent session usually records only a progress step
+    (``Processing <host>``) in ``reason``; the real error text lives on the
+    per-host child session (``<job> - <host>``), which the parent-only byte
+    filter excludes. So prefer the latest non-progress reason from any session
+    that normalizes to the same job name on the same day, and fall back to the
+    row's own reason. CR/LF/tab/pipe are stripped because rows are parsed as
+    pipe-delimited, one-per-line output. ``TOP 1``/``LIMIT 1`` is used instead
+    of ``STRING_AGG`` so the query also runs on SQL Server 2016.
+    """
+    if db_type == "mssql":
+        norm_c = (
+            "CASE WHEN CHARINDEX(' - ', c.job_name) > 0 "
+            "THEN LEFT(c.job_name, CHARINDEX(' - ', c.job_name) - 1) "
+            "ELSE c.job_name END"
+        )
+        norm_js = (
+            "CASE WHEN CHARINDEX(' - ', js.job_name) > 0 "
+            "THEN LEFT(js.job_name, CHARINDEX(' - ', js.job_name) - 1) "
+            "ELSE js.job_name END"
+        )
+        return (
+            "LEFT(COALESCE(("
+            "SELECT TOP 1 LEFT(REPLACE(REPLACE(REPLACE(REPLACE("
+            "CONVERT(nvarchar(max), c.reason), CHAR(13), ' '), CHAR(10), ' '), "
+            "CHAR(9), ' '), '|', ' '), 200) "
+            "FROM [Backup.Model.JobSessions] c "
+            "WHERE " + norm_c + " = " + norm_js + " "
+            "AND CAST(c.creation_time AS DATE) = CAST(js.creation_time AS DATE) "
+            "AND c.reason IS NOT NULL AND CONVERT(nvarchar(max), c.reason) <> '' "
+            "AND CONVERT(nvarchar(max), c.reason) NOT LIKE 'Processing %' "
+            "ORDER BY c.creation_time DESC"
+            "), LEFT(REPLACE(REPLACE(REPLACE(REPLACE("
+            "CONVERT(nvarchar(max), js.reason), CHAR(13), ' '), CHAR(10), ' '), "
+            "CHAR(9), ' '), '|', ' '), 500)), 500) AS reason"
+        )
+    return (
+        "left(COALESCE(("
+        "SELECT left(replace(replace(replace(replace("
+        "COALESCE(c.reason::text, ''), chr(13), ' '), chr(10), ' '), "
+        "chr(9), ' '), '|', ' '), 200) "
+        'FROM "backup.model.jobsessions" c '
+        "WHERE regexp_replace(c.job_name, ' - [A-Za-z0-9._]+$', '') "
+        "= regexp_replace(js.job_name, ' - [A-Za-z0-9._]+$', '') "
+        "AND DATE(c.creation_time) = DATE(js.creation_time) "
+        "AND c.reason IS NOT NULL AND c.reason::text <> '' "
+        "AND c.reason::text NOT LIKE 'Processing %' "
+        "ORDER BY c.creation_time DESC "
+        "LIMIT 1"
+        "), left(replace(replace(replace(replace("
+        "COALESCE(js.reason::text, ''), chr(13), ' '), chr(10), ' '), "
+        "chr(9), ' '), '|', ' '), 500)), 500) AS reason"
+    )
+
+
 class VeeamPlugin(AgentPlugin):
     """Veeam B&R management plugin - cross-platform."""
 
@@ -1197,6 +1254,7 @@ AND js.job_name NOT LIKE '%Security & Compliance Analyzer%'"""
                 continue
             date_set.add(run_date)
             result_name = self._map_result(self._to_int(r[4], -1))
+            reason = r[8].strip() if len(r) > 8 and r[8] else ""
             run = {
                 "creation_time": r[2] if r[2] and str(r[2]).strip().lower() != "null" else None,
                 "end_time": r[3] if r[3] and str(r[3]).strip().lower() != "null" else None,
@@ -1204,6 +1262,7 @@ AND js.job_name NOT LIKE '%Security & Compliance Analyzer%'"""
                 "processed_bytes": self._to_int(r[5]),
                 "read_bytes": self._to_int(r[6]),
                 "stored_bytes": self._to_int(r[7]),
+                "reason": reason or None,
             }
             run["transferred_bytes"] = run["stored_bytes"] or run["read_bytes"]
             by_job.setdefault(job_name, {"job_name": job_name, "daily": {}})
@@ -1436,7 +1495,8 @@ AND js.job_name NOT LIKE '%Security & Compliance Analyzer%'"""
                     "js.creation_time, js.end_time, js.result, "
                     "ISNULL(bs.processed_size, 0), "
                     "ISNULL(bs.read_size, 0), "
-                    "ISNULL(bs.stored_size, 0) "
+                    "ISNULL(bs.stored_size, 0), "
+                    + _daily_reason_sql("mssql") + " "
                     "FROM [Backup.Model.JobSessions] js "
                     "LEFT JOIN [Backup.Model.BackupJobSessions] bs "
                     "ON bs.id = js.id "
@@ -1452,7 +1512,8 @@ AND js.job_name NOT LIKE '%Security & Compliance Analyzer%'"""
                 "js.creation_time, js.end_time, js.result, "
                 "COALESCE(bs.processed_size, 0), "
                 "COALESCE(bs.read_size, 0), "
-                "COALESCE(bs.stored_size, 0) "
+                "COALESCE(bs.stored_size, 0), "
+                + _daily_reason_sql("postgresql") + " "
                 'FROM "backup.model.jobsessions" js '
                 'LEFT JOIN "backup.model.backupjobsessions" bs ON bs.id = js.id '
                 "WHERE DATE(js.creation_time) >= CURRENT_DATE - ("

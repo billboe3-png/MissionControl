@@ -123,6 +123,7 @@ export interface VeeamJobDailyRun {
     read_bytes: number;
     stored_bytes: number;
     transferred_bytes?: number;
+    reason?: string | null;
 }
 
 export interface VeeamJobDailyCell {
