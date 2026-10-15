@@ -33,13 +33,23 @@ PARENT_ONLY_PG = "regexp_replace(js.job_name, ' - [A-Za-z0-9._]+$', '') = js.job
 PARENT_ONLY_MSSQL_PASCAL = "CHARINDEX(' - ', js.JobName) = 0"
 PARENT_ONLY_MSSQL_SNAKE = "CHARINDEX(' - ', js.job_name) = 0"
 
+CHILD_PREFERENCE = (
+    "(p.has_child = 1 AND b.is_parent = 0) "
+    "OR (p.has_child = 0 AND b.is_parent = 1)"
+)
+
 
 def test_stats_sql_count_parent_session_once():
-    """Regression: Veeam writes one parent session per run plus one child
-    session per protected host (``<job> - <host>``) with identical byte
-    counters. Both previously normalized to the same name and were summed,
-    doubling every agent job's stats. The builders must keep only the parent
-    row (the one whose name the *_NORM_NAME_* filter leaves unchanged)."""
+    """Row-list queries must keep only the parent session per run.
+
+    Veeam writes one parent session per run plus one child session per
+    protected host (``<job> - <host>``) with identical byte counters; both
+    normalize to the same name, so listing both would duplicate every run.
+    Session and job-name listings still need exactly one row per run.
+
+    The aggregate builders (``job_stats``/``job_stats_daily``) no longer use
+    this fragment — see ``test_stats_aggregates_prefer_child_sessions``.
+    """
     expected = {
         ("postgresql", "pascal"): PARENT_ONLY_PG,
         ("mssql", "pascal"): PARENT_ONLY_MSSQL_PASCAL,
@@ -47,7 +57,6 @@ def test_stats_sql_count_parent_session_once():
     }
     for (db_type, column_case), fragment in expected.items():
         for builder in (
-            sql_queries.job_stats_sql,
             sql_queries.session_stats_sql,
             sql_queries.job_names_sql,
         ):
@@ -56,11 +65,34 @@ def test_stats_sql_count_parent_session_once():
                 f"{builder.__name__}({db_type!r}, {column_case!r}) "
                 f"missing parent-only filter"
             )
-        sql = sql_queries.job_stats_daily_sql(db_type=db_type, column_case=column_case)
-        assert fragment in sql, (
-            f"job_stats_daily_sql({db_type!r}, {column_case!r}) missing "
-            f"parent-only filter"
-        )
+
+
+def test_stats_aggregates_prefer_child_sessions():
+    """Regression: agent/endpoint job counters live on the child session.
+
+    For ``Exco_*`` jobs the parent row records zeros while the per-host child
+    session holds the real byte counters. The aggregate builders must use the
+    child rows whenever a job (or job/day) has any, and fall back to the
+    parent row when it does not — never summing both.
+    """
+    for db_type, column_case in (
+        ("postgresql", "pascal"),
+        ("mssql", "pascal"),
+        ("mssql", "snake"),
+    ):
+        for builder in (
+            sql_queries.job_stats_sql,
+            sql_queries.job_stats_daily_sql,
+        ):
+            sql = builder(db_type=db_type, column_case=column_case)
+            assert "AS is_parent" in sql, f"{builder.__name__} missing is_parent"
+            assert "has_child" in sql, f"{builder.__name__} missing has_child"
+            assert CHILD_PREFERENCE in sql, (
+                f"{builder.__name__}({db_type!r}, {column_case!r}) "
+                f"missing parent/child preference"
+            )
+        daily = sql_queries.job_stats_daily_sql(db_type=db_type, column_case=column_case)
+        assert "p.run_date = b.run_date" in daily
 
 
 async def test_detect_db_type_returns_probe_detail():

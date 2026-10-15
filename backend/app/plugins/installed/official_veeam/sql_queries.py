@@ -131,64 +131,109 @@ def job_stats_sql(db_type: str = "postgresql", column_case: str = "pascal") -> s
     if db_type == "mssql":
         if column_case == "snake":
             norm = _NORM_NAME_MSSQL_SNAKE
-            return f"""SELECT
-    {norm} AS job_name,
-    COUNT(*) AS session_count,
-    ISNULL(SUM(bs.total_size), 0),
-    ISNULL(SUM(bs.processed_size), 0),
-    ISNULL(SUM(bs.read_size), 0),
-    ISNULL(SUM(bs.stored_size), 0),
-    ISNULL(AVG(bs.avg_speed), 0),
-    MAX(js.creation_time),
-    SUM(CASE WHEN js.result = 0 THEN 1 ELSE 0 END),
-    SUM(CASE WHEN js.result = 1 THEN 1 ELSE 0 END),
-    SUM(CASE WHEN js.result = 2 THEN 1 ELSE 0 END)
+            return f"""WITH base AS (
+    SELECT {norm} AS job_name,
+    js.result,
+    js.creation_time,
+    CASE WHEN {norm} = js.job_name THEN 1 ELSE 0 END AS is_parent,
+    ISNULL(bs.total_size, 0) AS total_size,
+    ISNULL(bs.processed_size, 0) AS processed_size,
+    ISNULL(bs.read_size, 0) AS read_size,
+    ISNULL(bs.stored_size, 0) AS stored_size,
+    ISNULL(bs.avg_speed, 0) AS avg_speed
 FROM [Backup.Model.JobSessions] js
 LEFT JOIN [Backup.Model.BackupJobSessions] bs ON bs.id = js.id
 WHERE 1=1 {_mssql_where(column_case)}
-{_parent_only_filter(db_type, column_case)}
-GROUP BY {norm}
-ORDER BY MAX(js.creation_time) DESC"""
+), pref AS (
+    SELECT job_name, MAX(1 - is_parent) AS has_child
+    FROM base GROUP BY job_name
+)
+SELECT b.job_name,
+    COUNT(*) AS session_count,
+    ISNULL(SUM(b.total_size), 0),
+    ISNULL(SUM(b.processed_size), 0),
+    ISNULL(SUM(b.read_size), 0),
+    ISNULL(SUM(b.stored_size), 0),
+    ISNULL(AVG(b.avg_speed), 0),
+    MAX(b.creation_time),
+    SUM(CASE WHEN b.result = 0 THEN 1 ELSE 0 END),
+    SUM(CASE WHEN b.result = 1 THEN 1 ELSE 0 END),
+    SUM(CASE WHEN b.result = 2 THEN 1 ELSE 0 END)
+FROM base b
+JOIN pref p ON p.job_name = b.job_name
+WHERE (p.has_child = 1 AND b.is_parent = 0) OR (p.has_child = 0 AND b.is_parent = 1)
+GROUP BY b.job_name
+ORDER BY MAX(b.creation_time) DESC"""
         else:
             norm = _NORM_NAME_MSSQL_PASCAL
-            return f"""SELECT
-    {norm} AS job_name,
-    COUNT(*) AS session_count,
-    ISNULL(SUM(bs.TotalSize), 0),
-    ISNULL(SUM(bs.ProcessedSize), 0),
-    ISNULL(SUM(bs.ReadSize), 0),
-    ISNULL(SUM(bs.StoredSize), 0),
-    ISNULL(AVG(bs.AvgSpeed), 0),
-    MAX(js.CreationTime),
-    SUM(CASE WHEN js.Result = 0 THEN 1 ELSE 0 END),
-    SUM(CASE WHEN js.Result = 1 THEN 1 ELSE 0 END),
-    SUM(CASE WHEN js.Result = 2 THEN 1 ELSE 0 END)
+            return f"""WITH base AS (
+    SELECT {norm} AS job_name,
+    js.Result,
+    js.CreationTime,
+    CASE WHEN {norm} = js.JobName THEN 1 ELSE 0 END AS is_parent,
+    ISNULL(bs.TotalSize, 0) AS total_size,
+    ISNULL(bs.ProcessedSize, 0) AS processed_size,
+    ISNULL(bs.ReadSize, 0) AS read_size,
+    ISNULL(bs.StoredSize, 0) AS stored_size,
+    ISNULL(bs.AvgSpeed, 0) AS avg_speed
 FROM [Backup.Model.JobSessions] js
 LEFT JOIN [Backup.Model.BackupJobSessions] bs ON bs.Id = js.Id
 WHERE 1=1 {_mssql_where(column_case)}
-{_parent_only_filter(db_type, column_case)}
-GROUP BY {norm}
-ORDER BY MAX(js.CreationTime) DESC"""
+), pref AS (
+    SELECT job_name, MAX(1 - is_parent) AS has_child
+    FROM base GROUP BY job_name
+)
+SELECT b.job_name,
+    COUNT(*) AS session_count,
+    ISNULL(SUM(b.total_size), 0),
+    ISNULL(SUM(b.processed_size), 0),
+    ISNULL(SUM(b.read_size), 0),
+    ISNULL(SUM(b.stored_size), 0),
+    ISNULL(AVG(b.avg_speed), 0),
+    MAX(b.CreationTime),
+    SUM(CASE WHEN b.Result = 0 THEN 1 ELSE 0 END),
+    SUM(CASE WHEN b.Result = 1 THEN 1 ELSE 0 END),
+    SUM(CASE WHEN b.Result = 2 THEN 1 ELSE 0 END)
+FROM base b
+JOIN pref p ON p.job_name = b.job_name
+WHERE (p.has_child = 1 AND b.is_parent = 0) OR (p.has_child = 0 AND b.is_parent = 1)
+GROUP BY b.job_name
+ORDER BY MAX(b.CreationTime) DESC"""
     else:
         norm = _NORM_NAME_PG
-        return f"""SELECT
-    {norm} AS job_name,
-    COUNT(*) as session_count,
-    COALESCE(SUM(bs.total_size), 0),
-    COALESCE(SUM(bs.processed_size), 0),
-    COALESCE(SUM(bs.read_size), 0),
-    COALESCE(SUM(bs.stored_size), 0),
-    COALESCE(AVG(bs.avg_speed), 0),
-    MAX(js.creation_time),
-    SUM(CASE WHEN js.result = 0 THEN 1 ELSE 0 END),
-    SUM(CASE WHEN js.result = 1 THEN 1 ELSE 0 END),
-    SUM(CASE WHEN js.result = 2 THEN 1 ELSE 0 END)
+        return f"""WITH base AS (
+    SELECT {norm} AS job_name,
+    js.result,
+    js.creation_time,
+    CASE WHEN {norm} = js.job_name THEN 1 ELSE 0 END AS is_parent,
+    COALESCE(bs.total_size, 0) AS total_size,
+    COALESCE(bs.processed_size, 0) AS processed_size,
+    COALESCE(bs.read_size, 0) AS read_size,
+    COALESCE(bs.stored_size, 0) AS stored_size,
+    COALESCE(bs.avg_speed, 0) AS avg_speed
 FROM "backup.model.jobsessions" js
 LEFT JOIN "backup.model.backupjobsessions" bs ON bs.id = js.id
 WHERE 1=1 {_WHERE_FILTER_PG}
-{_parent_only_filter(db_type, column_case)}
-GROUP BY 1
-ORDER BY MAX(js.creation_time) DESC"""
+), pref AS (
+    SELECT job_name, MAX(1 - is_parent) AS has_child
+    FROM base GROUP BY job_name
+)
+SELECT b.job_name,
+    COUNT(*) as session_count,
+    COALESCE(SUM(b.total_size), 0),
+    COALESCE(SUM(b.processed_size), 0),
+    COALESCE(SUM(b.read_size), 0),
+    COALESCE(SUM(b.stored_size), 0),
+    COALESCE(AVG(b.avg_speed), 0),
+    MAX(b.creation_time),
+    SUM(CASE WHEN b.result = 0 THEN 1 ELSE 0 END),
+    SUM(CASE WHEN b.result = 1 THEN 1 ELSE 0 END),
+    SUM(CASE WHEN b.result = 2 THEN 1 ELSE 0 END)
+FROM base b
+JOIN pref p ON p.job_name = b.job_name
+WHERE (p.has_child = 1 AND b.is_parent = 0) OR (p.has_child = 0 AND b.is_parent = 1)
+GROUP BY b.job_name
+ORDER BY MAX(b.creation_time) DESC"""
 
 
 def job_stats_daily_sql(
@@ -210,58 +255,94 @@ def job_stats_daily_sql(
     if db_type == "mssql":
         if column_case == "snake":
             norm = _NORM_NAME_MSSQL_SNAKE
-            return f"""SELECT
-    {norm} AS job_name,
+            return f"""WITH base AS (
+    SELECT {norm} AS job_name,
     CAST(js.creation_time AS DATE) AS run_date,
-    ISNULL(SUM(bs.processed_size), 0),
-    ISNULL(SUM(bs.read_size), 0),
-    ISNULL(SUM(bs.stored_size), 0),
-    COUNT(*) AS session_count,
-    SUM(CASE WHEN js.result = 0 THEN 1 ELSE 0 END) AS success_count,
-    SUM(CASE WHEN js.result = 1 THEN 1 ELSE 0 END) AS warning_count,
-    SUM(CASE WHEN js.result = 2 THEN 1 ELSE 0 END) AS failed_count
+    js.result,
+    CASE WHEN {norm} = js.job_name THEN 1 ELSE 0 END AS is_parent,
+    ISNULL(bs.processed_size, 0) AS processed_size,
+    ISNULL(bs.read_size, 0) AS read_size,
+    ISNULL(bs.stored_size, 0) AS stored_size
 FROM [Backup.Model.JobSessions] js
 LEFT JOIN [Backup.Model.BackupJobSessions] bs ON bs.id = js.id
 WHERE CAST(js.creation_time AS DATE) >= DATEADD(day, -{window_start}, CAST(GETDATE() AS DATE)) {where}
-{_parent_only_filter(db_type, column_case)}
-GROUP BY {norm}, CAST(js.creation_time AS DATE)
+), pref AS (
+    SELECT job_name, run_date, MAX(1 - is_parent) AS has_child
+    FROM base GROUP BY job_name, run_date
+)
+SELECT b.job_name, b.run_date,
+    ISNULL(SUM(b.processed_size), 0),
+    ISNULL(SUM(b.read_size), 0),
+    ISNULL(SUM(b.stored_size), 0),
+    COUNT(*) AS session_count,
+    SUM(CASE WHEN b.result = 0 THEN 1 ELSE 0 END) AS success_count,
+    SUM(CASE WHEN b.result = 1 THEN 1 ELSE 0 END) AS warning_count,
+    SUM(CASE WHEN b.result = 2 THEN 1 ELSE 0 END) AS failed_count
+FROM base b
+JOIN pref p ON p.job_name = b.job_name AND p.run_date = b.run_date
+WHERE (p.has_child = 1 AND b.is_parent = 0) OR (p.has_child = 0 AND b.is_parent = 1)
+GROUP BY b.job_name, b.run_date
 ORDER BY 1, 2 DESC"""
         else:
             norm = _NORM_NAME_MSSQL_PASCAL
-            return f"""SELECT
-    {norm} AS job_name,
+            return f"""WITH base AS (
+    SELECT {norm} AS job_name,
     CAST(js.CreationTime AS DATE) AS run_date,
-    ISNULL(SUM(bs.ProcessedSize), 0),
-    ISNULL(SUM(bs.ReadSize), 0),
-    ISNULL(SUM(bs.StoredSize), 0),
-    COUNT(*) AS session_count,
-    SUM(CASE WHEN js.Result = 0 THEN 1 ELSE 0 END) AS success_count,
-    SUM(CASE WHEN js.Result = 1 THEN 1 ELSE 0 END) AS warning_count,
-    SUM(CASE WHEN js.Result = 2 THEN 1 ELSE 0 END) AS failed_count
+    js.Result,
+    CASE WHEN {norm} = js.JobName THEN 1 ELSE 0 END AS is_parent,
+    ISNULL(bs.ProcessedSize, 0) AS processed_size,
+    ISNULL(bs.ReadSize, 0) AS read_size,
+    ISNULL(bs.StoredSize, 0) AS stored_size
 FROM [Backup.Model.JobSessions] js
 LEFT JOIN [Backup.Model.BackupJobSessions] bs ON bs.Id = js.Id
 WHERE CAST(js.CreationTime AS DATE) >= DATEADD(day, -{window_start}, CAST(GETDATE() AS DATE)) {where}
-{_parent_only_filter(db_type, column_case)}
-GROUP BY {norm}, CAST(js.CreationTime AS DATE)
+), pref AS (
+    SELECT job_name, run_date, MAX(1 - is_parent) AS has_child
+    FROM base GROUP BY job_name, run_date
+)
+SELECT b.job_name, b.run_date,
+    ISNULL(SUM(b.processed_size), 0),
+    ISNULL(SUM(b.read_size), 0),
+    ISNULL(SUM(b.stored_size), 0),
+    COUNT(*) AS session_count,
+    SUM(CASE WHEN b.result = 0 THEN 1 ELSE 0 END) AS success_count,
+    SUM(CASE WHEN b.result = 1 THEN 1 ELSE 0 END) AS warning_count,
+    SUM(CASE WHEN b.result = 2 THEN 1 ELSE 0 END) AS failed_count
+FROM base b
+JOIN pref p ON p.job_name = b.job_name AND p.run_date = b.run_date
+WHERE (p.has_child = 1 AND b.is_parent = 0) OR (p.has_child = 0 AND b.is_parent = 1)
+GROUP BY b.job_name, b.run_date
 ORDER BY 1, 2 DESC"""
     else:
         norm = _NORM_NAME_PG
-        return f"""SELECT
-    {norm} AS job_name,
+        return f"""WITH base AS (
+    SELECT {norm} AS job_name,
     DATE(js.creation_time) AS run_date,
-    COALESCE(SUM(bs.processed_size), 0),
-    COALESCE(SUM(bs.read_size), 0),
-    COALESCE(SUM(bs.stored_size), 0),
-    COUNT(*) AS session_count,
-    SUM(CASE WHEN js.result = 0 THEN 1 ELSE 0 END) AS success_count,
-    SUM(CASE WHEN js.result = 1 THEN 1 ELSE 0 END) AS warning_count,
-    SUM(CASE WHEN js.result = 2 THEN 1 ELSE 0 END) AS failed_count
+    js.result,
+    CASE WHEN {norm} = js.job_name THEN 1 ELSE 0 END AS is_parent,
+    COALESCE(bs.processed_size, 0) AS processed_size,
+    COALESCE(bs.read_size, 0) AS read_size,
+    COALESCE(bs.stored_size, 0) AS stored_size
 FROM "backup.model.jobsessions" js
 LEFT JOIN "backup.model.backupjobsessions" bs ON bs.id = js.id
 WHERE DATE(js.creation_time) >= CURRENT_DATE - {window_start} {where}
-{_parent_only_filter(db_type, column_case)}
-GROUP BY 1, DATE(js.creation_time)
-ORDER BY 1, DATE(js.creation_time) DESC"""
+), pref AS (
+    SELECT job_name, run_date, MAX(1 - is_parent) AS has_child
+    FROM base GROUP BY job_name, run_date
+)
+SELECT b.job_name, b.run_date,
+    COALESCE(SUM(b.processed_size), 0),
+    COALESCE(SUM(b.read_size), 0),
+    COALESCE(SUM(b.stored_size), 0),
+    COUNT(*) AS session_count,
+    SUM(CASE WHEN b.result = 0 THEN 1 ELSE 0 END) AS success_count,
+    SUM(CASE WHEN b.result = 1 THEN 1 ELSE 0 END) AS warning_count,
+    SUM(CASE WHEN b.result = 2 THEN 1 ELSE 0 END) AS failed_count
+FROM base b
+JOIN pref p ON p.job_name = b.job_name AND p.run_date = b.run_date
+WHERE (p.has_child = 1 AND b.is_parent = 0) OR (p.has_child = 0 AND b.is_parent = 1)
+GROUP BY b.job_name, b.run_date
+ORDER BY 1, 2 DESC"""
 
 
 def session_stats_sql(db_type: str = "postgresql", column_case: str = "pascal") -> str:
