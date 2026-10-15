@@ -22,6 +22,7 @@ from app.core.auth_dependency import get_current_user
 from app.core.config import get_settings
 from app.core.security import CredentialCipher
 from app.db.database import get_db
+from app.models.db.agent import Agent
 from app.plugins.installed.official_veeam.cache import cache_manager
 from app.plugins.installed.official_veeam.collector import _upsert_snapshot
 from app.plugins.installed.official_veeam.models import (
@@ -230,6 +231,83 @@ def _cached_success(row: VeeamSnapshot) -> dict[str, Any] | None:
     return payload if payload.get("success") else None
 
 
+def _server_agent_offline(db: Session, server: VeeamBackupServer) -> str | None:
+    """Name of the linked agent when it exists but is not online.
+
+    Returns None when the server has no linked agent (API/direct data source)
+    or the agent is online, so callers only surface an offline banner when the
+    relay that actually feeds this server cannot be reached.
+    """
+    agent_id = getattr(server, "agent_id", None)
+    if agent_id is None:
+        return None
+    agent = db.query(Agent).filter(Agent.id == agent_id).first()
+    if agent is None:
+        return None
+    if (getattr(agent, "status", None) or "").lower() == "online":
+        return None
+    return agent.name
+
+
+def _stale_payload(
+    cached: dict[str, Any], row: VeeamSnapshot, offline_name: str | None
+) -> dict[str, Any]:
+    """Serve cached data with a timestamp banner and, when known, offline note."""
+    stale = dict(cached)
+    collected_at = row.collected_at.isoformat() if row.collected_at else None
+    stale["stale"] = True
+    stale["collected_at"] = collected_at
+    if offline_name:
+        stale["offline"] = True
+        stale["agent_name"] = offline_name
+        stale["error"] = (
+            f"Agent '{offline_name}' is offline — showing last data received"
+            + (f" {collected_at}" if collected_at else "")
+            + ". Data may be outdated."
+        )
+    else:
+        stale["error"] = (
+            f"Data may be stale — last collected {collected_at}"
+            if collected_at
+            else "Data may be stale"
+        )
+    return stale
+
+
+def _offline_payload(payload: dict[str, Any], offline_name: str | None) -> dict[str, Any]:
+    """Annotate a live failure with the offline agent so the UI can say so."""
+    if not offline_name:
+        return payload
+    out = dict(payload)
+    out["offline"] = True
+    out["agent_name"] = offline_name
+    out.setdefault("collected_at", None)
+    return out
+
+
+def _fallback_daily_snapshot(db: Session, server_id: int) -> VeeamSnapshot | None:
+    """Most recent successful job_stats_daily snapshot for any window.
+
+    The daily dataset key embeds the requested window (days + system flag), so
+    a request for a window the hourly collector never wrote (e.g. the UI's 8
+    days vs the collector's 7) finds no exact cache. Falling back to the newest
+    successful daily snapshot lets the page still show the last data received
+    instead of only the live failure.
+    """
+    rows = db.execute(
+        select(VeeamSnapshot)
+        .where(
+            VeeamSnapshot.server_id == server_id,
+            VeeamSnapshot.dataset.like("job_stats_daily:%"),
+        )
+        .order_by(VeeamSnapshot.collected_at.desc())
+    ).scalars().all()
+    for candidate in rows:
+        if _cached_success(candidate) is not None:
+            return candidate
+    return None
+
+
 async def _serve(
     db: Session,
     provider: Any,
@@ -253,22 +331,25 @@ async def _serve(
     ).scalar_one_or_none()
     cached = _cached_success(row) if row is not None else None
 
+    offline_name = _server_agent_offline(db, server)
+
     if refresh:
         payload = await method(**params)
         if payload.get("success", False):
             _upsert_snapshot(db, server.id, dataset_key, payload)
             db.commit()
             return payload
+        if cached is None and dataset == "job_stats_daily":
+            fallback = _fallback_daily_snapshot(db, server.id)
+            if fallback is not None:
+                cached = _cached_success(fallback)
+                row = fallback
         if cached is not None:
-            stale = dict(cached)
-            stale["error"] = (
-                f"Data may be stale — last collected {row.collected_at.isoformat()}"
-            )
-            return stale
+            return _stale_payload(cached, row, offline_name)
         # No good cache to fall back to: surface the live failure. Failed
         # payloads are never persisted, so a broken server keeps reporting its
         # real error instead of a phantom snapshot.
-        return payload
+        return _offline_payload(payload, offline_name)
 
     if cached is not None and _snapshot_age(row) < SNAPSHOT_TTL_SECONDS:
         return cached
@@ -278,13 +359,14 @@ async def _serve(
         _upsert_snapshot(db, server.id, dataset_key, payload)
         db.commit()
         return payload
+    if cached is None and dataset == "job_stats_daily":
+        fallback = _fallback_daily_snapshot(db, server.id)
+        if fallback is not None:
+            cached = _cached_success(fallback)
+            row = fallback
     if cached is not None:
-        stale = dict(cached)
-        stale["error"] = (
-            f"Data may be stale — last collected {row.collected_at.isoformat()}"
-        )
-        return stale
-    return payload
+        return _stale_payload(cached, row, offline_name)
+    return _offline_payload(payload, offline_name)
 
 
 @router.get("/overview")

@@ -183,6 +183,13 @@ export interface VeeamJobStatsDailyResponse {
     count: number;
     message: string | null;
     error: string | null;
+    // Set when the page is being served from cache because the live collection
+    // failed. `offline`/`agent_name` are added when the linked agent is the
+    // reason; `collected_at` is when the served snapshot was captured.
+    stale?: boolean;
+    offline?: boolean;
+    agent_name?: string | null;
+    collected_at?: string | null;
 }
 
 export interface VeeamRepository {

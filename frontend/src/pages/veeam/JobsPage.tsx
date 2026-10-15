@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useVeeamServer } from "../../contexts/VeeamServerContext";
 import VeeamPageShell from "../../components/veeam/VeeamPageShell";
+import { formatDateTime } from "../../utils/dateFormat";
 import { formatBytes } from "../../services/veeam";
 import {
     veeamApi,
@@ -69,6 +70,7 @@ export default function VeeamJobsPage() {
     const [showSystem, setShowSystem] = useState(false);
     const [dates, setDates] = useState<string[]>([]);
     const [error, setError] = useState<string | null>(null);
+    const [notice, setNotice] = useState<string | null>(null);
     const [loading, setLoading] = useState(false);
     const { selectedServerId, servers } = useVeeamServer();
 
@@ -109,10 +111,29 @@ export default function VeeamJobsPage() {
     const load = useCallback((refresh: boolean = false) => {
         setLoading(true);
         setError(null);
+        setNotice(null);
         veeamApi
             .getJobStatsDaily(days, selectedServerId, showSystem, refresh)
             .then((r) => {
-                if (!r.success) {
+                const collected = r.collected_at ? formatDateTime(r.collected_at) : null;
+                if (r.offline) {
+                    setNotice(
+                        `Agent '${r.agent_name ?? "unknown"}' is offline — ` +
+                            (collected
+                                ? `showing last data received ${collected}. `
+                                : "") +
+                            "Data may be outdated.",
+                    );
+                } else if (r.stale && r.success) {
+                    setNotice(
+                        `Live refresh failed — ` +
+                            (collected
+                                ? `showing last data received ${collected}. `
+                                : "showing cached data. ") +
+                            "Data may be outdated.",
+                    );
+                }
+                if (!r.success && !r.offline) {
                     setError(r.error ?? "Failed to load job stats");
                     return;
                 }
@@ -169,6 +190,7 @@ export default function VeeamJobsPage() {
                 </button>
             </div>
             {error && <div className="error-banner">{error}</div>}
+            {!error && notice && <div className="offline-banner">{notice}</div>}
             {loading && <div className="loading-bar" />}
             {!error && jobs.length === 0 && !loading && (
                 <div className="data-table-empty">No job data available.</div>
