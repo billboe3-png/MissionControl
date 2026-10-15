@@ -50,6 +50,19 @@ AND js.job_name NOT LIKE '%Database Maintenance%'
 AND js.job_name NOT LIKE '%HealthCheck %'
 AND js.job_name NOT LIKE '%Security & Compliance Analyzer%'"""
 
+# PostgreSQL form of the system-job filter above, written as one case-sensitive
+# regex (``!~``) instead of sixteen ``NOT LIKE`` lines. The relay runs this query
+# through ``powershell -EncodedCommand``, which Windows executes via cmd.exe and
+# therefore caps at ~8 KB; the sixteen-line filter alone pushed the daily query
+# over that limit (it is the same set of system jobs).
+_WHERE_FILTER_PG = (
+    "AND js.job_name !~ '("
+    "Resynchronize|Host Discovery|Foreign transform|Infrastructure update|"
+    "Audit Logs|Catalog Cleanup|Shell run|Backup Configuration|Hyper-V CBT|"
+    "Rescan|Checkpoint Removal|Retention job|Malware Detection|"
+    "Database Maintenance|HealthCheck |Security & Compliance Analyzer)'"
+)
+
 # Parent-session filter: keep only rows that _NORM_NAME_MSSQL/_NORM_NAME_PG
 # above leave unchanged (i.e. no trailing " - <hostname>" host-child suffix).
 # Veeam writes one parent session per run plus one child session per protected
@@ -61,59 +74,27 @@ _PARENT_ONLY_PG = (
 
 
 def _daily_reason_sql(db_type: str) -> str:
-    """Return the ``reason`` column expression for the daily job-stats query.
+    """Return the ``reason`` column expression for a daily job-stats row.
 
-    A failed backup job's parent session usually records only a progress step
-    (``Processing <host>``) in ``reason``; the real error text lives on the
-    per-host child session (``<job> - <host>``), which the parent-only byte
-    filter excludes. So prefer the latest non-progress reason from any session
-    that normalizes to the same job name on the same day, and fall back to the
-    row's own reason. CR/LF/tab/pipe are stripped because rows are parsed as
-    pipe-delimited, one-per-line output. ``TOP 1``/``LIMIT 1`` is used instead
-    of ``STRING_AGG`` so the query also runs on SQL Server 2016.
+    The query already prefers the per-host child session for jobs that have one,
+    and that child session carries the real error text, so the row's own reason
+    is used directly instead of looking it up across sibling sessions. CR/LF/
+    tab/pipe are stripped because rows are parsed as pipe-delimited,
+    one-per-line output.
+
+    Keeping this expression short is deliberate: the relay sends the whole query
+    in a ``powershell -EncodedCommand`` line, which Windows runs via cmd.exe and
+    is therefore capped at ~8 KB.
     """
     if db_type == "mssql":
-        norm_c = (
-            "CASE WHEN CHARINDEX(' - ', c.job_name) > 0 "
-            "THEN LEFT(c.job_name, CHARINDEX(' - ', c.job_name) - 1) "
-            "ELSE c.job_name END"
-        )
-        norm_js = (
-            "CASE WHEN CHARINDEX(' - ', js.job_name) > 0 "
-            "THEN LEFT(js.job_name, CHARINDEX(' - ', js.job_name) - 1) "
-            "ELSE js.job_name END"
-        )
         return (
-            "LEFT(COALESCE(("
-            "SELECT TOP 1 LEFT(REPLACE(REPLACE(REPLACE(REPLACE("
-            "CONVERT(nvarchar(max), c.reason), CHAR(13), ' '), CHAR(10), ' '), "
-            "CHAR(9), ' '), '|', ' '), 200) "
-            "FROM [Backup.Model.JobSessions] c "
-            "WHERE " + norm_c + " = " + norm_js + " "
-            "AND CAST(c.creation_time AS DATE) = CAST(js.creation_time AS DATE) "
-            "AND c.reason IS NOT NULL AND CONVERT(nvarchar(max), c.reason) <> '' "
-            "AND CONVERT(nvarchar(max), c.reason) NOT LIKE 'Processing %' "
-            "ORDER BY c.creation_time DESC"
-            "), ISNULL(LEFT(REPLACE(REPLACE(REPLACE(REPLACE("
+            "ISNULL(LEFT(REPLACE(REPLACE(REPLACE(REPLACE("
             "CONVERT(nvarchar(max), js.reason), CHAR(13), ' '), CHAR(10), ' '), "
-            "CHAR(9), ' '), '|', ' '), 500), '')), 500) AS reason"
+            "CHAR(9), ' '), '|', ' '), 500), '') AS reason"
         )
     return (
-        "left(COALESCE(("
-        "SELECT left(replace(replace(replace(replace("
-        "COALESCE(c.reason::text, ''), chr(13), ' '), chr(10), ' '), "
-        "chr(9), ' '), '|', ' '), 200) "
-        'FROM "backup.model.jobsessions" c '
-        "WHERE regexp_replace(c.job_name, ' - [A-Za-z0-9._]+$', '') "
-        "= regexp_replace(js.job_name, ' - [A-Za-z0-9._]+$', '') "
-        "AND DATE(c.creation_time) = DATE(js.creation_time) "
-        "AND c.reason IS NOT NULL AND c.reason::text <> '' "
-        "AND c.reason::text NOT LIKE 'Processing %' "
-        "ORDER BY c.creation_time DESC "
-        "LIMIT 1"
-        "), left(replace(replace(replace(replace("
-        "COALESCE(js.reason::text, ''), chr(13), ' '), chr(10), ' '), "
-        "chr(9), ' '), '|', ' '), 500)), 500) AS reason"
+        "left(translate(COALESCE(js.reason::text, ''), "
+        "chr(13)||chr(10)||chr(9)||'|', '    '), 500) AS reason"
     )
 
 
@@ -1555,7 +1536,12 @@ AND js.job_name NOT LIKE '%Security & Compliance Analyzer%'"""
         if collector == "job_stats_daily":
             days = max(1, int(days or 7))
             window_start = days - 1
-            where_filter = "" if include_system else _WHERE_FILTER_SQL
+            if include_system:
+                where_filter = ""
+            elif db_type == "mssql":
+                where_filter = _WHERE_FILTER_SQL
+            else:
+                where_filter = _WHERE_FILTER_PG
             if db_type == "mssql":
                 norm = _NORM_NAME_MSSQL
                 return (
@@ -1567,8 +1553,8 @@ AND js.job_name NOT LIKE '%Security & Compliance Analyzer%'"""
                     "ISNULL(bs.read_size, 0) AS read_size, "
                     "ISNULL(bs.stored_size, 0) AS stored_size, "
                     + _daily_reason_sql("mssql") + ", "
-                    "CASE WHEN " + norm + " = js.job_name THEN 1 ELSE 0 END "
-                    "AS is_parent "
+                    "CASE WHEN CHARINDEX(' - ', js.job_name) = 0 "
+                    "THEN 1 ELSE 0 END AS is_parent "
                     "FROM [Backup.Model.JobSessions] js "
                     "LEFT JOIN [Backup.Model.BackupJobSessions] bs "
                     "ON bs.id = js.id "
