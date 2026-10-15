@@ -5915,6 +5915,119 @@ select.form-input {
     border-color: rgba(139, 148, 158, 0.3);
 }
 
+/* ── Per-host backup health cards ─────────────────────── */
+
+.veeam-hosts-section {
+    margin-bottom: 16px;
+}
+
+.veeam-hosts-heading {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin: 0 0 10px;
+}
+
+.veeam-hosts-heading h3 {
+    margin: 0;
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: var(--text);
+}
+
+.veeam-hosts-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 12px;
+}
+
+.veeam-host-card {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    text-align: left;
+    padding: 14px 16px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--border);
+    border-radius: var(--radius);
+    cursor: pointer;
+    transition: border-color 0.15s, background 0.15s;
+    font: inherit;
+    color: var(--text);
+}
+
+.veeam-host-card:hover {
+    border-color: rgba(59, 130, 246, 0.3);
+    border-left-color: var(--primary);
+}
+
+.veeam-host-card.is-selected {
+    border-color: var(--primary);
+    border-left-color: var(--primary);
+    background: rgba(59, 130, 246, 0.08);
+}
+
+.veeam-host-card.status-passed { border-left-color: #3fb950; }
+.veeam-host-card.status-failed { border-left-color: #f85149; }
+.veeam-host-card.status-warning { border-left-color: #d29922; }
+.veeam-host-card.status-no_data { border-left-color: #8b949e; }
+.veeam-host-card.status-error { border-left-color: #f85149; }
+
+.veeam-host-card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+.veeam-host-name {
+    font-weight: 600;
+    font-size: 0.9rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.veeam-host-meta {
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+}
+
+.veeam-host-reasons {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.veeam-host-reason {
+    display: flex;
+    flex-direction: column;
+    font-size: 0.75rem;
+    padding: 4px 8px;
+    border-radius: 4px;
+    background: rgba(248, 81, 73, 0.1);
+    border: 1px solid rgba(248, 81, 73, 0.25);
+}
+
+.veeam-host-reason-job {
+    font-weight: 600;
+    color: var(--text);
+}
+
+.veeam-host-reason-text {
+    color: var(--text-muted);
+    word-break: break-word;
+}
+
+.veeam-host-reason-more {
+    font-size: 0.72rem;
+    color: var(--text-muted);
+}
+
 /* ── Jobs Matrix View ─────────────────────────────────── */
 
 .jobs-toolbar {

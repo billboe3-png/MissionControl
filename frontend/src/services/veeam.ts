@@ -115,6 +115,35 @@ export interface VeeamJobStatsResponse {
     error: string | null;
 }
 
+export type VeeamHostBackupStatus = "passed" | "failed" | "warning" | "no_data" | "error";
+
+export interface VeeamHostFailure {
+    job_name: string;
+    date: string;
+    reason: string | null;
+}
+
+export interface VeeamHostBackup {
+    server_id: number;
+    name: string;
+    enabled: boolean;
+    days: number;
+    status: VeeamHostBackupStatus;
+    jobs_total: number;
+    jobs_failed: number;
+    jobs_warning: number;
+    failures: VeeamHostFailure[];
+    last_run: string | null;
+    error: string | null;
+}
+
+export interface VeeamHostsStatusResponse {
+    success: boolean;
+    days: number;
+    count: number;
+    hosts: VeeamHostBackup[];
+}
+
 export interface VeeamJobDailyRun {
     creation_time?: string | null;
     end_time?: string | null;
@@ -415,5 +444,12 @@ export const veeamApi = {
         return veeamClient<VeeamJobStatsDailyResponse>(
             `${API}/jobs/stats/daily?days=${days}&include_system=${includeSystem}${sid}${ref}`,
         );
+    },
+
+    async getHostsStatus(days: number = 3, refresh: boolean = false): Promise<VeeamHostsStatusResponse> {
+        const params = new URLSearchParams();
+        params.set("days", String(days));
+        if (refresh) params.set("refresh", "true");
+        return veeamClient<VeeamHostsStatusResponse>(`${API}/hosts/status?${params.toString()}`);
     },
 };

@@ -8,8 +8,80 @@ import {
     VeeamHealth,
     VeeamJob,
     VeeamRepository,
+    VeeamHostBackup,
+    VeeamHostBackupStatus,
     formatBytes,
 } from "../../services/veeam";
+
+const HOST_WINDOW_DAYS = 3;
+
+function hostBadge(status: VeeamHostBackupStatus): {
+    status: "healthy" | "error" | "warning" | "neutral";
+    label: string;
+} {
+    if (status === "passed") return { status: "healthy", label: "Passed" };
+    if (status === "failed") return { status: "error", label: "Failed" };
+    if (status === "warning") return { status: "warning", label: "Warning" };
+    if (status === "error") return { status: "error", label: "Error" };
+    return { status: "neutral", label: "No data" };
+}
+
+function hostSummaryText(host: VeeamHostBackup): string {
+    if (host.error) return host.error;
+    if (host.status === "no_data") {
+        return `No backups in the last ${host.days} days`;
+    }
+    if (host.jobs_failed > 0) {
+        return `${host.jobs_failed} of ${host.jobs_total} jobs failed (last ${host.days} days)`;
+    }
+    if (host.jobs_warning > 0) {
+        return `${host.jobs_warning} of ${host.jobs_total} jobs warned (last ${host.days} days)`;
+    }
+    return `All ${host.jobs_total} jobs passed (last ${host.days} days)`;
+}
+
+function VeeamHostCard({
+    host,
+    selected,
+    onSelect,
+}: {
+    host: VeeamHostBackup;
+    selected: boolean;
+    onSelect: () => void;
+}) {
+    const badge = hostBadge(host.status);
+    return (
+        <button
+            type="button"
+            className={`veeam-host-card status-${host.status}${selected ? " is-selected" : ""}`}
+            onClick={onSelect}
+            title={host.name}
+        >
+            <div className="veeam-host-card-header">
+                <span className="veeam-host-name">{host.name}</span>
+                <StatusBadge status={badge.status} label={badge.label} />
+            </div>
+            <div className="veeam-host-meta">{hostSummaryText(host)}</div>
+            {host.failures.length > 0 && (
+                <ul className="veeam-host-reasons">
+                    {host.failures.slice(0, 3).map((failure, i) => (
+                        <li key={i} className="veeam-host-reason">
+                            <span className="veeam-host-reason-job">{failure.job_name}</span>
+                            {failure.reason && (
+                                <span className="veeam-host-reason-text">{failure.reason}</span>
+                            )}
+                        </li>
+                    ))}
+                    {host.failures.length > 3 && (
+                        <li className="veeam-host-reason-more">
+                            +{host.failures.length - 3} more
+                        </li>
+                    )}
+                </ul>
+            )}
+        </button>
+    );
+}
 
 function jobState(s: string): { status: "healthy" | "warning" | "error" | "info"; label: string } {
     if (s === "Stopped") return { status: "healthy", label: "Idle" };
@@ -28,10 +100,12 @@ export default function VeeamOverviewPage() {
     const [health, setHealth] = useState<VeeamHealth | null>(null);
     const [jobs, setJobs] = useState<VeeamJob[]>([]);
     const [repos, setRepos] = useState<VeeamRepository[]>([]);
+    const [hosts, setHosts] = useState<VeeamHostBackup[]>([]);
     const [error, setError] = useState<string | null>(null);
     const [loading, setLoading] = useState(false);
     const [refreshing, setRefreshing] = useState(false);
-    const { selectedServerId } = useVeeamServer();
+    const [hostsLoading, setHostsLoading] = useState(false);
+    const { selectedServerId, setSelectedServerId } = useVeeamServer();
 
     const load = useCallback((refresh: boolean = false) => {
         if (refresh) {
@@ -59,9 +133,22 @@ export default function VeeamOverviewPage() {
             });
     }, [selectedServerId]);
 
+    const loadHosts = useCallback((refresh: boolean = false) => {
+        setHostsLoading(true);
+        veeamApi
+            .getHostsStatus(HOST_WINDOW_DAYS, refresh)
+            .then((res) => setHosts(res.hosts ?? []))
+            .catch(() => setHosts([]))
+            .finally(() => setHostsLoading(false));
+    }, []);
+
     useEffect(() => {
         load(false);
     }, [load]);
+
+    useEffect(() => {
+        loadHosts(false);
+    }, [loadHosts]);
 
     const storagePercent =
         summary && summary.total_space_bytes > 0
@@ -72,8 +159,11 @@ export default function VeeamOverviewPage() {
         <VeeamPageShell
             title="Veeam Backup &amp; Replication"
             version={summary?.version ?? "?"}
-            onRefresh={() => load(true)}
-            refreshing={loading || refreshing}
+            onRefresh={() => {
+                load(true);
+                loadHosts(true);
+            }}
+            refreshing={loading || refreshing || hostsLoading}
         >
             {error && <div className="error-banner">{error}</div>}
             {loading && <div className="loading-bar" />}
@@ -89,6 +179,26 @@ export default function VeeamOverviewPage() {
                         label={health.healthy ? "Connected" : "Error"}
                     />
                     <span>{health.healthy ? "Server reachable" : health.error}</span>
+                </div>
+            )}
+            {(hosts.length > 0 || hostsLoading) && (
+                <div className="veeam-hosts-section">
+                    <div className="veeam-hosts-heading">
+                        <h3>Backup Health (Last {HOST_WINDOW_DAYS} Days)</h3>
+                        {hostsLoading && (
+                            <span className="refresh-indicator">Loading hosts…</span>
+                        )}
+                    </div>
+                    <div className="veeam-hosts-grid">
+                        {hosts.map((host) => (
+                            <VeeamHostCard
+                                key={host.server_id}
+                                host={host}
+                                selected={host.server_id === selectedServerId}
+                                onSelect={() => setSelectedServerId(host.server_id)}
+                            />
+                        ))}
+                    </div>
                 </div>
             )}
             {summary && (

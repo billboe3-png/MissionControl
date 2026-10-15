@@ -386,6 +386,133 @@ async def get_job_stats_daily(
         return _failed("job_stats_daily", str(exc))
 
 
+def _classify_host(server: VeeamBackupServer, payload: Any, days: int) -> dict[str, Any]:
+    """Summarise one host's backup outcome over the last ``days`` days.
+
+    A host "passes" when every job that ran in the window succeeded, "fails"
+    when at least one job failed and "warns" when a job only produced warnings.
+    Failure reasons come from the ``runs`` the agent relay attaches to each
+    daily cell; direct-DB servers only expose counts, so their reasons are
+    empty.
+    """
+    summary: dict[str, Any] = {
+        "server_id": server.id,
+        "name": server.name,
+        "enabled": bool(server.enabled),
+        "days": days,
+        "status": "no_data",
+        "jobs_total": 0,
+        "jobs_failed": 0,
+        "jobs_warning": 0,
+        "failures": [],
+        "last_run": None,
+        "error": None,
+    }
+
+    if not isinstance(payload, dict) or not payload.get("success"):
+        error = payload.get("error") if isinstance(payload, dict) else None
+        summary["status"] = "error" if error else "no_data"
+        summary["error"] = error
+        return summary
+
+    jobs = payload.get("jobs") or []
+    dates = [d for d in (payload.get("dates") or []) if d]
+    window = set(dates[-days:]) if dates else set()
+    summary["jobs_total"] = len(jobs)
+
+    has_activity = False
+    failed_jobs = 0
+    warning_jobs = 0
+    failures: list[dict[str, Any]] = []
+    last_run: str | None = None
+
+    for job in jobs:
+        job_failed = False
+        job_warning = False
+        for day, cell in (job.get("daily") or {}).items():
+            if window and day not in window:
+                continue
+            has_activity = True
+            if int(cell.get("failed_count") or 0) > 0:
+                job_failed = True
+            elif int(cell.get("warning_count") or 0) > 0:
+                job_warning = True
+            for run in cell.get("runs") or []:
+                when = run.get("end_time") or run.get("creation_time")
+                if when and (last_run is None or str(when) > last_run):
+                    last_run = str(when)
+                if str(run.get("result")) == "Failed":
+                    reason = str(run.get("reason") or "").strip() or None
+                    failures.append({
+                        "job_name": job.get("job_name"),
+                        "date": day,
+                        "reason": reason,
+                    })
+        if job_failed:
+            failed_jobs += 1
+        elif job_warning:
+            warning_jobs += 1
+
+    seen: set[tuple[Any, Any, Any]] = set()
+    deduped: list[dict[str, Any]] = []
+    for failure in failures:
+        key = (failure["job_name"], failure["date"], failure["reason"])
+        if key in seen:
+            continue
+        seen.add(key)
+        deduped.append(failure)
+
+    summary["jobs_failed"] = failed_jobs
+    summary["jobs_warning"] = warning_jobs
+    summary["failures"] = deduped[:10]
+    summary["last_run"] = last_run
+
+    if not has_activity:
+        summary["status"] = "no_data"
+    elif failed_jobs > 0:
+        summary["status"] = "failed"
+    elif warning_jobs > 0:
+        summary["status"] = "warning"
+    else:
+        summary["status"] = "passed"
+    return summary
+
+
+@router.get("/hosts/status")
+async def hosts_status(
+    days: int = Query(default=3, ge=1, le=30),
+    refresh: bool = Query(False),
+    db: Session = Depends(get_db),
+) -> dict[str, Any]:
+    """Per-host backup health for every Veeam-enabled remote target.
+
+    Returns one entry per enabled server summarising whether the jobs that ran
+    over the last ``days`` days passed, failed or warned, including failure
+    reasons. Served from each server's snapshot cache when fresh, collected
+    live otherwise.
+    """
+    servers = db.execute(
+        select(VeeamBackupServer)
+        .where(VeeamBackupServer.enabled.is_(True))
+        .order_by(VeeamBackupServer.name)
+    ).scalars().all()
+
+    hosts: list[dict[str, Any]] = []
+    for server in servers:
+        try:
+            provider = build_server_provider(db, server)
+            payload = await _serve(
+                db, provider, server, "job_stats_daily",
+                provider.get_job_stats_daily, refresh,
+                days=days, include_system=False,
+            )
+        except Exception as exc:  # pragma: no cover - defensive
+            payload = {"success": False, "error": str(exc)}
+        hosts.append(_classify_host(server, payload, days))
+
+    return {"success": True, "days": days, "count": len(hosts), "hosts": hosts}
+
+
 @router.get("/jobs/{job_id}")
 async def get_job_detail(
     job_id: str,
