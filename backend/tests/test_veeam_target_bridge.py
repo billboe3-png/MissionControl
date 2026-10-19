@@ -274,20 +274,35 @@ def test_sync_skips_non_ssh_veeam_target(db_session):
     assert row is None
 
 
-def test_sync_disables_row_when_protocol_changed_to_non_ssh(db_session):
+def test_sync_disables_row_when_protocol_changed_to_unsupported(db_session):
     _, target = _make_target(db_session, plugins="veeam", protocol="ssh")
     sync_target_to_server(db_session, target)
     row = db_session.query(VeeamBackupServer).filter(
         VeeamBackupServer.target_id == target.id
     ).one()
     assert row.enabled is True
-    target.protocol = "winrm"
+    target.protocol = "psremoting"
     db_session.commit()
     sync_target_to_server(db_session, target)
     row = db_session.query(VeeamBackupServer).filter(
         VeeamBackupServer.target_id == target.id
     ).one()
     assert row.enabled is False
+
+
+def test_sync_keeps_row_enabled_for_winrm_target(db_session):
+    """The agent relay supports winrm, so a winrm target stays enabled.
+
+    Live symptom: EREHQDC01/INTHQDC01 relay targets run winrm (psremoting
+    fails on Linux agents, their sshd is unusable), but the bridge disabled
+    the veeam server row on the next sync and no queries ever dispatched.
+    """
+    _, target = _make_target(db_session, plugins="veeam", protocol="winrm")
+    sync_target_to_server(db_session, target)
+    row = db_session.query(VeeamBackupServer).filter(
+        VeeamBackupServer.target_id == target.id
+    ).one()
+    assert row.enabled is True
 
 
 def test_backfill_creates_rows_for_preexisting_targets(db_session):

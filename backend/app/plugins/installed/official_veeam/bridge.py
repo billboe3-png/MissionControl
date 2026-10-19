@@ -177,9 +177,10 @@ def _upsert_target_server(db: Session, target) -> bool:
     """Create/refresh the veeam_backup_servers row for a remote target.
 
     Enabled when the target is enabled, its target_plugins include "veeam",
-    and its protocol is ssh. The agent relay/community path only works over
-    SSH, so a psremoting/winrm target never registers a row; if an existing
-    row is re-synced against a non-SSH target it is disabled (same path as
+    and its protocol is ssh or winrm. The agent relay/community path runs over
+    both (the agent's veeam plugin accepts protocol in ("ssh", "winrm")); a
+    psremoting target never registers a row, and if an existing row is
+    re-synced against an unsupported protocol it is disabled (same path as
     removing the veeam plugin).
 
     Returns True when a row was created, updated or disabled. The caller owns
@@ -194,9 +195,11 @@ def _upsert_target_server(db: Session, target) -> bool:
         select(VeeamBackupServer).where(VeeamBackupServer.target_id == target.id)
     ).scalar_one_or_none()
 
-    protocol_is_ssh = (getattr(target, "protocol", "") or "").lower() == "ssh"
+    protocol_supported = (
+        getattr(target, "protocol", "") or ""
+    ).lower() in ("ssh", "winrm")
 
-    if not (target.enabled and "veeam" in plugins and protocol_is_ssh):
+    if not (target.enabled and "veeam" in plugins and protocol_supported):
         if row is not None:
             row.enabled = False
             return True
