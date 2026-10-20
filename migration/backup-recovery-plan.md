@@ -1,6 +1,9 @@
 # Backup & Recovery Plan — Mission Control 2-VM Migration
 
-**Status:** PLAN FOR APPROVAL. **No production backup has been created or transferred.**
+**Status:** ✅ **APPROVED AND EXECUTED (2026-10-20).** Backup set `20261020T173709Z` created, encrypted,
+transferred to the owner's local Windows machine, integrity-verified, and restored successfully in a scratch
+database (schema, row counts, and **33/33 credential decryptions** — all PASS). Full evidence in
+`migration/execution-log.md` → "Phase 4".
 **Owner decision U6 (2026-10-20):** back up to the owner's **local Windows machine**; encrypt sensitive
 artefacts; never print secrets; verify by SHA-256; document location, access control, encryption and
 recovery-key custody; include a scratch-database restore test verifying schema, row counts and credential

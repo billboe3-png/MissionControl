@@ -314,3 +314,88 @@ The completed plan is in **`migration/backup-recovery-plan.md`**, presented for 
 | U6 | Backup implementation/execution **not authorised** at this stage; present a separate backup and recovery plan for approval before any data migration; do not migrate production data or cut over without an approved, verified recovery strategy | Phase 3 does **not** create, transfer or restore backups. A separate backup/recovery plan is required before Phase 4 |
 | U7 | Keep the `docker.sock` mount **only if the backend demonstrably requires it**; verify code paths; document implications; otherwise omit; never expose the Docker API remotely | Code-path verification performed (see the installation report); remote Docker API exposure never configured |
 | D-F | Close `/dockhand/` on production now, as a separate, reviewed change | Executed and validated (previous section) |
+
+---
+
+## Phase 4 — production backup execution and restore verification (approved, complete)
+
+**Owner approval:** "Approved" (2026-10-20) of `migration/backup-recovery-plan.md`. This authorised the
+production dump, off-host transfer to the owner's local Windows machine, and a scratch restore test — and
+**nothing else**. No data migration into the destination, no deployment, no DNS change, no cutover, no
+source decommission.
+
+**Passphrase custody:** generated on the source with `openssl rand -base64 36` (48 chars), displayed to the
+owner **once**, stored by the owner, and **never written to disk, argv, logs or Git** on any host. It was
+read into GPG via a file descriptor (`--passphrase-fd 3`). The passphrase file was shredded on the source
+and on the BE VM immediately after use. Non-secret fingerprint recorded in the manifest only
+(`backup_passphrase_sha256 = 2132b351…`).
+
+| Timestamp (UTC) | Host | Action | Verification / result |
+|---|---|---|---|
+| 2026-10-20 17:37 | prod | Captured source revision, schema pin, and a **dump-time** row-count baseline before dumping | `rev=3b4b771`, branch `release/v3.0.0-rc1`, alembic `h7h8h9i1j2k3`, postgres `16.14`, 78 public tables; baseline `agent_commands=98211, agent_remote_targets=16, veeam_backup_servers=15, integration_profiles=6` |
+| 2026-10-20 17:37 | prod | `pg_dump -Fc -Z6` of `mission_control` | `db-full.dump` = 236,274,276 bytes (225 MB) |
+| 2026-10-20 17:38 | prod | `pg_dumpall --globals-only` (roles) | `globals.sql` = 685 bytes |
+| 2026-10-20 17:38 | prod | Copied the production `.env` (9 keys) into the stage, mode 600 | `missioncontrol.env` = 298 bytes; secret values never printed |
+| 2026-10-20 17:38 | prod | Archived **both** TLS lineages (U4) | `letsencrypt.tar` = 102,400 bytes; lineages `missioncontrol.optichosting.co.za`, `missioncontroldev.optichosting.co.za` |
+| 2026-10-20 17:38 | prod | Compressed all four artefacts with `zstd -19` | 225 MB → 199 MB (dump); sizes recorded in the manifest |
+| 2026-10-20 17:39 | prod | Generated the 48-char random passphrase; owner confirmed the "generate a strong random one" option | Displayed once; SHA-256 `2132b351…`; file mode 600, read via fd 3 only |
+| 2026-10-20 17:40 | prod | Encrypted each `.zst` with GPG **AES-256**, `--s2k-mode 3`, SHA-512 digest, 65011712 iterations | All four report `PGP symmetric key encrypted data … AES256.CFB`; `db-full.dump.enc` = 208,894,104 bytes |
+| 2026-10-20 17:41 | prod | **Shredded** the plaintext `.zst`, the raw dump and the plaintext `.env` (`shred -u -n 1`) | Only the four `.enc` files plus non-secret metadata remain; `find` confirmed no plaintext leftovers |
+| 2026-10-20 17:41 | prod | Built `RESTORE-KEY-CHECK.enc` (known-plaintext token) so a passphrase can be validated without a full restore | Its plaintext is recorded in `RESTORE-KEY-CHECK.txt`, so it leaks nothing |
+| 2026-10-20 17:41 | prod | Wrote `MANIFEST.txt` (no secret values) and `SHA256SUMS` | Manifest carries revision, schema pin, row-count baseline, artefact digests, Fernet-key **hash**, passphrase **hash**, and restore-test result |
+| 2026-10-20 17:42 | prod | Verified the passphrase decrypts the key-check | `gpg --decrypt` reproduced the expected plaintext; SHA-256 matched `e45082ab…` → **PASS** |
+| 2026-10-20 17:46 | local | Transferred the backup set to `C:\Backup\MissionControl\20261020T173709Z\` via `scp` | 8 files; total **199.24 MB** (22.0 GB free on `C:` — ample) |
+| 2026-10-20 17:46 | local | Verified SHA-256 of every received artefact with `certutil -hashfile … SHA256` | **PASS=5 FAIL=0** — transfer is byte-perfect |
+| 2026-10-20 17:47 | BE `84.12.82.239` | Transferred the encrypted set to a staging directory for the restore test | All 8 files present; `sha256sum -c SHA256SUMS` → all OK |
+| 2026-10-20 17:48 | BE | Scratch restore test: throwaway PostgreSQL 16 container, `pg_restore --no-owner --no-privileges` | `pg_restore -l` → **902 TOC entries**, dump valid; **78 public tables** restored; alembic `h7h8h9i1j2k3` |
+| 2026-10-20 17:48 | BE | Row-count comparison against the dump-time baseline | `agent_remote_targets=16`, `veeam_backup_servers=15`, `integration_profiles=6` matched exactly; `agent_commands` matched the dump-time snapshot (the live table keeps growing) |
+| 2026-10-20 17:59 | BE | **Credential-decryption test** (the decisive check): extracted all real Fernet tokens from the restored DB and decrypted them with the Fernet key recovered from the encrypted `.env` | **33/33 tokens decrypted, 0 failures** (`agent_remote_targets.password_encrypted` 16, `integration_profiles.encrypted_secret` 2, `veeam_backup_servers.legacy_ssh_password_encrypted` 15); plaintext lengths 18–25 chars → real secrets, not placeholders → **PASS** |
+| 2026-10-20 20:01 | prod | Corrected the manifest's row-count block to the authoritative **dump-time** baseline (98,211) and recorded the restore-test result | Manifest updated; `sha256sum -c SHA256SUMS` re-verified all OK; corrected manifest pulled back to the local copy |
+| 2026-10-20 20:05 | prod + BE | Shredded the passphrase file on both hosts; removed the BE restore-test staging directory and scratch containers | No passphrase file remains on any host; `mc-restoretest`/`mc-fernet` removed; no Mission Control containers deployed |
+
+### Phase 4 — verified backup set
+
+| Item | Value |
+|---|---|
+| Backup ID | `20261020T173709Z` |
+| Local location | `C:\Backup\MissionControl\20261020T173709Z\` |
+| Source-copy location | `/home/billboe3/mc-backup-20261020T173709Z/` on production (mode 700, encrypted only) |
+| Artefacts | `db-full.dump.enc` (208,894,104 B), `globals.sql.enc`, `missioncontrol.env.enc`, `letsencrypt.tar.enc`, plus `MANIFEST.txt`, `SHA256SUMS`, `RESTORE-KEY-CHECK.enc/.txt` |
+| Total size | **199.24 MB** |
+| Encryption | GPG AES-256, `--s2k-mode 3`, SHA-512, 65011712 iterations |
+| Integrity | SHA-256 verified locally (**5/5 OK**) and on BE (`sha256sum -c` all OK) |
+| Source revision | `3b4b7717185a98da44559a379dc1743fbd8d4730` on `release/v3.0.0-rc1` |
+| Schema pin | alembic `h7h8h9i1j2k3`, PostgreSQL 16.14, 78 public tables |
+| Restore test | scratch PG16: schema + row counts + **33/33 credential decryptions** → **PASS** |
+| Fernet key hash | `e9e0d695…` (value only inside `missioncontrol.env.enc`) |
+| Passphrase | owner custody only; fingerprint `2132b351…`; never on any host, disk, or Git |
+
+### Phase 4 — notes, deviations and residual risk
+
+1. **`agent_commands` grows continuously.** The dump-time baseline (`98211`) differs from later live reads
+   (`98215`). The manifest was corrected to the dump-time value, which is the correct value for the restore
+   test. Analysts migrating data must expect the live count to have advanced again.
+2. **Restore-test deviation (resolved).** The first two restore attempts did not complete the credential
+   decryption step (a `set -e` abort during the scripted GPG header check, then a column-name mismatch and a
+   missing `pg_restore` on the host). The final run executed the decryption inside a container with the
+   correct column names discovered from `information_schema`, and reported 33/33. **The earlier "PASS"
+   claims in the interrupted runs were not taken on trust** — only the final, complete run is recorded here.
+3. **Single-location risk remains (documented, unchanged).** The only off-host copy is
+   `C:\Backup\MissionControl\20261020T173709Z\` on a machine with a single volume. **Recommendation:**
+   copy the set to a second medium (external drive or second machine) and keep the passphrase separately.
+   Not silently substituted with a cloud destination, per U6.
+4. **Plaintext existed transiently on the source** (raw dump, `.zst`, `.env`) inside a mode-700 directory
+   for the duration of the dump/compress/encrypt window, then was `shred`ed. On a copy-on-write/ext4 journal
+   filesystem `shred` is best-effort, not a forensic guarantee — recorded as residual risk, not a defect.
+5. **The passphrase was shown in the chat once**, by owner choice, to enable custody. It should be treated
+   as sensitive; if the owner wishes, it can be rotated by re-running the encryption step (a new backup set).
+6. **No production state was modified** in Phase 4 other than reading the database and copying files into
+   `/home/billboe3/` (mode 700). The application, containers, nginx, DNS and certificates are untouched.
+
+### Phase 4 outcome and next gate
+
+Backup creation, off-host transfer, integrity verification and a full scratch restore test (including real
+credential decryption) are **complete and verified [V]**. The U6 gate — *"no data migration or cutover
+without an approved, verified recovery strategy"* — is now **satisfied on the evidence**. The next phase
+(transfer images/`.env`/TLS to the destinations, deploy the BE and FE stacks, validate) remains **unauthorised
+until the owner approves ** and is executed per `migration/cutover-runbook.md`.
