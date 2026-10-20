@@ -495,8 +495,9 @@ Before writing anything to the destination, the mandatory connectivity precondit
 | `sshd` listening `0.0.0.0:22` both hosts | **yes** |
 | Internet egress / OCI metadata | 200 / open |
 
-**Conclusion:** the SYNs never reached the guests; the block is at the **OCI security-list / NSG layer**,
-not the guest firewall. This contradicts the Phase 1 claim that the private path "delivers every port"
+**Conclusion (SUPERSEDED — see RESOLUTION below):** the SYNs appeared never to reach the guests and the
+block was attributed to the **OCI security-list / NSG layer**. **This was WRONG.** The block was the
+guest firewall on each destination VM; the SYNs did reach them. This contradicts the Phase 1 claim that the private path "delivers every port"
 (now corrected in `network-security-plan.md` §1 and §3.6). The supplied intra-VCN rules (rule 1 all-protocols
 `10.0.0.0/16`, rule 9 TCP 22 `10.0.0.0/16`) *should* permit this traffic but are demonstrably not in force
 as supplied — **[?]** either a different list/NSG is applied, or the rules are attached elsewhere.
@@ -508,3 +509,65 @@ remains untouched. Full requirement and remediation options in `network-security
 
 **Owner action required:** permit `10.0.0.26/32 → 10.0.0.33 TCP 8000` (required) and intra-VCN TCP 22
 (validation), keeping all sources private — never `0.0.0.0/0`.
+
+### Phase 5 blocker RESOLVED — root cause was the guest firewall, not OCI (2026-10-20 ~19:00 UTC)
+
+The STOP was lifted once the true cause was isolated. **Oracle Cloud networking was correct throughout.**
+
+**Evidence chain (decisive):**
+
+1. OCI control plane confirmed exactly **one** subnet (`Internal-IP`, `10.0.0.0/24`), **one** security list
+   (`Default Security List for vcn-20261017-1032`) and — after the owner detached the stray
+   `ig-quick-action-NSG` from the FE VNIC — **zero** NSGs and **no** VLAN attachment on either VNIC.
+2. That security list already carried correct **stateful** ingress rules, including
+   `10.0.0.0/24 → all protocols`, `10.0.0.26/32 → TCP 8000` and `10.0.0.0/24 → TCP 22`.
+3. A **temporary** `10.0.0.0/24` ACCEPT inserted into the **backend guest's** INPUT chain then recorded
+   **16+ packets from FE probes** — proving the SYNs crossed the OCI fabric and the security list and were
+   delivered to the guest. The cloud path was never the problem.
+4. Both guests' INPUT chains ended with an unconditional
+   `REJECT --reject-with icmp-host-prohibited` and had **no** ACCEPT for `10.0.0.0/24`. That
+   `icmp-host-prohibited` rejection is what surfaces to a client as **`No route to host`** — the symptom
+   that had been misread as a cloud-layer block. The REJECT counters were low only because sampling
+   preceded the bulk of the probe traffic.
+
+**Root cause:** the destination image ships a restrictive guest firewall (ICMP + admin SSH + 80/443, then
+reject all). The migration plan assumed the OCI security list was the *only* ACL governing the path and
+therefore never accounted for a host-level firewall. **Planning defect, now corrected.**
+
+**Change applied (approved by owner) — both destination VMs:**
+
+| Item | Value |
+|---|---|
+| Hosts | FE `10.0.0.26`, BE `10.0.0.33` |
+| Rule | `iptables -I INPUT 1 -s 10.0.0.0/24 -j ACCEPT` |
+| Effect | stops the guest rejecting intra-VCN traffic the security list already permits |
+| Persistence | `netfilter-persistent` — confirmed `enabled` + `active`; written to `/etc/iptables/rules.v4` |
+| Backup | `/etc/iptables/rules.v4.bak.20261020T185922Z` (FE), `…T185923Z` (BE) |
+| Rollback | `iptables -D INPUT -s 10.0.0.0/24 -j ACCEPT` + restore the `.bak` file |
+| Scope | private subnet only — grants nothing beyond what the OCI security list already allows; cannot expose anything publicly |
+
+Docker chains were deliberately **excluded** from the persisted file (the plan forbids capturing container
+rules); the only Docker references retained are empty chain declarations plus the pre-existing empty NAT
+chain — no container port-mapping rules.
+
+**Verification — 13-port intra-VCN probe, both directions, after the fix:**
+
+| Port | Before | After |
+|---|---|---|
+| 22 | `NO-ROUTE` | **`OPEN`** (sshd) |
+| 8000 | `NO-ROUTE` | **`refused`** (path open, no listener yet — the required result) |
+| 7, 9, 13, 25, 53, 80, 111, 123, 443, 8443, 19090 | `NO-ROUTE` | **`refused`** (path open, no listener) |
+
+`refused` = packet reached the destination and received a TCP reset, i.e. **the network path is open**.
+Every previously blocked port now reaches the peer; **only SSH is listening** — nothing unintended exposed.
+
+**Outstanding (carried forward):**
+
+- The owner's `ig-quick-action-NSG` was detached from the FE VNIC at the owner's direction. Follow-up:
+  confirm nobody created it deliberately; if it was a security recommendation, decide whether an NSG is
+  still wanted (it may be re-attached later *populated*, not empty).
+- `migration/network-security-plan.md` §3.6 has been corrected to state the real cause.
+- Worth adding to Phase 3 host preparation for any future host: verify the guest firewall permits the
+  private subnet, rather than assuming the cloud ACL is the only gate.
+
+**Phase 5 is unblocked. The required FE→BE TCP 8000 path is open. Deployment may resume.**

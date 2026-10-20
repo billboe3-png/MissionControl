@@ -186,55 +186,36 @@ Two host-side findings from the same run:
 
 ---
 
-### 3.6 CRITICAL FINDING (Phase 5, 2026-10-20): intra-VCN TCP is blocked by the cloud layer
+### 3.6 CRITICAL intra-VCN TCP finding — RESOLVED (guest firewall, not OCI)
 
-**Observed (active probes, both directions, both VMs):**
+**Original finding (now corrected):** FE↔BE TCP appeared blocked at the cloud layer; the intra-VCN rules
+`10.0.0.0/24 → all protocols` and `10.0.0.26/32 → TCP 8000` "should" have permitted the traffic.
 
-| Probe | Result |
-|---|---|
-| ICMP FE→BE | **works** (2/2, 0.27 ms avg) |
-| FE→BE TCP 22 / 80 / 443 / 5432 / 6379 / 8000 | **`No route to host`** (every port) |
-| BE→FE TCP 22 / 80 / 443 / 5432 / 6379 / 8000 | **`No route to host`** (every port) |
-| ARP/neighbour to the peer | **REACHABLE** on both sides (L2 works) |
-| Guest INPUT `REJECT` counter after all probes | FE **10 pkts**, BE **13 pkts** — far too low to account for the probes |
-| `sshd` listening on `0.0.0.0:22` on both VMs | **yes** |
-| Egress to the internet (`https://example.com`) | **200** |
-| OCI metadata `169.254.169.254:80` | **open** |
+**Actual root cause — the destination guests' own firewalls.** Each VM's `iptables INPUT` chain ends with
+an unconditional `REJECT --reject-with icmp-host-prohibited` and contained **no** ACCEPT for the private
+subnet. Intra-VCN packets therefore reached the guest and were rejected **by the guest**, and
+`icmp-host-prohibited` is what a client reports as **`No route to host`** — which is why the fault was
+misattributed to OCI.
 
-**Diagnosis:** the TCP SYNs never reached either guest (the guest REJECT counters did not increment), while
-L2 ARP is fine and ICMP passes. Therefore the drop happens at the **OCI security-list / NSG layer**, not in
-the guest firewalls. `No route to host` on a *same-subnet* peer is the signature of a stateful cloud
-firewall silently dropping the flow.
+**Proof the cloud path was always fine:** inserting a temporary `10.0.0.0/24` ACCEPT into the **backend**
+guest's INPUT chain immediately counted FE probe packets arriving (16+), and the FE→BE:8000 result changed
+from `No route to host` to `refused` (path open, no listener). The security list was never at fault. The
+stray `ig-quick-action-NSG` on the FE VNIC (empty ingress) was a second, unrelated misconfiguration and was
+detached by the owner.
 
-**Why this is critical for Phase 5:** the frontend edge proxies `/api/` to
-`http://10.0.0.33:8000` (§2, and `deploy/migration-2vm/nginx/default.conf`). That requires **FE→BE TCP 8000**.
-With intra-VCN TCP blocked, the deployed frontend **cannot reach the backend API**, so the two-VM
-architecture cannot function until this is fixed.
+**Requirement (now satisfied on both hosts):**
 
-**Relationship to the supplied rules (§1.1):** rule 1 (`10.0.0.0/16`, all protocols, all) and rule 9
-(`10.0.0.0/16`, TCP 22) *should* permit exactly this traffic. They are not being enforced as supplied.
-Two explanations remain, both console-side:
+```
+iptables -I INPUT 1 -s 10.0.0.0/24 -j ACCEPT      # persisted via netfilter-persistent
+```
 
-- **[?]** the security list in force is not the one supplied, or an **NSG** on the VNIC overrides it; or
-- **[?]** the rules were attached to a different subnet/compartment than these two VMs.
+Sources stay private; nothing is exposed to `0.0.0.0/0`. Full change record, rollback and verification in
+`execution-log.md` → "Phase 5 blocker RESOLVED".
 
-**This is not fixable from inside a guest and must not be worked around by broadening rules** (U2). It
-requires the owner to correct the cloud firewall so that **`10.0.0.26 → 10.0.0.33 TCP 8000` (and, for
-management/validation, intra-VCN TCP 22)** is permitted. **Phase 5 stopped at this check** (see
-`execution-log.md` → Phase 5).
+**Lesson / planning correction:** the OCI security list is **not** the only ACL on the path. Every
+destination host must also be checked for a host-level firewall during preparation. Any future host added
+to this design must satisfy the same precondition before deployment.
 
-**[R] Owner action required (OCI console/API):** ensure the security list (and any NSG) applied to both
-VNICs allows at minimum:
-
-| Source | Protocol | Port | Purpose |
-|---|---|---|---|
-| `10.0.0.26/32` | TCP | 8000 | frontend edge → backend API (required) |
-| `10.0.0.0/24` (or the two `/32`s) | TCP | 22 | intra-VCN administration/validation |
-| `10.0.0.0/16` | ICMP | all | already effectively working |
-
-Do **not** add `0.0.0.0/0` to any of these; keep the sources private.
-
----
 
 ## 4. TLS plan (FE)
 
