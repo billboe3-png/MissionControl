@@ -221,6 +221,67 @@ source-host decommission. Production remains authoritative.
 `docker-compose.backend.yml`, `docker-compose.frontend.yml`, `nginx/default.conf` and
 `env/backend.env.example`. They are **artefacts**, not deployed state. Deployment is Phase 4.
 
+## Phase 3b — destination hardening and backup planning (owner decisions 2026-10-20)
+
+**Authorised by the owner's second decision set:** fail2ban SSH jail on both destination VMs, SSH
+reachability verification, OCI rule/NSG clarification, and **planning** (not execution) of the backup and
+recovery plan. Still **not** authorised: production backup creation/transfer, data restore, deployment,
+DNS change, cutover, decommission.
+
+| Timestamp (UTC) | Host | Action | Verification / result |
+|---|---|---|---|
+| 2026-10-20 17:24 | FE/BE | SSH reachability check from the intended administration location | Logged-in source observed as `45.220.11.50`; the work address is the second owner-confirmed admin IP. Both are stable **[V, owner-confirmed]** |
+| 2026-10-20 17:25 | FE/BE | fail2ban readiness assessment before configuring | `fail2ban` 0.11.2 installed but **inactive/disabled**; **`/var/log/auth.log` is absent** — sshd logs only to **journald**; `systemd.journal` Python module present; `iptables` is the **nft** variant (v1.8.7) |
+| 2026-10-20 17:25 | FE/BE | Wrote `/etc/fail2ban/jail.local` with `backend = systemd` (journald is the only source), `ignoreip` = both admin `/32`s + `10.0.0.0/24` + loopback, `maxretry 5 / findtime 10m / bantime 1h` with increment to 1 week | `fail2ban-client -t` → **OK: configuration test is successful** |
+| 2026-10-20 17:25 | FE/BE | Enabled + started fail2ban | `active`, `enabled`; 1 jail: `sshd`; journal matches `_SYSTEMD_UNIT=sshd.service + _COMM=sshd`; **0 banned** |
+| 2026-10-20 17:25 | FE | Proved the **ban action** works without touching a real peer | Synthetic ban of TEST-NET-3 `203.0.113.99` created `-A f2b-sshd -s 203.0.113.99/32 -j REJECT` in the live ruleset (confirmed in both the iptables and nft views); unban removed it cleanly |
+| 2026-10-20 17:26 | FE | Investigated why a localhost probe produced no detections | **Root cause found:** `passwordauthentication no` + `permitrootlogin without-password` — the hosts are **pubkey-only**, so no `Failed password` lines can ever be generated. `Connection closed … [preauth]` lines are matched by the filter's *ignore* rules by design (a scanner disconnecting is not an auth failure) |
+| 2026-10-20 17:27 | FE | Verified the filter matches the signatures this host **can** produce | Against real captured journal: **16 lines matched**, 20 ignored; sample signature file (`Failed publickey`, `Invalid user`, `maximum authentication attempts exceeded`) matched **3/5** (the 2 ignored are password lines the host cannot generate) |
+| 2026-10-20 17:28 | FE | Resolved an `iptables-legacy tables present` warning | The live ruleset is entirely in the **nft** table (where Docker, `netfilter-persistent` and fail2ban operate); `iptables-legacy` carries only stock empty defaults. **No effective divergence.** No reconfiguration needed |
+| 2026-10-20 17:30 | FE/BE | Confirmed the whitelist prevents administrator lockout | Generated 32 real `Invalid user … from 127.0.0.1` lines; the running jail reported **`Currently failed: 0`** because `127.0.0.1` is in `ignoreip` — demonstrating the lockout protection works exactly as intended |
+| 2026-10-20 17:30 | FE | Confirmed fail2ban does not disturb the persisted firewall | `/etc/iptables/rules.v4` contains **0** fail2ban lines (bans are runtime-only, correctly) |
+| 2026-10-20 17:31 | FE/BE | Cleaned up all test artefacts | No bans remain, no probe jails, no leftover `f2b` chains; admin whitelist intact |
+
+### fail2ban — final verified state (both hosts)
+
+| Item | Value |
+|---|---|
+| Version / service | fail2ban **0.11.2**, `active` + `enabled` |
+| Jail | `sshd`, `backend = systemd`, port 22 |
+| Threshold | `maxretry 5`, `findtime 10m`, `bantime 1h`, incrementing to `1w` |
+| Whitelist (`ignoreip`) | `45.220.11.50`, `168.253.204.10`, `10.0.0.0/24`, `127.0.0.0/8`, `::1` |
+| Log source | journald (`_SYSTEMD_UNIT=sshd.service`) — **required**, because `auth.log` does not exist |
+| Ban mechanism | `iptables-multiport` → `f2b-sshd` chain in the **nft**-backed filter table (production-proven) |
+| Detection | filter matches the host's real sshd output (16 lines matched in a live sample) |
+| Lockout protection | admin IPs and the VCN subnet are never banned (live-proven) |
+| Persistence | survives reboot (`systemctl enable`); bans are runtime-only and do **not** pollute `rules.v4` |
+
+### OCI rule and NSG clarification (owner-confirmed)
+
+The owner clarified that the private-network exposure is **limited to their own compartment**, and that the
+security-list rules previously supplied are the ones in force. This is recorded as
+**[V, owner-confirmed]**. The behavioural verification in `network-security-plan.md` §3.5 remains the
+strongest guest-side evidence. **Recommendation unchanged:** add a `10.0.0.26/32 → 8000` rule and scope the
+`10.0.0.0/16` all-protocols rule, so "BE 8000 from FE only" is enforced at the cloud layer as well as by
+the bind address and host firewall. `5432`/`6379` remain non-public.
+
+### Backup and recovery plan
+
+The completed plan is in **`migration/backup-recovery-plan.md`**, presented for approval. Highlights:
+
+- **Destination (exact):** `C:\Backup\MissionControl\<UTC-timestamp>\` on the owner's local Windows machine.
+- **Space:** required ≈ **200–300 MB**; **22.0 GB free** on `C:` **[V]** — space is not a constraint.
+- **Encryption:** compression (`zstd`) and encryption (**GPG AES-256, `--s2k-mode 3`**) are performed **on
+  the source**, because the local machine has **no `7z`/`gpg`/`openssl`** — only `tar`, `ssh-keygen`,
+  `certutil` **[V]**.
+- **Integrity:** SHA-256 of every encrypted artefact, verified locally with `certutil -hashfile … SHA256`.
+- **Custody:** passphrase in the owner's password manager **plus** a sealed off-line copy; never on the
+  backup disk alone, never printed, never in Git. Fernet key hash recorded (value never).
+- **Restore test:** scratch PostgreSQL 16, verifying alembic `h7h8h9i1j2k3`, exact row counts, and
+  **explicit credential decryption** (the check that catches a wrong-but-valid Fernet key).
+- **Single-location risk:** documented, **not** silently substituted with a cloud destination; the plan
+  recommends adding an external drive or second machine (the machine has a **single volume** today).
+
 ### Outstanding blockers (as required at the Phase 3 gate)
 
 1. **U6 — backup and recovery plan is not approved.** No backup exists or was created. A separate plan

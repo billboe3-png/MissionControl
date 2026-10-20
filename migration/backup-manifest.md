@@ -1,7 +1,11 @@
 # Backup Manifest — Mission Control Migration
 
-**Status:** design for approval. **No backup has been taken yet.** Producing the first backup is a
-Phase 4 action behind its own approval gate.
+**Status:** design for approval. **No backup has been taken yet.**
+**Superseded in detail by `backup-recovery-plan.md`** (owner decision U6 revised, 2026-10-20): the
+destination is now the owner's **local Windows machine**, with source-side GPG AES-256 encryption,
+SHA-256 verification and a scratch-database restore test. This file remains the scope/inventory annex.
+Producing the first backup is a separate action behind its own approval gate.
+
 **Labels:** **[V]** verified · **[A]** assumption · **[?]** unresolved · **[R]** recommendation.
 
 ---

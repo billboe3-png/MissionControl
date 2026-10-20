@@ -70,11 +70,26 @@ Resize triggers: sustained host RAM > 80 %, any OOM kill, or sustained swap thra
 
 ---
 
-## 5. Remaining blockers before data migration
+## 5. Destination hardening applied (Phase 3b, owner-approved)
 
-1. **Backup and recovery plan not yet approved** (U6). No backup is created in Phase 3 by instruction.
+| Item | State |
+|---|---|
+| fail2ban | **0.11.2 active + enabled** on both VMs; `sshd` jail with `backend = systemd` (no `auth.log` exists, so journald is the only source); `maxretry 5 / findtime 10m / bantime 1h` incrementing to 1w |
+| Lockout protection | `ignoreip` = `45.220.11.50`, `168.253.204.10`, `10.0.0.0/24`, loopback — proven live (32 real events did not ban localhost) |
+| Ban action | `iptables-multiport` into the nft-backed table; `f2b-sshd` chain proven, then removed |
+| Firewall | unchanged by fail2ban — bans are runtime-only and do not appear in `rules.v4` |
+| `iptables-legacy` warning | investigated: legacy table holds only stock empty defaults; all live rules (Docker, persisted, fail2ban) are in the **nft** table. **No divergence** |
+| SSH reachability | verified from the intended administration location; both admin IPs owner-confirmed stable |
+
+## 6. Remaining blockers before data migration
+
+1. **Backup and recovery plan not yet approved** (U6, revised decision). The completed plan is in
+   `backup-recovery-plan.md`; **no backup is created or transferred** until the owner approves it.
 2. **`.env` value transfer** requires the production Fernet key and DB password; must be moved over SSH
    with mode 600 and verified by hash.
-3. **OCI NSG question** unresolved: whether an NSG applies in addition to the security list cannot be read
-   from inside the guest.
+3. **OCI NSG question** — owner clarified exposure is limited to their compartment; the guest-side
+   behavioural evidence remains the strongest available assertion.
 4. **Image transfer** not yet executed (built and digested on the workstation; see `build-and-transfer.md`).
+5. **`recidive` jail** not installed (out of the approved "SSH jail" scope) — optional follow-up.
+6. **Cloud-layer rule tightening** recommended (not applied): add `10.0.0.26/32 → 8000`; scope the
+   `10.0.0.0/16` all-protocols rule. The owner must make this change in the OCI console.

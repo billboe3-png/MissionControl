@@ -212,13 +212,29 @@ internal CA — out of scope here.
 | Item | Source behaviour | Destination plan |
 |---|---|---|
 | SSH | key-only, root login without password | copy the same `authorized_keys`, keep key-only; **no password auth** |
-| fail2ban | sshd + recidive, 184 bans | install on FE and BE with the repo's `deploy/fail2ban-*` jails |
+| fail2ban | **1.0.2**, jails `sshd` + `recidive`; reads `/var/log/auth.log` (rsyslog present) | installed on both destinations (**0.11.2**); jail `sshd` uses **`backend = systemd`**, because **`auth.log` does not exist** on the destination images (no rsyslog) — a real source/destination divergence. `recidive` not carried over (see §5.1) |
 | ufw / firewalld | inactive / absent | **do not install** (persisted iptables is the control) |
-| rpcbind / iscsid | running / enabled | disable `rpcbind`; leave `iscsid` (OCI image inertia) but document |
+| rpcbind / iscsid | running / enabled | disable `rpcbind` (**done**); leave `iscsid` (OCI image inertia) but document |
 | unattended-upgrades | enabled, auto-reboot off | keep; **pin Docker version** and exclude it from auto-upgrade during the migration window **[R]** |
 | Oracle Cloud Agent | monitoring, run-command, cloud-guard, custom logs | leave enabled; confirm no custom-log config points at obsolete paths |
 | Time sync | `systemd-timesyncd` active | keep |
 | Host users | `ubuntu` (OCI default), `billboe3` | **do not** create extra accounts; connect as `ubuntu` + key |
+
+### 5.1 fail2ban as installed on the destinations (Phase 3b, verified)
+
+| Aspect | Destination state |
+|---|---|
+| Version / service | 0.11.2, `active` + `enabled` on both VMs |
+| Jail | `sshd` only; `backend = systemd`, `filter = sshd`, `port = ssh` |
+| Threshold | `maxretry 5`, `findtime 10m`, `bantime 1h`, incrementing to `1w` |
+| `ignoreip` (lockout protection) | `45.220.11.50`, `168.253.204.10`, `10.0.0.0/24`, `127.0.0.0/8`, `::1` |
+| Log source | journald (`_SYSTEMD_UNIT=sshd.service + _COMM=sshd`) — **required**, `auth.log` absent |
+| Ban action | `iptables-multiport` → `f2b-sshd` chain in the **nft**-backed filter table (live-proven) |
+| Detection proof | 16 lines matched against a real captured journal sample |
+| Lockout proof | 32 real `Invalid user … from 127.0.0.1` events produced; jail reported 0 failed because localhost is whitelisted |
+| Persistence | enabled for boot; bans are runtime-only and do **not** appear in `rules.v4` |
+| `recidive` jail | **not installed** **[R]** add later if repeated-offender escalation is wanted; requires a filter over fail2ban's own log, which is a separate hardening step and was outside the approved "SSH jail" scope |
+| Password auth | **disabled** (`passwordauthentication no`) — the jail therefore catches `Invalid user`, `Failed publickey` and `maximum authentication attempts exceeded`, not `Failed password` |
 
 ---
 
