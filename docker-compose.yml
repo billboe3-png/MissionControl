@@ -90,10 +90,13 @@ services:
         condition: service_healthy
       frontend:
         condition: service_started
+      dockhand:
+        condition: service_started
 
     ports:
       - "80:80"
       - "443:443"
+      - "3000:3000"
 
     volumes:
       - ./nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
@@ -110,7 +113,7 @@ services:
           "--tries=1",
           "--spider",
           "--no-check-certificate",
-          "https://127.0.0.1/api/v1/health/live"
+          "https://127.0.0.1/health"
         ]
       interval: 10s
       timeout: 5s
@@ -192,6 +195,21 @@ services:
     networks:
       - mc-net
 
+  dockhand:
+    image: fnsys/dockhand:v1.0.48
+    container_name: dockhand
+    restart: unless-stopped
+    expose:
+      - "3000"
+    volumes:
+      - dockhand_data:/app/data
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      - SESSION_SECRET=${DOCKERHAND_SECRET:-changeme-dockhand-secret}
+    networks:
+      - mc-net
+
 volumes:
   postgres_data:
   redis_data:
+  dockhand_data:
