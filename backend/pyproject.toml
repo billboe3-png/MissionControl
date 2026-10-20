@@ -18,3 +18,7 @@ extend-ignore = ["E501", "B008", "S507"]
 [tool.ruff.lint.per-file-ignores]
 "tests/**/*.py" = ["S101", "PLR2004", "S106", "S105", "S108", "S604", "S110", "SIM105"]
 "scripts/**/*.py" = ["S101", "BLE001", "PLW1510", "SIM115", "TRY004", "RUF059"]
+# official_dlink/__init__.py ends with an intentional "Export for backward
+# compatibility" re-import block after the plugin class (E402 by design) that
+# re-binds 5 names already imported at the top (F811 by design).
+"app/plugins/installed/official_dlink/__init__.py" = ["E402", "F811"]

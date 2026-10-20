@@ -29,7 +29,6 @@ from app.plugins.installed.official_mikrotik.service import (
     encrypt_password,
     mikrotik_service,
 )
-from app.plugins.installed.official_mikrotik.config_routes import router as config_router
 
 logger = logging.getLogger("plugin.mikrotik.routes")
 

@@ -5,7 +5,6 @@ Abstract base class for Veeam providers.
 """
 
 from abc import ABC, abstractmethod
-from typing import Any
 
 
 class VeeamProvider(ABC):
@@ -89,19 +88,4 @@ class VeeamProvider(ABC):
     @abstractmethod
     async def get_job_stats_daily(self, days: int = 7, include_system: bool = False) -> dict:
         """Get daily job statistics."""
-        pass
-
-    @abstractmethod
-    async def get_restore_points(self, vm_id: str | None = None) -> dict:
-        """Get restore points."""
-        pass
-
-    @abstractmethod
-    async def start_job(self, job_id: str) -> dict:
-        """Start a Veeam job."""
-        pass
-
-    @abstractmethod
-    async def stop_job(self, job_id: str) -> dict:
-        """Stop a Veeam job."""
         pass

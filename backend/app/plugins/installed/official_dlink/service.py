@@ -2,12 +2,12 @@
 D-Link DGS-1210 Service - Business logic and agent coordination
 """
 import logging
-from typing import Any, Dict, List, Optional
 from datetime import datetime
+from typing import Any
 
-from .models import DLinkSwitch, DLinkRemoteTarget
-from .repository import repository
+from .models import DLinkRemoteTarget, DLinkSwitch
 from .relay import execute_plugin_command, rest_api_call
+from .repository import repository
 
 logger = logging.getLogger("plugin.dlink.service")
 
@@ -20,10 +20,10 @@ class DLinkService:
 
     # ---- Switch Management ----
 
-    def get_switch(self, db, switch_id: int) -> Optional[DLinkSwitch]:
+    def get_switch(self, db, switch_id: int) -> DLinkSwitch | None:
         return self._repository.get_switch(db, switch_id)
 
-    def list_switches(self, db, **kwargs) -> List[DLinkSwitch]:
+    def list_switches(self, db, **kwargs) -> list[DLinkSwitch]:
         return self._repository.list_switches(db, **kwargs)
 
     def count_switches(self, db, **kwargs) -> int:
@@ -34,7 +34,7 @@ class DLinkService:
         db.commit()
         return switch
 
-    def update_switch(self, db, switch_id: int, **kwargs) -> Optional[DLinkSwitch]:
+    def update_switch(self, db, switch_id: int, **kwargs) -> DLinkSwitch | None:
         switch = self._repository.update_switch(db, switch_id, **kwargs)
         if switch:
             db.commit()
@@ -48,7 +48,7 @@ class DLinkService:
 
     # ---- Remote Target Management ----
 
-    def get_remote_target(self, db, target_id: int) -> Optional[DLinkRemoteTarget]:
+    def get_remote_target(self, db, target_id: int) -> DLinkRemoteTarget | None:
         return self._repository.get_remote_target(db, target_id)
 
     def create_remote_target(self, db, **kwargs) -> DLinkRemoteTarget:
@@ -56,7 +56,7 @@ class DLinkService:
         db.commit()
         return target
 
-    def update_remote_target(self, db, target_id: int, **kwargs) -> Optional[DLinkRemoteTarget]:
+    def update_remote_target(self, db, target_id: int, **kwargs) -> DLinkRemoteTarget | None:
         target = self._repository.update_remote_target(db, target_id, **kwargs)
         if target:
             db.commit()
@@ -70,7 +70,7 @@ class DLinkService:
 
     # ---- CLI Command Execution via Agent ----
 
-    async def execute_cli(self, db, switch_id: int, command: str, timeout: int = 30) -> Dict[str, Any]:
+    async def execute_cli(self, db, switch_id: int, command: str, timeout: int = 30) -> dict[str, Any]:
         """Execute a CLI command on the D-Link switch via agent relay."""
         switch = self.get_switch(db, switch_id)
         if not switch:
@@ -87,7 +87,7 @@ class DLinkService:
         )
         return result
 
-    async def test_connection(self, db, switch_id: int) -> Dict[str, Any]:
+    async def test_connection(self, db, switch_id: int) -> dict[str, Any]:
         """Test connectivity to the D-Link switch."""
         switch = self.get_switch(db, switch_id)
         if not switch:
@@ -105,7 +105,7 @@ class DLinkService:
 
     # ---- Inventory Collection ----
 
-    async def collect_inventory(self, db, switch_id: int) -> Dict[str, Any]:
+    async def collect_inventory(self, db, switch_id: int) -> dict[str, Any]:
         """Collect full inventory from the D-Link switch."""
         switch = self.get_switch(db, switch_id)
         if not switch:
@@ -148,7 +148,7 @@ class DLinkService:
 
         return result
 
-    async def collect_mac_table(self, db, switch_id: int) -> Dict[str, Any]:
+    async def collect_mac_table(self, db, switch_id: int) -> dict[str, Any]:
         """Collect MAC address table (FDB) from the switch."""
         switch = self.get_switch(db, switch_id)
         if not switch:
@@ -164,7 +164,7 @@ class DLinkService:
             namespace="dlink"
         )
 
-    async def collect_vlans(self, db, switch_id: int) -> Dict[str, Any]:
+    async def collect_vlans(self, db, switch_id: int) -> dict[str, Any]:
         """Collect VLAN configuration from the switch."""
         switch = self.get_switch(db, switch_id)
         if not switch:
@@ -180,7 +180,7 @@ class DLinkService:
             namespace="dlink"
         )
 
-    async def collect_port_vlans(self, db, switch_id: int) -> Dict[str, Any]:
+    async def collect_port_vlans(self, db, switch_id: int) -> dict[str, Any]:
         """Collect per-port VLAN configuration."""
         switch = self.get_switch(db, switch_id)
         if not switch:
@@ -198,14 +198,14 @@ class DLinkService:
 
     # ---- Configuration Commands ----
 
-    async def configure_port(self, db, switch_id: int, port: str, config: Dict[str, Any]) -> Dict[str, Any]:
+    async def configure_port(self, db, switch_id: int, port: str, config: dict[str, Any]) -> dict[str, Any]:
         """Configure a port (VLAN, PVID, mode, etc.)."""
         return await self.execute_cli(db, switch_id, f"config ports {port} " + " ".join(
             f"{k} {v}" for k, v in config.items()
         ))
 
-    async def configure_vlan(self, db, switch_id: int, vlan_id: int, name: Optional[str],
-                             ports_tagged: Optional[List[int]], ports_untagged: Optional[List[int]]) -> Dict[str, Any]:
+    async def configure_vlan(self, db, switch_id: int, vlan_id: int, name: str | None,
+                             ports_tagged: list[int] | None, ports_untagged: list[int] | None) -> dict[str, Any]:
         """Configure a VLAN."""
         cmd_parts = [f"create vlan {vlan_id}"]
         if name:
@@ -220,8 +220,8 @@ class DLinkService:
 
     async def webui_request(
         self, db, switch_id: int, method: str, path: str,
-        body: Optional[Dict] = None, headers: Optional[Dict] = None
-    ) -> Dict[str, Any]:
+        body: dict | None = None, headers: dict | None = None
+    ) -> dict[str, Any]:
         """Make a REST API call to the D-Link switch web UI."""
         switch = self.get_switch(db, switch_id)
         if not switch:

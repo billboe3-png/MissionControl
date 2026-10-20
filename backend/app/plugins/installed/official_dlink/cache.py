@@ -3,8 +3,8 @@ D-Link DGS-1210 Cache - In-memory caching layer
 """
 import logging
 import time
-from typing import Any, Dict, List, Optional
 from threading import Lock
+from typing import Any
 
 logger = logging.getLogger("plugin.dlink.cache")
 
@@ -13,14 +13,14 @@ class DLinkCache:
     """Thread-safe in-memory cache for D-Link switch data."""
 
     def __init__(self, ttl: int = 60):
-        self._cache: Dict[str, Dict[str, Any]] = {}
+        self._cache: dict[str, dict[str, Any]] = {}
         self._ttl = ttl
         self._lock = Lock()
 
     def _make_key(self, *parts: str) -> str:
         return ":".join(parts)
 
-    def get(self, *parts: str) -> Optional[Any]:
+    def get(self, *parts: str) -> Any | None:
         key = self._make_key(*parts)
         with self._lock:
             entry = self._cache.get(key)
@@ -55,10 +55,10 @@ class DLinkCacheManager:
     """Manages multiple caches for different data types."""
 
     def __init__(self, default_ttl: int = 60):
-        self._caches: Dict[str, DLinkCache] = {}
+        self._caches: dict[str, DLinkCache] = {}
         self._default_ttl = default_ttl
 
-    def get_cache(self, name: str, ttl: Optional[int] = None) -> DLinkCache:
+    def get_cache(self, name: str, ttl: int | None = None) -> DLinkCache:
         if name not in self._caches:
             self._caches[name] = DLinkCache(ttl or self._default_ttl)
         return self._caches[name]

@@ -2,11 +2,10 @@
 D-Link DGS-1210 Sync - Background inventory collection
 """
 import asyncio
+import contextlib
 import logging
 from datetime import datetime
-from typing import Any, Dict, Optional
-
-from sqlalchemy.orm import Session
+from typing import Any
 
 from app.db.database import SessionLocal
 from app.plugins.installed.official_dlink.models import DLinkSwitch
@@ -21,7 +20,7 @@ class DLinkSync:
 
     def __init__(self):
         self._running = False
-        self._task: Optional[asyncio.Task] = None
+        self._task: asyncio.Task | None = None
 
     async def start(self, interval: int = 300):
         """Start the periodic sync task."""
@@ -36,10 +35,8 @@ class DLinkSync:
         self._running = False
         if self._task:
             self._task.cancel()
-            try:
+            with contextlib.suppress(asyncio.CancelledError):
                 await self._task
-            except asyncio.CancelledError:
-                pass
         logger.info("D-Link sync stopped")
 
     async def _sync_loop(self, interval: int):
@@ -47,7 +44,7 @@ class DLinkSync:
         while self._running:
             try:
                 await self._sync_all_switches()
-            except Exception as e:
+            except Exception:
                 logger.exception("Error in D-Link sync loop")
             await asyncio.sleep(interval)
 
@@ -56,7 +53,7 @@ class DLinkSync:
         db = SessionLocal()
         try:
             switches = db.query(DLinkSwitch).filter(
-                DLinkSwitch.enabled == True,
+                DLinkSwitch.enabled.is_(True),
                 DLinkSwitch.remote_target_id.isnot(None)
             ).all()
 
@@ -65,7 +62,7 @@ class DLinkSync:
                     break
                 try:
                     await self._sync_switch(switch.id)
-                except Exception as e:
+                except Exception:
                     logger.exception(f"Error syncing switch {switch.id}")
         finally:
             db.close()
@@ -123,12 +120,12 @@ class DLinkSync:
 
             logger.info(f"Sync completed for switch {switch.name}")
 
-        except Exception as e:
+        except Exception:
             logger.exception(f"Error syncing switch {switch_id}")
         finally:
             db.close()
 
-    async def sync_switch_now(self, switch_id: int) -> Dict[str, Any]:
+    async def sync_switch_now(self, switch_id: int) -> dict[str, Any]:
         """Trigger immediate sync for a switch."""
         db = SessionLocal()
         try:

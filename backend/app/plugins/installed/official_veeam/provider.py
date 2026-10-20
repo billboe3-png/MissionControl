@@ -7,9 +7,12 @@ servers so the Connection badge reflects db_available.
 """
 
 import logging
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from app.plugins.installed.official_veeam.models import VeeamBackupServer
+
+if TYPE_CHECKING:
+    from app.plugins.installed.official_veeam.api import VeeamApiClient
 
 logger = logging.getLogger("plugin.veeam.provider")
 

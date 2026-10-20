@@ -58,17 +58,6 @@ async def collect_dataset(
     return payload
 
 
-async def collect_all(
-    db: Session, provider: VeeamServerProvider, server_id: int,
-) -> dict[str, dict[str, Any]]:
-    results: dict[str, dict[str, Any]] = {}
-    for dataset in _ALL_DATASETS:
-        try:
-            results[dataset] = await collect_dataset(db, provider, server_id, dataset)
-        except Exception as exc:
-            logger.error("collect_all server=%s dataset=%s failed: %s", server_id, dataset, exc)
-    return results
-
 
 # ------------------------------------------------------------------ #
 # Method mapping                                                     #

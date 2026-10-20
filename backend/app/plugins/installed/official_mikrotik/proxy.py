@@ -11,17 +11,15 @@ Provides a functional pass-through for RouterOS Web UI / WebFig including:
 from __future__ import annotations
 
 import base64
-import json
+import contextlib
 import logging
 import re
-from typing import Any
-from urllib.parse import urljoin
 
 import httpx
 from fastapi import Request
 from fastapi.responses import Response
 from starlette.background import BackgroundTask
-from starlette.websockets import WebSocket, WebSocketDisconnect
+from starlette.websockets import WebSocket
 
 from app.plugins.installed.official_mikrotik.models import MikroTikServer
 from app.plugins.installed.official_mikrotik.service import decrypt_password
@@ -120,7 +118,7 @@ class WebFigProxy:
         cookie_jar = getattr(self, "_cookies", None)
         if cookie_jar is None:
             cookie_jar = {}
-            setattr(self, "_cookies", cookie_jar)
+            self._cookies = cookie_jar
         server_cookies = cookie_jar.setdefault(server_id, {})
 
         if server_cookies:
@@ -207,10 +205,8 @@ class WebFigWebSocketProxy:
                     async for chunk in resp.aiter_bytes():
                         await websocket.send_bytes(chunk)
             except Exception as exc:
-                try:
+                with contextlib.suppress(Exception):
                     await websocket.send_text(f"proxy-error: {exc}")
-                except Exception:
-                    pass
         if server_cookies:
             getattr(self, "_ws_cookies", {})[server_id] = server_cookies
 

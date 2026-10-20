@@ -3,12 +3,12 @@ D-Link DGS-1210 Relay - Agent command dispatch
 """
 import json
 import logging
-from typing import Any, Dict, Optional
+from datetime import datetime
+from typing import Any
 
+from app.db.database import SessionLocal
 from app.models.db.agent import Agent
 from app.models.db.agent_command import AgentCommand
-from app.db.database import SessionLocal
-from app.services.agent_service import AgentService
 
 logger = logging.getLogger("plugin.dlink.relay")
 
@@ -16,10 +16,10 @@ logger = logging.getLogger("plugin.dlink.relay")
 async def execute_plugin_command(
     target_id: int,
     command: str,
-    params: Dict[str, Any],
+    params: dict[str, Any],
     namespace: str = "dlink",
-    agent_id: Optional[int] = None
-) -> Dict[str, Any]:
+    agent_id: int | None = None
+) -> dict[str, Any]:
     """
     Queue a plugin command for the agent to execute on a remote target.
 
@@ -104,12 +104,12 @@ async def rest_api_call(
     target_id: int,
     method: str,
     path: str,
-    body: Optional[Dict[str, Any]] = None,
-    headers: Optional[Dict[str, str]] = None,
+    body: dict[str, Any] | None = None,
+    headers: dict[str, str] | None = None,
     port: int = 443,
     use_https: bool = True,
-    agent_id: Optional[int] = None
-) -> Dict[str, Any]:
+    agent_id: int | None = None
+) -> dict[str, Any]:
     """
     Execute an HTTP/HTTPS REST API call to the D-Link switch via agent.
     """
@@ -168,10 +168,8 @@ async def start_webui_stream(
         db.add(agent_cmd)
         db.commit()
         logger.info(f"Dispatched webui_stream command {agent_cmd.id} to agent {agent.id}")
-    except Exception as e:
+    except Exception:
         logger.exception("Error dispatching webui_stream command")
     finally:
         db.close()
 
-
-from datetime import datetime

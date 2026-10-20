@@ -38,7 +38,7 @@ class TestVeeamPluginConfig:
     """Tests for VeeamPluginConfig pydantic model."""
 
     def test_default_config(self):
-        from app.plugins.installed.official_veeam.config import VeeamPluginConfig  # noqa: I001
+        from app.plugins.installed.official_veeam.config import VeeamPluginConfig
 
         cfg = VeeamPluginConfig()
         assert cfg.servers == []
@@ -68,7 +68,7 @@ class TestVeeamPluginConfig:
         assert cfg.auto_sync_enabled is False
 
     def test_server_config_defaults(self):
-        from app.plugins.installed.official_veeam.config import VeeamServerConfig  # noqa: I001
+        from app.plugins.installed.official_veeam.config import VeeamServerConfig
 
         srv = VeeamServerConfig()
         assert srv.name == "default"
@@ -79,7 +79,7 @@ class TestVeeamPluginConfig:
         assert srv.db_type == "auto"
 
     def test_server_config_live_fields(self):
-        from app.plugins.installed.official_veeam.config import VeeamServerConfig  # noqa: I001
+        from app.plugins.installed.official_veeam.config import VeeamServerConfig
 
         srv = VeeamServerConfig()
         assert srv.edition == "enterprise"
@@ -103,7 +103,7 @@ class TestVeeamPluginModels:
         assert VeeamBackupServer.__tablename__ == "veeam_backup_servers"
 
     def test_veeam_repository_table_name(self):
-        from app.plugins.installed.official_veeam.models import VeeamRepository  # noqa: I001
+        from app.plugins.installed.official_veeam.models import VeeamRepository
 
         assert VeeamRepository.__tablename__ == "veeam_repositories"
 
@@ -113,17 +113,17 @@ class TestVeeamPluginModels:
         assert VeeamJob.__tablename__ == "veeam_jobs"
 
     def test_veeam_restore_point_table_name(self):
-        from app.plugins.installed.official_veeam.models import VeeamRestorePoint  # noqa: I001
+        from app.plugins.installed.official_veeam.models import VeeamRestorePoint
 
         assert VeeamRestorePoint.__tablename__ == "veeam_restore_points"
 
     def test_veeam_license_table_name(self):
-        from app.plugins.installed.official_veeam.models import VeeamLicense  # noqa: I001
+        from app.plugins.installed.official_veeam.models import VeeamLicense
 
         assert VeeamLicense.__tablename__ == "veeam_licenses"
 
     def test_veeam_job_run_table_name(self):
-        from app.plugins.installed.official_veeam.models import VeeamJobRun  # noqa: I001
+        from app.plugins.installed.official_veeam.models import VeeamJobRun
 
         assert VeeamJobRun.__tablename__ == "veeam_job_runs"
 
@@ -329,7 +329,7 @@ class TestVeeamApiClient:
     """Tests for VeeamApiClient initialization and provider delegation."""
 
     def test_api_client_init(self):
-        from app.plugins.installed.official_veeam.api import VeeamApiClient  # noqa: I001
+        from app.plugins.installed.official_veeam.api import VeeamApiClient
         from app.plugins.installed.official_veeam.veeam_provider import (
             VeeamRESTProvider,
         )
@@ -346,7 +346,7 @@ class TestVeeamApiClient:
 
     @pytest.mark.asyncio
     async def test_get_jobs_delegates_to_provider(self):
-        from app.plugins.installed.official_veeam.api import VeeamApiClient  # noqa: I001
+        from app.plugins.installed.official_veeam.api import VeeamApiClient
 
         server = VeeamBackupServer(
             name="v1",

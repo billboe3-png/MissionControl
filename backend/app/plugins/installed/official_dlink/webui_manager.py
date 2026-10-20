@@ -8,10 +8,9 @@ import asyncio
 import base64
 import logging
 import uuid
-from typing import Dict, List, Optional, Any
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional
 from datetime import datetime
+from typing import Any
 
 logger = logging.getLogger("plugin.dlink.webui")
 
@@ -26,15 +25,15 @@ class WebUISession:
     last_activity: datetime = field(default_factory=datetime.utcnow)
     status: str = "connecting"
     input_queue: asyncio.Queue = field(default_factory=asyncio.Queue)
-    output_buffer: List[bytes] = field(default_factory=list)
-    error: Optional[str] = None
+    output_buffer: list[bytes] = field(default_factory=list)
+    error: str | None = None
 
     def send_input(self, data: str) -> None:
         """Queue base64-encoded input from browser."""
         self.input_queue.put_nowait(data)
         self.last_activity = datetime.utcnow()
 
-    def get_input(self) -> List[str]:
+    def get_input(self) -> list[str]:
         """Get all queued input chunks."""
         chunks = []
         while not self.input_queue.empty():
@@ -49,7 +48,7 @@ class WebUISession:
         self.output_buffer.append(chunk)
         self.last_activity = datetime.utcnow()
 
-    def read_output(self) -> List[bytes]:
+    def read_output(self) -> list[bytes]:
         """Read and clear output buffer."""
         chunks = self.output_buffer
         self.output_buffer = []
@@ -67,8 +66,8 @@ class WebUIManager:
     """Manages Web UI sessions for D-Link switches."""
 
     def __init__(self):
-        self._sessions: Dict[str, WebUISession] = {}
-        self._cleanup_task: Optional[asyncio.Task] = None
+        self._sessions: dict[str, WebUISession] = {}
+        self._cleanup_task: asyncio.Task | None = None
 
     def create_session(self, switch_id: int, agent_id: int) -> str:
         """Create a new Web UI session."""
@@ -82,7 +81,7 @@ class WebUIManager:
         logger.info(f"Created D-Link Web UI session: {session_id}")
         return session_id
 
-    def get_session(self, session_id: str) -> Optional[WebUISession]:
+    def get_session(self, session_id: str) -> WebUISession | None:
         """Get session by ID."""
         return self._sessions.get(session_id)
 
@@ -98,9 +97,9 @@ class WebUIManager:
         agent_id: int,
         session_id: str,
         output_b64: str,
-        status: Optional[str] = None,
+        status: str | None = None,
         error: str = ""
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Apply update from agent (called via edge agent webui/io endpoint)."""
         session = self._sessions.get(session_id)
         if not session:
@@ -119,7 +118,7 @@ class WebUIManager:
 
         return {"success": True, "input": session.get_input()}
 
-    def get_pending_input(self, session_id: str) -> List[str]:
+    def get_pending_input(self, session_id: str) -> list[str]:
         """Get pending input for agent to send to switch."""
         session = self._sessions.get(session_id)
         if not session:

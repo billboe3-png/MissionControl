@@ -3,22 +3,29 @@ D-Link DGS-1210 Routes - REST API and WebSocket endpoints
 """
 import logging
 import uuid
-from typing import Any, Dict, List, Optional
+from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, Query, WebSocket, WebSocketDisconnect, status
+from fastapi import (
+    APIRouter,
+    Depends,
+    HTTPException,
+    Query,
+    WebSocket,
+    WebSocketDisconnect,
+    status,
+)
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.core.auth_dependency import get_current_user
-from app.db.database import get_db
+from app.db.database import SessionLocal, get_db
 from app.models.db.agent import Agent
 from app.models.db.user import User
-from app.plugins.installed.official_dlink.config import get_plugin_config
-from app.plugins.installed.official_dlink.models import DLinkSwitch, DLinkRemoteTarget
+from app.plugins.installed.official_dlink.models import DLinkRemoteTarget
+from app.plugins.installed.official_dlink.relay import start_webui_stream
 from app.plugins.installed.official_dlink.repository import repository
 from app.plugins.installed.official_dlink.service import dlink_service
 from app.plugins.installed.official_dlink.webui_manager import webui_manager
-from app.plugins.installed.official_dlink.relay import start_webui_stream
 
 logger = logging.getLogger("plugin.dlink.routes")
 
@@ -55,23 +62,23 @@ class SwitchCreate(BaseModel):
     webui_use_https: bool = True
     relay_agent_id: int
     remote_target_id: int
-    company_id: Optional[int] = None
-    site_id: Optional[int] = None
+    company_id: int | None = None
+    site_id: int | None = None
     enabled: bool = True
 
 
 class SwitchUpdate(BaseModel):
-    name: Optional[str] = None
-    host: Optional[str] = None
-    ssh_port: Optional[int] = None
-    telnet_port: Optional[int] = None
-    webui_port: Optional[int] = None
-    webui_use_https: Optional[bool] = None
-    relay_agent_id: Optional[int] = None
-    remote_target_id: Optional[int] = None
-    company_id: Optional[int] = None
-    site_id: Optional[int] = None
-    enabled: Optional[bool] = None
+    name: str | None = None
+    host: str | None = None
+    ssh_port: int | None = None
+    telnet_port: int | None = None
+    webui_port: int | None = None
+    webui_use_https: bool | None = None
+    relay_agent_id: int | None = None
+    remote_target_id: int | None = None
+    company_id: int | None = None
+    site_id: int | None = None
+    enabled: bool | None = None
 
 
 class SwitchResponse(BaseModel):
@@ -84,17 +91,17 @@ class SwitchResponse(BaseModel):
     webui_use_https: bool
     relay_agent_id: int
     remote_target_id: int
-    company_id: Optional[int]
-    site_id: Optional[int]
+    company_id: int | None
+    site_id: int | None
     status: str
-    firmware_version: Optional[str]
-    hardware_version: Optional[str]
-    serial_number: Optional[str]
-    model_name: Optional[str]
-    mac_address: Optional[str]
+    firmware_version: str | None
+    hardware_version: str | None
+    serial_number: str | None
+    model_name: str | None
+    mac_address: str | None
     enabled: bool
-    last_seen: Optional[str]
-    last_error: Optional[str]
+    last_seen: str | None
+    last_error: str | None
     created_at: str
     updated_at: str
 
@@ -103,7 +110,7 @@ class SwitchResponse(BaseModel):
 
 
 class SwitchesResponse(BaseModel):
-    items: List[SwitchResponse]
+    items: list[SwitchResponse]
     total: int
 
 
@@ -116,8 +123,8 @@ class RemoteTargetCreate(BaseModel):
     username: str = "admin"
     password: str
     enabled: bool = True
-    tags: Optional[str] = None
-    notes: Optional[str] = None
+    tags: str | None = None
+    notes: str | None = None
 
 
 class RemoteTargetResponse(BaseModel):
@@ -129,12 +136,12 @@ class RemoteTargetResponse(BaseModel):
     port: int
     username: str
     enabled: bool
-    tags: Optional[str]
-    notes: Optional[str]
+    tags: str | None
+    notes: str | None
     target_plugins: str
-    last_collected_at: Optional[str]
+    last_collected_at: str | None
     last_status: str
-    last_error: Optional[str]
+    last_error: str | None
     created_at: str
     updated_at: str
 
@@ -152,27 +159,27 @@ class ExecuteResponse(BaseModel):
     stdout: str = ""
     stderr: str = ""
     exit_code: int = 0
-    error: Optional[str] = None
+    error: str | None = None
 
 
 class WebUIRequest(BaseModel):
     method: str
     path: str
-    body: Optional[Dict[str, Any]] = None
-    headers: Optional[Dict[str, str]] = None
+    body: dict[str, Any] | None = None
+    headers: dict[str, str] | None = None
 
 
 class PortConfigRequest(BaseModel):
-    pvid: Optional[int] = None
-    allowed_vlans: Optional[str] = None
-    mode: Optional[str] = None
+    pvid: int | None = None
+    allowed_vlans: str | None = None
+    mode: str | None = None
 
 
 class VlanConfigRequest(BaseModel):
     vlan_id: int
-    name: Optional[str] = None
-    ports_tagged: Optional[List[int]] = None
-    ports_untagged: Optional[List[int]] = None
+    name: str | None = None
+    ports_tagged: list[int] | None = None
+    ports_untagged: list[int] | None = None
 
 
 # ---- Switch Endpoints ----
@@ -180,8 +187,8 @@ class VlanConfigRequest(BaseModel):
 @router.get("/servers", response_model=SwitchesResponse)
 async def list_switches(
     db: Session = Depends(get_db),
-    company_id: Optional[int] = Query(None),
-    site_id: Optional[int] = Query(None),
+    company_id: int | None = Query(None),
+    site_id: int | None = Query(None),
     enabled_only: bool = Query(False),
     limit: int = Query(100, le=500),
     offset: int = Query(0, ge=0),
@@ -249,9 +256,9 @@ async def delete_switch(
 
 # ---- Remote Target Endpoints ----
 
-@router.get("/targets", response_model=List[RemoteTargetResponse])
+@router.get("/targets", response_model=list[RemoteTargetResponse])
 async def list_remote_targets(
-    agent_id: Optional[int] = Query(None),
+    agent_id: int | None = Query(None),
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
@@ -259,7 +266,7 @@ async def list_remote_targets(
     if agent_id:
         targets = repository.get_remote_targets_by_agent(db, agent_id)
     else:
-        targets = db.query(DLinkRemoteTarget).filter(DLinkRemoteTarget.enabled == True).all()
+        targets = db.query(DLinkRemoteTarget).filter(DLinkRemoteTarget.enabled.is_(True)).all()
     return targets
 
 
@@ -270,7 +277,6 @@ async def create_remote_target(
     user: User = Depends(require_operator),
 ):
     """Create a D-Link remote target (SSH/Telnet)."""
-    from app.plugins.installed.official_dlink.service import encrypt_password
     target = dlink_service.create_remote_target(db, **payload.model_dump())
     return target
 
@@ -362,8 +368,8 @@ async def collect_port_vlans(
 @router.get("/servers/{switch_id}/macs")
 async def list_macs(
     switch_id: int,
-    port: Optional[str] = Query(None),
-    vlan_id: Optional[int] = Query(None),
+    port: str | None = Query(None),
+    vlan_id: int | None = Query(None),
     active_only: bool = Query(True),
     limit: int = Query(500, le=2000),
     offset: int = Query(0, ge=0),
@@ -394,7 +400,7 @@ async def list_vlans(
     return {"items": vlans}
 
 
-@router.post("/servers/{switch_id}/vlans", response_model=Dict[str, Any])
+@router.post("/servers/{switch_id}/vlans", response_model=dict[str, Any])
 async def create_or_update_vlan(
     switch_id: int,
     payload: VlanConfigRequest,
@@ -444,7 +450,7 @@ async def list_port_vlans(
     return {"items": ports}
 
 
-@router.post("/servers/{switch_id}/ports/{port}/vlan", response_model=Dict[str, Any])
+@router.post("/servers/{switch_id}/ports/{port}/vlan", response_model=dict[str, Any])
 async def configure_port_vlan(
     switch_id: int,
     port: str,
@@ -572,7 +578,7 @@ async def webui_websocket(
                     await websocket.send_text("__CLOSED__")
                     break
 
-        done, pending = await asyncio.wait(
+        _done, pending = await asyncio.wait(
             [
                 asyncio.create_task(ws_to_session()),
                 asyncio.create_task(session_to_ws()),
@@ -591,7 +597,3 @@ async def webui_websocket(
 async def health():
     """Health check endpoint."""
     return {"status": "ok", "plugin": "official_dlink"}
-
-
-# Need to import SessionLocal
-from app.db.database import SessionLocal

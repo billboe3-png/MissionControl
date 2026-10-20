@@ -1,8 +1,8 @@
 """
 D-Link DGS-1210 Plugin Configuration
 """
+
 from pydantic import BaseModel, Field
-from typing import Optional
 
 
 class DLinkPluginConfig(BaseModel):

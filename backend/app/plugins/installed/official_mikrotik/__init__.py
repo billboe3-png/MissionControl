@@ -14,9 +14,11 @@ from typing import Any
 
 from app.db.database import SessionLocal
 from app.plugins.installed.official_mikrotik.config import MikroTikPluginConfig
+from app.plugins.installed.official_mikrotik.config_routes import (
+    router as config_router,
+)
 from app.plugins.installed.official_mikrotik.repository import MikroTikRepository
 from app.plugins.installed.official_mikrotik.routes import router
-from app.plugins.installed.official_mikrotik.config_routes import router as config_router
 from app.plugins.installed.official_mikrotik.service import mikrotik_service
 from app.plugins.server import ServerPluginSDK
 

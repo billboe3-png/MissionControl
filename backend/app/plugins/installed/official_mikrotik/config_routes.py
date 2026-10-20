@@ -4,28 +4,18 @@ import logging
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
-from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 
 from app.core.auth_dependency import get_current_user
 from app.db.database import get_db
 from app.models.db.user import User
-from app.plugins.installed.official_mikrotik.models import MikroTikServer
-from app.plugins.installed.official_mikrotik.proxy import proxy as webfig_proxy
-from app.plugins.installed.official_mikrotik.relay import (
-    delete_remote_target,
-    provision_remote_target,
-)
-from app.plugins.installed.official_mikrotik.repository import MikroTikRepository
-from app.plugins.installed.official_mikrotik.service import (
-    CONNECTOR_TYPES,
-    encrypt_password,
-    mikrotik_service,
-)
+from app.plugins.installed.official_mikrotik.cache import MikroTikCacheManager
 from app.plugins.installed.official_mikrotik.config_service import (
     MikroTikConfigService,
 )
-from app.plugins.installed.official_mikrotik.cache import MikroTikCacheManager
+from app.plugins.installed.official_mikrotik.models import MikroTikServer
+from app.plugins.installed.official_mikrotik.proxy import proxy as webfig_proxy
+from app.plugins.installed.official_mikrotik.repository import MikroTikRepository
 
 logger = logging.getLogger("plugin.mikrotik.routes")
 
@@ -106,7 +96,7 @@ async def list_interfaces_config(
         return {"success": True, "interfaces": interfaces, "cached": False}
     except Exception as exc:
         logger.exception("Failed to list interfaces for server %s", server_id)
-        raise HTTPException(status_code=500, detail=str(exc))
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
 @router.patch("/servers/{server_id}/config/interfaces/{interface_name}")
@@ -131,7 +121,7 @@ async def update_interface(
         return {"success": True, "interface": result}
     except Exception as exc:
         logger.exception("Failed to update interface %s on server %s", interface_name, server_id)
-        raise HTTPException(status_code=500, detail=str(exc))
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
 @router.get("/servers/{server_id}/config/ip-addresses")
@@ -147,7 +137,7 @@ async def list_ip_addresses(
         return {"success": True, "addresses": addresses, "cached": False}
     except Exception as exc:
         logger.exception("Failed to list IP addresses for server %s", server_id)
-        raise HTTPException(status_code=500, detail=str(exc))
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
 @router.post("/servers/{server_id}/config/ip-addresses")
@@ -170,7 +160,7 @@ async def create_ip_address(
         return {"success": True, "address": result}
     except Exception as exc:
         logger.exception("Failed to create IP address on server %s", server_id)
-        raise HTTPException(status_code=500, detail=str(exc))
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
 @router.delete("/servers/{server_id}/config/ip-addresses/{address_id}")
@@ -189,7 +179,7 @@ async def delete_ip_address(
         return {"success": True, "deleted": result}
     except Exception as exc:
         logger.exception("Failed to delete IP address %s on server %s", address_id, server_id)
-        raise HTTPException(status_code=500, detail=str(exc))
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
 @router.get("/servers/{server_id}/config/firewall-rules")
@@ -205,7 +195,7 @@ async def list_firewall_rules_config(
         return {"success": True, "rules": rules, "cached": False}
     except Exception as exc:
         logger.exception("Failed to list firewall rules for server %s", server_id)
-        raise HTTPException(status_code=500, detail=str(exc))
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
 @router.post("/servers/{server_id}/config/firewall-rules")
@@ -224,7 +214,7 @@ async def create_firewall_rule(
         return {"success": True, "rule": result}
     except Exception as exc:
         logger.exception("Failed to create firewall rule on server %s", server_id)
-        raise HTTPException(status_code=500, detail=str(exc))
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
 @router.patch("/servers/{server_id}/config/firewall-rules/{rule_id}")
@@ -244,7 +234,7 @@ async def update_firewall_rule(
         return {"success": True, "rule": result}
     except Exception as exc:
         logger.exception("Failed to update firewall rule %s on server %s", rule_id, server_id)
-        raise HTTPException(status_code=500, detail=str(exc))
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
 @router.delete("/servers/{server_id}/config/firewall-rules/{rule_id}")
@@ -263,7 +253,7 @@ async def delete_firewall_rule(
         return {"success": True, "deleted": result}
     except Exception as exc:
         logger.exception("Failed to delete firewall rule %s on server %s", rule_id, server_id)
-        raise HTTPException(status_code=500, detail=str(exc))
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
 @router.get("/servers/{server_id}/config/dhcp-leases")
@@ -279,7 +269,7 @@ async def list_dhcp_leases_config(
         return {"success": True, "leases": leases, "cached": False}
     except Exception as exc:
         logger.exception("Failed to list DHCP leases for server %s", server_id)
-        raise HTTPException(status_code=500, detail=str(exc))
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
 @router.get("/servers/{server_id}/config/system")
@@ -295,7 +285,7 @@ async def get_system_config(
         return {"success": True, "config": config, "cached": False}
     except Exception as exc:
         logger.exception("Failed to get system config for server %s", server_id)
-        raise HTTPException(status_code=500, detail=str(exc))
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
 @router.patch("/servers/{server_id}/config/system")
@@ -317,4 +307,4 @@ async def update_system_config(
         return {"success": True, "config": result}
     except Exception as exc:
         logger.exception("Failed to update system config for server %s", server_id)
-        raise HTTPException(status_code=500, detail=str(exc))
+        raise HTTPException(status_code=500, detail=str(exc)) from exc

@@ -194,43 +194,43 @@ class DLinkPlugin(ServerPluginSDK):
 
 
 # Export for backward compatibility
+from .cache import DLinkCacheManager, cache_manager
 from .config import DLinkPluginConfig, get_plugin_config
 from .models import (
-    DLinkSwitch,
-    DLinkRemoteTarget,
     DLinkMacEntry,
-    DLinkVlan,
     DLinkPortVlan,
+    DLinkRemoteTarget,
+    DLinkSwitch,
+    DLinkVlan,
 )
-from .repository import repository, DLinkRepository
-from .service import dlink_service, DLinkService
 from .relay import execute_plugin_command, rest_api_call, start_webui_stream
-from .webui_manager import webui_manager, WebUIManager
-from .sync import sync_service, DLinkSync
-from .cache import cache_manager, DLinkCacheManager
+from .repository import DLinkRepository, repository
 from .routes import router
+from .service import DLinkService, dlink_service
+from .sync import DLinkSync, sync_service
+from .webui_manager import WebUIManager, webui_manager
 
 __all__ = [
+    "DLinkCacheManager",
+    "DLinkMacEntry",
     "DLinkPlugin",
     "DLinkPluginConfig",
-    "get_plugin_config",
-    "DLinkSwitch",
-    "DLinkRemoteTarget",
-    "DLinkMacEntry",
-    "DLinkVlan",
     "DLinkPortVlan",
-    "repository",
+    "DLinkRemoteTarget",
     "DLinkRepository",
-    "dlink_service",
     "DLinkService",
-    "execute_plugin_command",
-    "rest_api_call",
-    "start_webui_stream",
-    "webui_manager",
-    "WebUIManager",
-    "sync_service",
+    "DLinkSwitch",
     "DLinkSync",
+    "DLinkVlan",
+    "WebUIManager",
     "cache_manager",
-    "DLinkCacheManager",
+    "dlink_service",
+    "execute_plugin_command",
+    "get_plugin_config",
+    "repository",
+    "rest_api_call",
     "router",
+    "start_webui_stream",
+    "sync_service",
+    "webui_manager",
 ]

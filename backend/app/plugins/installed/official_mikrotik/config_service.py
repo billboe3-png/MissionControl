@@ -161,7 +161,7 @@ class MikroTikConfigService:
     ) -> dict[str, Any]:
         """Create a new firewall rule via CLI."""
         parts = [
-            f"/ip firewall filter add",
+            "/ip firewall filter add",
             f"chain={payload.get('chain', 'input')}",
             f"action={payload.get('action', 'accept')}",
         ]
