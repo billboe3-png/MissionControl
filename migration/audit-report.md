@@ -37,9 +37,14 @@ findings change the shape of Phase 2**:
    on production independently of this migration.
 
 Additionally, the live deployment is **not reproducible from git**: `docker-compose.yml` and
-`nginx/default.conf` are uncommitted working-tree edits, and the running backend imports an
-**untracked** module (`official_veeam/agent_remote_target.py`). [V ✓] A clean clone produces a
-different stack and a backend that fails at import.
+`nginx/default.conf` are uncommitted working-tree edits. [V ✓] A clean clone produces a different stack.
+
+> **Correction added in Phase 2 (2026-10-20):** Phase 1 also stated that the running backend imports an
+> **untracked** module (`official_veeam/agent_remote_target.py`) and would fail at import from a clean
+> clone. Re-verification for Phase 2 disproved this: `grep -rn 'agent_remote_target' backend --include='*.py'`
+> shows the canonical, **tracked** model at `backend/app/models/db/agent_remote_target.py` and its importers.
+> The plugin-local copy is a **dead duplicate** with no importer. The reproducibility problem above remains
+> valid on the strength of the two uncommitted config files alone. See `destination-diff.md` §2.2.
 
 **No production change is required to complete Phase 1. Nothing was changed.**
 
@@ -127,6 +132,9 @@ Single Docker Compose project `missioncontrol`, one compose file
 - The running backend **imports an untracked module**:
   `backend/app/plugins/installed/official_veeam/agent_remote_target.py` (untracked per `git status`,
   import succeeds inside the container). [V ✓]
+  **Corrected in Phase 2 — see the note in §1.** The file is a dead duplicate of the tracked
+  `backend/app/models/db/agent_remote_target.py`; no module imports it. The file is untracked, but it is
+  **not** a runtime dependency.
 - Untracked `deploy/2vm/` is an OCI migration scaffold written earlier today (not committed). [V]
 - Other untracked artifacts: agent installers/zips, `backend/tests/test_agent_token_service.py`,
   `test_veeam_collector.py`, `test_veeam_column_case.py` (the last imports a nonexistent symbol).
@@ -225,11 +233,18 @@ Single Docker Compose project `missioncontrol`, one compose file
 3. **Decide dockhand.** Recommendation: do not serve it publicly; either run it on the backend VM
    with an authenticated reverse proxy on localhost only, or retire it. Never re-expose
    `/dockhand/api/*` to the internet.
-4. **Carry the working tree, not just git** — or commit `docker-compose.yml`,
-   `nginx/default.conf` and `backend/app/plugins/installed/official_veeam/agent_remote_target.py`
-   before migrating.
+   **Resolved in Phase 2 (D-B):** no dependency found (0 users, 0 sessions, auth disabled, empty state,
+   no code/script/DB reference) and only one human visitor ever → **not migrated**. The public route is
+   handled as a separate security item (D-F) with an exact change proposal in `network-security-plan.md` §7.
+4. **Carry the working tree, not just git** — or commit the reviewed parts of it before migrating.
+   **Resolved in Phase 2 (D-E):** the live `docker-compose.yml` and `nginx/default.conf` are preserved as a
+   provenance snapshot (branch `migration/prod-live-snapshot-2026-10-20`, commit `75a8280`); the untracked
+   Veeam module is a dead duplicate and is **excluded**; see `destination-diff.md` §2.
 5. **Carry the host agent** (`/opt/mission-control-agent`, `/etc/mission-control-agent`, `/var/lib/
    mission-control-agent`, systemd unit) or explicitly retire it.
+   **Resolved in Phase 2 (D-C):** it monitors only the machine it runs on, has no dependants and no
+   automation, so it **retires with the source host**; a fresh agent on the BE VM is an optional
+   post-cutover change.
 6. **Replace cert renewal** with an ACME challenge that does not stop containers (webroot on port 80
    before the 301, or DNS-01), and move `/etc/letsencrypt` intact.
 7. **Add log rotation** (`json-file` max-size/max-file) — the correct stanza already exists in the
@@ -282,3 +297,23 @@ The following require an explicit decision before Phase 2 can be planned:
 - **D-E** Commit the uncommitted live config + untracked modules before migration, or carry the
   working tree as-is?
 - **D-F** May the `/dockhand/` public exposure be closed on production now, ahead of the migration?
+
+---
+
+## 12. Phase 2 decision outcomes (owner decisions, 2026-10-20)
+
+| ID | Owner decision | Phase 2 handling | Where documented |
+|---|---|---|---|
+| D-A | Build images **off-host**; review real capacity, consider a 2 GB swap; resize only if measurement justifies it | Build host = operator workstation (Docker 29.8.2, 8.1 GB, verified). Swap 2 GB at `swappiness=10` recommended as a safety net. Resizing deferred with explicit trigger conditions | `software-inventory.md` §4–5, `target-architecture.md` §7 |
+| D-B | Prefer internal-only if required; otherwise recommend retirement after verifying dependencies; never expose the admin UI publicly; do not remove the production service now | Dependency check completed → unused. **Not migrated.** Container/volume untouched on the source. Route closure handled under D-F | `current-architecture.md` §9.2, `service-migration-matrix.md` (dockhand row) |
+| D-C | Preserve functionality until purpose/dependencies are established; migrate only if required; never disable production during Phase 2 | Purpose established: host-local telemetry with no dependants. **Not migrated**; retires with the source host. Fresh BE agent is an optional post-cutover change | `current-architecture.md` §9.3, `service-migration-matrix.md` (host-agent row) |
+| D-D | Migrate the complete dataset; defer pruning to a separate retention-policy change; do not delete/truncate production rows | Full dataset in scope; profile, size breakdown, growth, restore implications and capacity check recorded; retention policy proposed as follow-up | `backup-manifest.md` §4 |
+| D-E | Preserve the working tree, review it, selectively commit suitable changes; keep secrets out of Git; document the exact revision and config differences | Reviewed and classified; provenance snapshot committed as `75a8280` on `migration/prod-live-snapshot-2026-10-20` (live checkout untouched); dead duplicate module and build artefacts excluded; secrets not committed | `destination-diff.md` (all) |
+| D-F | Separate security work item: establish exposure/auth/dependencies, present exact change + impact + validation + rollback, obtain explicit approval, do not remove Dockhand or its data | Exposure confirmed (200 anonymous), dependencies absent, exact nginx diff + validation + rollback prepared — **approval still required before any production routing change** | `network-security-plan.md` §7 |
+
+**Corrected finding from Phase 2 evidence:** the Phase 1 claim that the backend imports the untracked
+`official_veeam/agent_remote_target.py` is **wrong** — it is a dead duplicate with no importer (see §1 note
+and §3.5). The reproducibility problem remains valid because of the two uncommitted config files.
+
+**No application, host, firewall, DNS or production configuration change was made in Phase 2.** The only
+writes were to this repository: the Phase 2 documents and the provenance snapshot commit.

@@ -88,18 +88,31 @@ inodes, `10.0.0.0/24` subnet, 483 packages.
 
 | Package | Purpose | Pinning recommendation |
 |---|---|---|
-| `docker-ce`, `docker-ce-cli`, `containerd.io`, `docker-buildx-plugin`, `docker-compose-plugin` | runtime + compose v2-style plugin | Pin to the **same** Docker Engine line as production (29.9.x) and compose 5.6.x where the apt repo allows, to keep behaviour identical; otherwise record the version difference |
+| `docker-ce`, `docker-ce-cli`, `containerd.io`, `docker-buildx-plugin`, `docker-compose-plugin` | runtime + compose plugin | Pin to the **same** Docker Engine line as production (29.9.x) and compose 5.6.x where the apt repo allows, to keep behaviour identical; otherwise record the version difference. Also pin / hold the package during the migration window so an unattended upgrade cannot restart the daemon mid-cutover |
 | `git` | deploy the repository working tree | distro version |
 | `rsync` | file transfer, backups | distro version |
 | `fail2ban` | SSH brute-force protection (source has it; 184 bans) | distro version + the repo's `deploy/fail2ban-*` config |
-| 2 GB swapfile | headroom on a 956 MB instance | `/swapfile`, `vm.swappiness=10`, persisted in `/etc/fstab` |
+| 2 GB swapfile | headroom on a 956 MB instance (D-A) | `/swapfile`, `vm.swappiness=10`, persisted in `/etc/fstab`; verify `free -m` and `swapon --show` after a reboot |
 
 ### Frontend VM only
-`certbot` (ACME renewal), `python3-certbot-nginx` optional (or use webroot).
+`certbot` (ACME renewal; **webroot** authenticator), optional `python3-certbot-nginx`. Install
+`certbot.timer` and remove any standalone-mode renewal script.
 
 ### Backend VM only
 No PostgreSQL/Redis packages — both run as containers. `git` is needed because the backend is deployed
 from the working tree (bind mount `./backend:/app`), and `rsync` for the dump transfer.
+
+### Host configuration steps (Phase 3, not executed)
+
+| Step | FE | BE |
+|---|---|---|
+| Create `/opt/missioncontrol`, deploy working tree | ✓ | ✓ |
+| `.env` transfer with mode 600, keys byte-identical | — | ✓ |
+| `/etc/iptables/rules.v4` per `network-security-plan.md` §3 | ✓ | ✓ |
+| Disable `rpcbind`; keep `iscsid` | ✓ | ✓ |
+| Copy `/etc/letsencrypt` intact; create `/var/www/letsencrypt` | ✓ | — |
+| Reboot test to confirm persisted firewall + swap survive | ✓ | ✓ |
+| Docker daemon pacing: keep the default, record version | ✓ | ✓ |
 
 ### Explicitly NOT installed on the destination
 `ufw`/`firewalld` (the image's persisted iptables is the control), a host nginx, a host PostgreSQL or
@@ -109,15 +122,46 @@ Redis, Node.js/npm (build the frontend image elsewhere), and the GCP Ops Agent.
 
 ## 4. Image build and transfer strategy
 
+**D-A resolution: build off-host on the operator workstation** (verified: Docker **29.8.2**, compose
+5.5.1, **8.1 GB RAM**), transfer by `docker save | gzip | ssh docker load`. Rationale: a Vite/npm build
+needs ~1–1.5 GB and the FE VM has 956 MB — it would be OOM-killed. Building on the source is also
+rejected (históric OOM with production running). CI-based builds remain an option for a later change
+(a registry and credentials would have to be introduced — not justified for one migration).
+
 | Artefact | Strategy | Reason |
 |---|---|---|
-| `missioncontrol-backend` | **Rebuild** on/for the destination from `backend/Dockerfile` (or build in CI and `docker save`/`load`). Verify `requirements.txt` delta vs the 2026-10-13 image. | The live container runs current code on 7-day-old dependencies |
-| `missioncontrol-frontend` | **Build off the destination** (CI, or a larger host) and transfer with `docker save | ssh … docker load`, **or** add swap and build on FE. Cache the npm layer. | `npm ci` + `vite build` typically need 1–1.5 GB; FE has 956 MB and no swap |
-| `nginx:1.27-alpine`, `postgres:16-alpine`, `redis:7.2-alpine` | Pull on the destination, pin by **digest** (same digests as source where possible) | Reproducibility |
-| `fnsys/dockhand:v1.0.48` | Only if dockhand is retained (recommended: not public) | Decision pending |
+| `missioncontrol-backend` | **Rebuild off-host** from `backend/Dockerfile` against the deployment branch working tree; verify the `requirements.txt` delta vs the 2026-10-13 image | the live container runs current code (bind mount) on older dependencies |
+| `missioncontrol-frontend` | **Build off-host**, transfer as above, cache the npm layer on the workstation | 956 MB destination cannot build it |
+| `nginx:1.27-alpine`, `postgres:16-alpine`, `redis:7.2-alpine` | Pull on the destination, pin by **digest** (same digests as source where possible) | reproducibility |
+| `fnsys/dockhand:v1.0.48` | **Not migrated** (D-B) | unused, unauthenticated, empty state |
 
-Pinning rule for Phase 2: every image referenced by digest, and the Docker/Compose versions recorded
-in `installation-report.md` so a future rebuild is deterministic.
+Naming: `missioncontrol-<component>:<git-sha>-<YYYYMMDD>`. Every image is recorded by digest in the
+Installation Report (`execution-log.md`) so a future rebuild is deterministic. Build inputs are the
+working tree of `migration/2vm-deploy` at a recorded commit — never `release/v3.0.0-rc1` directly,
+which does not contain the live config.
+
+---
+
+## 5. Capacity assessment (D-A)
+
+| Quantity | Value | Source |
+|---|---|---|
+| Destination RAM / swap / disk | 956 MB / 0 MB / 42 GB free | Phase 1 audit |
+| Measured live usage — BE role (backend + postgres + redis) | 175 + 47 + 4 = **226 MB** | `docker stats`, 2026-10-20 |
+| Measured live usage — FE role (nginx + frontend) | 5 + 3 = **8 MB** | `docker stats` |
+| Dockerd overhead (not in container stats) | ≈ 80–120 MB | estimate **[A]** |
+| Peak risk | frontend build, `npm ci`, `pg_restore` of 439 MB | measured behaviour on other hosts |
+
+Conclusion: current shapes are **sufficient for the steady state** but have thin headroom for restore
+work, Vite builds and OOM spikes; the source host has already OOM-killed a process once. Therefore:
+
+1. **Do not resize now.**
+2. Add **2 GB swap** on both VMs (`/swapfile`, `vm.swappiness=10`, persisted in `/etc/fstab`) as a safety
+   net — 2 GB of 42 GB free.
+3. **Build off-host**; never build on a destination.
+4. Resize (2 OCPU / 8 GB) only if observed: sustained host RAM > 80 %, any OOM kill, sustained swap
+   thrash, or backup/restore durations that threaten the RTO.
+5. Do not use swap as capacity; it is for cold pages and short spikes.
 
 ---
 
@@ -145,3 +189,23 @@ in `installation-report.md` so a future rebuild is deterministic.
   mid-migration is possible; pin/observe before cutover.
 - The destination's persisted `iptables` (`netfilter-persistent`) will silently revert ad-hoc rules on
   reboot. Any firewall change must be written to `/etc/iptables/rules.v4` and re-verified after a reboot.
+- **Docker and the host firewall interact:** published container ports are DNATed and traverse `FORWARD`,
+  not `INPUT`, so `INPUT` rules are not the gate for 80/443. The real public gate is the OCI security list
+  plus the container bind address; see `network-security-plan.md` §3.1. Do not run `iptables-save` after
+  Docker has started.
+- `verify_ssl: false` in the host agent config is **not** carried (the agent is not migrated); the plugins
+  running on BE keep their existing settings inside the database.
+
+---
+
+## 7. Phase 2 additions at a glance
+
+| New artefact | Where |
+|---|---|
+| Target architecture, compose split, TLS renewal design, capacity model | `migration/target-architecture.md` |
+| Source revision, working-tree classification, per-host configuration diffs | `migration/destination-diff.md` |
+| Firewall rules, exposure matrix, D-F change proposal | `migration/network-security-plan.md` |
+| Backup scope, commands, verification, `agent_commands` profile | `migration/backup-manifest.md` |
+| Cutover sequence, validation set, abort points | `migration/cutover-runbook.md` |
+| Rollback scenarios, reconciliation, point-of-no-return | `migration/rollback-runbook.md` |
+| Evidence for D-B/D-C/D-D/D-E and the Phase 1 correction | `migration/current-architecture.md` §9 |

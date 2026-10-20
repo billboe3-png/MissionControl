@@ -152,3 +152,80 @@ log-rotation stanza the live file lacks; the second is a two-line override fragm
 
 Deliberate differences from today: no public dockhand, no public port 3000, no host edge agent
 (unless approved), no `docker.sock` on the frontend host, log rotation enabled, backups scheduled.
+
+Full design detail — compose split, TLS renewal, firewall rules, capacity model — is in
+`target-architecture.md`, `network-security-plan.md` and `destination-diff.md`.
+
+---
+
+## 9. Phase 2 evidence updates (2026-10-20)
+
+Targeted read-only checks added during Phase 2. These refine, and in one case correct, the Phase 1
+record.
+
+### 9.1 Correction — the untracked Veeam module is **not** imported
+
+Phase 1 stated that the backend imports the untracked
+`official_veeam/agent_remote_target.py` and that a git-only deploy would fail at import. Re-verified:
+
+```
+grep -rn 'agent_remote_target' backend --include='*.py'
+  → backend/app/models/db/agent_remote_target.py      (tracked, canonical model)
+  → importers of app.models.db.agent_remote_target     (bridge/collector code)
+  → the plugin-local copy: definition only, no importer
+```
+
+The plugin-local file defines the same table as the tracked model and is a **dead duplicate**. It is
+preserved in the provenance branch but excluded from the deployment. See `destination-diff.md` §2.2.
+
+### 9.2 Dockhand is effectively unused (D-B evidence)
+
+| Signal | Value |
+|---|---|
+| `dockhand.db` users / sessions | **0 / 0** |
+| Dockhand authentication | `auth_settings.auth_enabled = 0` (disabled) |
+| Environments, git repos, stacks, backups configured | 0 |
+| nginx requests to `/dockhand*` (whole log) | 326, of which 282 were not our audit `curl` |
+| Nature of the real traffic | one browser session from an owner device (14 Oct) that received `404`s on `/dockhand/api/...`, i.e. the SPA loads but its API calls fail under the sub-path |
+| Production dependencies on it | none found in the repo, compose, scripts or the database |
+
+Conclusion: no operational dependency; the only human user is the owner, and the UI is partly broken as
+deployed. Supports "do not migrate; close the route" (D-B/D-F) rather than "re-platform it".
+
+### 9.3 Host edge agent — role established (D-C evidence)
+
+| Signal | Value |
+|---|---|
+| Service | `mission-control-agent.service`, systemd, venv at `/opt/mission-control-agent` |
+| Registered as | agent **id 3** |
+| Agent row | reports itself as the host it runs on (source host, private `10.218.0.4`); `last_heartbeat` is current (live) |
+| Plugins | `docker` (unavailable — local image lookup error), `linux` inventory |
+| Local state | `/var/lib/mission-control-agent/edge.db`, 272 MB: `sync_log` ≈ 456 k rows, heartbeat/inventory tables — a local send buffer |
+| Commands ever dispatched to it | **2**, last on 2026-09-22 |
+| References from `agent_remote_targets` / integration profiles | **none** reference agent 3 |
+| Automation depending on it | none found |
+
+Conclusion: it monitors **the machine it is installed on** and buffers its own telemetry. Its value ends
+with the source host. Recommendation: retire with the source host; if host-level inventory of the new
+backend VM is wanted later, install a **fresh** agent there post-cutover (new agent id, new API key) as a
+separate change. The 272 MB state is not migrated.
+
+### 9.4 `agent_commands` profile (D-D evidence)
+
+98,015 rows; 420 MB total (heap 64 MB, indexes 8.9 MB, TOAST ≈ 347 MB); ~4.5 KB/row; status split
+completed 64,450 / failed 33,564 / dispatched 1; **no foreign keys reference it**; growth 2.6–5.4 k
+rows/day over the last 10 days. Migrated in full; pruning deferred to a separate retention policy.
+Details and estimates in `backup-manifest.md` §4.
+
+### 9.5 Working tree and uncommitted configuration (D-E evidence)
+
+Two modified tracked files (compose, nginx) plus 13 untracked entries, largely build artefacts.
+Preserved in branch `migration/prod-live-snapshot-2026-10-20` (commit `75a8280`) created in a temporary
+worktree so the running checkout was never altered; live file hashes re-verified afterwards. Classification
+and exclusions in `destination-diff.md` §2.
+
+### 9.6 Build host capability (D-A evidence)
+
+The operator workstation runs **Docker 29.8.2 / compose 5.5.1 with 8.1 GB RAM**, so off-host image builds
+are available without touching the 956 MB VMs. Destination hosts remain Docker-free at design time.
+
