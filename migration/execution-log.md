@@ -101,3 +101,155 @@ Format per plan §22. Times are UTC. No secrets are recorded here. Commands are 
 - Probes against production were read-only: `psql` SELECT/`\d`, SQLite opened with `?mode=ro`, log greps,
   `docker inspect`/`logs`, `git` queries.
 - No secret value was printed: key material was compared by hash only.
+
+---
+
+## D-F — Production security change: close public `/dockhand/` (approved, executed)
+
+**Approval:** owner decision D-F, 2026-10-20. Explicitly authorised as a **separate operation** from the
+migration. No other production change was made.
+
+| Timestamp (UTC) | Host | Action | Verification / result |
+|---|---|---|---|
+| 2026-10-20 16:47 | prod `34.35.177.209` | Pre-change capture: branch `release/v3.0.0-rc1` @ `618394d`; `nginx/default.conf` sha256 **`734f40e4…`**; dockhand blocks at lines 42–65; nginx mounts the live file read-only from `/opt/MissionControl/nginx/default.conf` | Baseline probes: `/` 200, `/api/v1/health/{live,ready}` 200, `/dockhand/` **200**, `/dockhand/api/containers` **200**, `/api/docs` 200 |
+| 2026-10-20 16:48 | prod | Reviewed the prepared diff (`network-security-plan.md` §7); confirmed the regex form covers `/dockhand`, `/dockhand/` **and** every sub-path (including the API) while matching nothing else | Nothing else in the file matches `^/dockhand` |
+| 2026-10-20 16:48 | prod | Protected copy taken before editing | `~/migration-preserved/default.conf.pre-dockhand-close-20261020T164807Z`, sha256 `734f40e4…` (identical to live) |
+| 2026-10-20 16:48 | prod | Applied the smallest routing change: removed the three proxy/redirect blocks (AGENT_META lines 42–65) and inserted `location ~ ^/dockhand(/|$) { return 404; }` | `git diff --stat` → `nginx/default.conf | 24 +++++-` (21 insertions, 3 deletions; remaining changes are pre-existing WIP already captured in snapshot `75a8280`) |
+| 2026-10-20 16:48 | prod | **Config test before reload** | `docker exec missioncontrol-nginx-1 nginx -t` → `syntax is ok` / `test is successful` |
+| 2026-10-20 16:48 | prod | Reload (not restart) | `nginx -s reload`; container still `Up (healthy)`; new sha256 **`a59d4145…`** |
+| 2026-10-20 16:48 | prod | Post-change validation, probes spaced ~1 s apart (the `@net` zone limits 30 r/min per IP) | `/dockhand` **404**, `/dockhand/` **404**, `/dockhand/api/containers` **404**, `/dockhand/api/containers?` **404**; `/` 200, `/api/v1/health/live` 200, `/api/v1/health/ready` 200, `/health` 200, `/api/v1/version` 200 (`3.0.0-rc1`), `/api/docs` 200 |
+| 2026-10-20 16:48 | prod | Over-block check: unrelated paths containing the word are unaffected | `/dockhand-not-a-route` 200, `/apidockhand` 200 |
+| 2026-10-20 16:48 | prod | TLS and redirect unchanged | cert `CN=missioncontrol.optichosting.co.za`, valid 2026-10-08 → **2027-01-06**; port 80 → 301 `https://…/` |
+| 2026-10-20 16:48 | prod | Application health | login page title `Mission Control`; all six containers healthy/running; backend `traceback|critical` count in the last 5 min = **0**; agent fleet still polling (edge `/config`, `/heartbeat`, `/bundle/download` 200) |
+| 2026-10-20 16:48 | prod | Dockhand left untouched per instruction | container `running=true`, same start time `2026-10-20T10:42:08Z`; volume `missioncontrol_dockhand_data` present |
+| 2026-10-20 16:49 | prod | Investigated the one non-200 observation: `GET /api/v1/ws/health` with upgrade headers → 403 | **Not caused by this change.** No WebSocket route exists at `/api/v1/ws/health`; the real ones are `/api/v1/remote/console`, `/console-agent` and the D-Link `…/servers/{id}/webui` (backend code). Lines 1–50 (including the whole `/api/` block) are **byte-identical** before and after the edit, and every `/api/` path validates 200/401 as expected. The 403 is an application/auth response, pre-existing and unrelated. |
+
+**Change summary — what was altered:** one nginx file, three removed blocks, one added `return 404`
+location. **What was not altered:** the dockhand container, its database, its volumes, the compose file,
+TLS, DNS, the API, the frontend, the database, agents, or any host firewall rule.
+
+**Rollback procedure (tested against the preserved copy):**
+
+```bash
+cd /opt/MissionControl
+cp ~/migration-preserved/default.conf.pre-dockhand-close-20261020T164807Z nginx/default.conf
+sha256sum nginx/default.conf        # must be 734f40e45c1ce3ff0b4ac3871c2fbc21dae83af2910f2c5da611126c2e747505
+docker exec missioncontrol-nginx-1 nginx -t
+docker exec missioncontrol-nginx-1 nginx -s reload
+curl -s -o /dev/null -w '%{http_code}\n' https://missioncontrol.optichosting.co.za/dockhand/   # 200 again
+```
+
+Alternative rollback from git: `git show 75a8280:nginx/default.conf > nginx/default.conf`.
+Estimated rollback time: **< 1 minute**, no restart, no downtime.
+
+**Follow-up (not authorised yet):** the container and volume remain running and are now unreachable from
+the internet. Removing them, and stopping the container, require a separate approval.
+
+---
+
+## Phase 3 — destination host preparation (complete, stopped at the gate)
+
+**Scope executed:** off-host image builds, deployment branch + artefacts, destination verification, approved
+prerequisite installation, firewall/swap persistence test. **Not executed (not authorised):** any backup
+creation/transfer/restore, any production data migration, any DNS change, any production deployment, any
+source-host decommission. Production remains authoritative.
+
+| Timestamp (UTC) | Host | Action and reason | Verification and result |
+|---|---|---|---|
+| 2026-10-20 16:47 | prod | D-F executed as a separate approved operation (preceding section) | approved, validated, rollback documented |
+| 2026-10-20 16:55 | — | Recorded owner decisions U1–U7 and the Phase 3 authorisation | §"Owner decisions U1–U7" below |
+| 2026-10-20 16:55 | local | U7 code-path verification: is the `docker.sock` mount load-bearing? | **No.** No `docker.from_env`/`DockerClient`/`import docker` in `backend/app`; the docker plugin (`official_docker/api.py`) is an **httpx** client to a *configured* Docker Engine API host. `docker_hosts` is **empty** and all `docker_*` tables hold **0 rows**. The mounted socket was additionally **unreadable/unwritable** to the container's `app` user (`DockerException … PermissionError(13)`). Mount and `DOCKER_HOST` therefore omitted on the destination; nothing was disabled on production |
+| 2026-10-20 17:00 | local | Verified the build host (Docker 29.8.2, compose 5.5.1, 8.1 GB RAM); identified the authoritative build source | The local Windows checkout is a **divergent line** with unrelated WIP, so it is not the build source. Cloned the server repo to `mc-build` (`--no-hardlinks --single-branch`, HEAD `618394d`) and built from that tree |
+| 2026-10-20 17:02 | local | Built both images `--no-cache` | `missioncontrol-backend:601a878-20261020` id `sha256:81f84489…` (603 MB); `missioncontrol-frontend:601a878-20261020` id `sha256:1ec76e71…` (75.6 MB). Recorded in `build-and-transfer.md` |
+| 2026-10-20 17:05 | FE/BE | Verified reserved public IPs (U1), capacity, prerequisites, private/public network path | Both reserved IPs resolve to the intended VMs (OCI metadata: `Mission-Control-Frontend` / `Mission-Control-Backend`); shape `VM.Standard.E2.1.Micro`, 956 MB, 42 GB free; Docker/git/rsync/certbot/fail2ban absent; private path `10.0.0.26 ↔ 10.0.0.33` delivers every port; `ADMIN_CIDR` sources observed: `45.220.11.50` (home) and `168.253.204.10` (work) |
+| 2026-10-20 17:06 | FE (from FE→BE public) | U2 cloud-side behaviour probe | BE public `22`/`8000`/`5432` = **no connection**; FE public `443` = `No route to host` (VCN does not hairpin public IPs from inside — expected). No path exposing BE 8000/5432 publicly was observed |
+| 2026-10-20 17:08 | — | Owner supplied the OCI security-list rules; recorded verbatim and compared to U2 in `network-security-plan.md` §1.1 | **Conforms:** FE 80/443 public; SSH restricted to the two admin `/32`s at the cloud layer; 5432/6379 not public. **Discrepancy:** “BE 8000 from `10.0.0.26` only” is **not** a cloud rule (the broad `10.0.0.0/16` all-protocols rule covers it) — enforced instead by container bind address + host firewall. Nothing broadened |
+| 2026-10-20 17:09 | FE + BE | Installed approved prerequisites (idempotent scripted run) | **Both:** 2 GB `/swapfile` + `vm.swappiness=10` (+ fstab), Docker Engine **29.9.1** + compose **v5.6.0** (matches production), `git`, `rsync`, `fail2ban`, `jq`, rewritten persisted `/etc/iptables/rules.v4` (22 narrowed to the two admin `/32`s; 80/443 open; final REJECT), `rpcbind` disabled. **FE only:** `certbot` **1.21.0** + `/var/www/letsencrypt/.well-known/acme-challenge` webroot. Backups of the previous `rules.v4` taken. Original `rules.v4` preserved as `.bak.<timestamp>` |
+| 2026-10-20 17:11 | FE | Reboot-persistence test #1 | `sudo reboot` issued; host returned; verify script was lost by the reboot (documented, re-uploaded) |
+| 2026-10-20 17:12 | FE | Reboot-persistence verification | uptime 0 min; swap **2 GB** present, `swappiness=10`, fstab entry line 20; iptables rules **persisted as written** (22 scoped to both admin `/32`s, 80/443 open, final REJECT); listeners = `sshd:22`, resolved stub `:53` (**no `:111`**); Docker `active` (Server 29.9.1, `MemTotal` 1002909696); `ip_forward=1`; persisted file contains **0** `DOCKER` lines (correct — Docker inserts its chains at start, they must not be baked into the file) |
+| 2026-10-20 17:15 | BE | Reboot-persistence test (first attempt did **not** actually reboot — uptime still 3 h 53 m; live `INPUT` still showed the **old** unrestricted-22 rule ahead of the new ones) | Detected and corrected rather than recorded as a pass. This is exactly why the reboot test is run before data exists |
+| 2026-10-20 17:16 | BE | Reboot-persistence verification after a real reboot | uptime 1 min; swap 2 GB, `swappiness=10`, fstab line 20; iptables **persisted as written** (identical rule set to FE); listeners `sshd:22` + resolved stub `:53`, no `:111`; Docker `active` 29.9.1; `ip_forward=1`; 0 `DOCKER` lines in the persisted file |
+| 2026-10-20 17:18 | FE + BE | Post-install posture check | FE: `rpcbind` listeners **0**; Docker `DOCKER` chains present in live ruleset (expected, inserted by dockerd) but **absent** from the persisted file. BE: `certbot` **absent** (correct — edge only), `fail2ban` installed/inactive (no jails configured yet — recorded below). BE `8000` returns *closed* from FE until the stack is deployed (nothing listening yet) |
+
+### U7 — Docker socket decision (evidence)
+
+| Question | Finding |
+|---|---|
+| Is `import docker` / the Docker SDK used anywhere in the backend? | **No.** `grep` for `import docker`, `docker.from_env`, `DockerClient`, `docker.errors` in `backend/app` returns nothing |
+| How does the Docker plugin reach a Docker host? | `backend/app/plugins/installed/official_docker/api.py` is an **httpx** async client that builds `http(s)://<configured host>` from a `DockerPluginConfig` host list (`config.py`) |
+| Is any Docker host configured? | **No** — `docker_hosts` is empty and `docker_containers/_images/_volumes/_networks/_compose_stacks` are all **0 rows**. The plugin has no configured target |
+| Does the mounted socket work in the container anyway? | **No** — `app` (uid 100) is not in the socket's group; the SDK probe failed with `PermissionError(13)`. So the socket provides no working capability today |
+| Decision | **Omit the mount and `DOCKER_HOST` on the destination.** Documented in `docker-compose.backend.yml`. If a Docker host is ever wanted, it should be added as a **configured remote host** in the plugin settings, not via a local socket. Remote Docker API was never exposed |
+| Production impact | **None.** Nothing was changed on production; this decision only affects the not-yet-deployed destination compose file |
+
+### Phase 3 installation report
+
+**Images (built off-host, per D-A):**
+
+| Image | Tag | Image ID | Size | Source revision |
+|---|---|---|---|---|
+| `missioncontrol-backend` | `601a878-20261020` | `sha256:81f8448974fcc5030310e527d67f791369ce52bbd5d8a7218a864227990d147d` | 603 MB | `release/v3.0.0-rc1` @ `618394d` (server working tree) |
+| `missioncontrol-frontend` | `601a878-20261020` | `sha256:1ec76e71b65ea98fbcfc2454bd12d26c82fa7c6ae99ee2606eff2369c1c9c78e` | 75.6 MB | same |
+
+**Installed software (verified, both hosts unless noted):**
+
+| Component | FE `10.0.0.26` | BE `10.0.0.33` |
+|---|---|---|
+| Docker Engine | 29.9.1 | 29.9.1 |
+| Docker Compose | v5.6.0 | v5.6.0 |
+| git / rsync / jq | installed | installed |
+| fail2ban | installed, inactive (no jails) | installed, inactive (no jails) |
+| certbot | 1.21.0 + webroot | absent (edge only) |
+| swap | 2 GB `/swapfile`, `swappiness=10` | 2 GB `/swapfile`, `swappiness=10` |
+| persisted iptables | rewritten, reboot-verified | rewritten, reboot-verified |
+| rpcbind (`:111`) | disabled | disabled |
+
+**Firewall as installed and verified after reboot (both hosts):**
+
+```
+-A INPUT -i lo -j ACCEPT
+-A INPUT -m state --state RELATED,ESTABLISHED -j ACCEPT
+-A INPUT -p icmp -j ACCEPT
+-A INPUT -s 45.220.11.50/32  -p tcp --dport 22 -j ACCEPT
+-A INPUT -s 168.253.204.10/32 -p tcp --dport 22 -j ACCEPT
+-A INPUT -p tcp --dport 80  -j ACCEPT
+-A INPUT -p tcp --dport 443 -j ACCEPT
+-A INPUT -j REJECT --reject-with icmp-host-prohibited
+```
+
+**Configuration diffs prepared (not yet deployed):** `deploy/migration-2vm/` contains
+`docker-compose.backend.yml`, `docker-compose.frontend.yml`, `nginx/default.conf` and
+`env/backend.env.example`. They are **artefacts**, not deployed state. Deployment is Phase 4.
+
+### Outstanding blockers (as required at the Phase 3 gate)
+
+1. **U6 — backup and recovery plan is not approved.** No backup exists or was created. A separate plan
+   (off-host destination, encryption, key custody, checksum verification, restore testing) must be
+   approved before any data migration. This is the primary gate before Phase 4.
+2. **Images are built but not transferred.** `docker save`/`load` to FE/BE has not been executed.
+3. **Artefacts are not committed and not deployed.** The `deploy/migration-2vm/` files live only in the
+   working tree; deployment branch creation and deployment are Phase 4.
+4. **`.env` has not been transferred.** The production Fernet key and DB password must be moved over SSH
+   with mode 600 and hash-verified — part of the data-migration phase.
+5. **Certificate material has not been moved.** Both lineages must be copied to `/etc/letsencrypt` on FE
+   (root-only) in a later phase; U4 forbids deleting either lineage.
+6. **fail2ban has no jails.** Installed but not configured; a deliberate choice to keep Phase 3 to
+   "install approved prerequisites". Jail configuration is a follow-up.
+7. **OCI NSG question unresolved.** Whether an NSG applies in addition to the security list cannot be read
+   from inside a guest; the behavioural evidence in `network-security-plan.md` §3.5 is the strongest
+   available assertion.
+8. **`ADMIN_CIDR` assumption.** The firewall scopes SSH to the two observed admin `/32`s. If either
+   address is dynamic, this is a lockout risk and must be revisited before the hosts are relied upon.
+
+### Owner decisions U1–U7 (2026-10-20)
+
+| ID | Decision | Effect on this migration |
+|---|---|---|
+| U1 | Both public IPs are **reserved**; verify assignments stay correct before cutover | DNS cutover is safe; verification added to the cutover runbook preconditions |
+| U2 | Ingress should already be correct; **verify** security lists/NSG and guest firewall; report discrepancies; never broaden rules to make deployment easier | Verification performed from inside the guests and from an external vantage; console-side items remain owner-verified |
+| U3 | **Block** `/api/docs` and `/api/openapi.json` publicly on the destination; keep normal API function | Added to the FE nginx target config; validated on the destination before cutover |
+| U4 | **Keep both** certificate lineages; preserve material; do not delete either | certbot renewal covers both; no lineage removed |
+| U5 | **No** Docker management UI on the destination; Dockhand is not migrated | compose has no dockhand service; nothing to install |
+| U6 | Backup implementation/execution **not authorised** at this stage; present a separate backup and recovery plan for approval before any data migration; do not migrate production data or cut over without an approved, verified recovery strategy | Phase 3 does **not** create, transfer or restore backups. A separate backup/recovery plan is required before Phase 4 |
+| U7 | Keep the `docker.sock` mount **only if the backend demonstrably requires it**; verify code paths; document implications; otherwise omit; never expose the Docker API remotely | Code-path verification performed (see the installation report); remote Docker API exposure never configured |
+| D-F | Close `/dockhand/` on production now, as a separate, reviewed change | Executed and validated (previous section) |

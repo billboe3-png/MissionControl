@@ -1,0 +1,108 @@
+# Mission Control — Backend VM stack (Phase 3 deployment artefact)
+#
+# Host: backend VM 10.0.0.33 / 84.12.82.239
+# Role: API, PostgreSQL, Redis
+#
+# Deliberate differences from the source-host compose file:
+#   - no nginx / frontend (they live on the frontend VM)
+#   - no dockhand (owner decision D-B / U5: not migrated, no replacement UI)
+#   - backend publishes on 10.0.0.33 ONLY, never 0.0.0.0
+#   - postgres and redis publish nothing
+#   - log rotation enabled (the source host has none)
+#   - MISSIONCONTROL_SECRET_KEY comes from .env only (no inline duplicate)
+#
+# Image tags are placeholders: set IMAGE_TAG to the value recorded in
+# migration/build-and-transfer.md, e.g. IMAGE_TAG=601a878-20261020
+#
+name: mc-be
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: mc-postgres
+    restart: unless-stopped
+    env_file:
+      - .env
+    volumes:
+      - mc-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  redis:
+    image: redis:7.2-alpine
+    container_name: mc-redis
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - mc-redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  backend:
+    image: missioncontrol-backend:${IMAGE_TAG:-601a878-20261020}
+    container_name: mc-backend
+    restart: unless-stopped
+    env_file:
+      - .env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    ports:
+      # Private VCN interface only. Never "8000:8000" or "0.0.0.0:8000".
+      - "10.0.0.33:8000:8000"
+    volumes:
+      # Parity with production: the backend runs from the working tree, so the
+      # deployed revision is defined by the tree, not by the image alone.
+      - ./backend:/app
+      - .:/project
+    working_dir: /app
+    environment:
+      PROJECT_DIR: /project
+      # SSH_AUTO_ADD_HOST_KEYS is preserved because it is live production
+      # behaviour read by the SSH executor (used by Veeam/Hyper-V/console
+      # operations), not by the Docker plugin.
+      SSH_AUTO_ADD_HOST_KEYS: "true"
+      # DOCKER_HOST is intentionally absent and /var/run/docker.sock is NOT
+      # mounted: the docker plugin is an httpx client to configured Docker
+      # Engine API hosts (docker_hosts table), no docker SDK is imported, and
+      # the mounted socket was in fact unreadable/unwritable to the container's
+      # app user (owner decision U7: keep only if demonstrably required).
+      # See migration/execution-log.md §U7 evidence.
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request;urllib.request.urlopen('http://127.0.0.1:8000/api/v1/health/live',timeout=3)"
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  mc-postgres-data:
+  mc-redis-data:

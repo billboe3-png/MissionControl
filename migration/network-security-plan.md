@@ -21,10 +21,49 @@
 | Docker is absent on both VMs (so no Docker-managed iptables chains yet) | audit |
 | Windows workstation gives **false negatives** for destination 80/443 | Phase 1 |
 
-**Unresolved (must be read from the OCI console before Phase 7):** whether the public IPs are
-**reserved**, the exact ingress rules (source scopes for 22, any explicit 8000 rule) and whether a
-network security group applies in addition to the security list. These cannot be read from inside the
-guest. **[?] U1/U2**
+**U1/U2 resolved 2026-10-20:**
+
+- Public IPs are **reserved** (owner-confirmed) — DNS cutover is safe; the assignment is re-verified before
+  cutover.
+- The OCI **ingress security-list rules were supplied by the owner** and are reproduced verbatim in §1.1.
+  Note the list supplied is the *egress* direction of the rule set; the same tables carry both directions,
+  and every entry above is an ingress rule (source → destination port), which is what matters here.
+- Still console-side and NOT verifiable from inside a guest: whether an **NSG** applies in addition to the
+  security list, and which specific rule permitted each observed connection. Behavioural evidence is in §3.5.
+
+### 1.1 OCI security-list rules as supplied by the owner (2026-10-20)
+
+| # | Source | Protocol | Ports | Purpose (as labelled) |
+|---|---|---|---|---|
+| 1 | `10.0.0.0/16` | All protocols | All | intra-VCN |
+| 2 | `45.220.11.50/32` | ICMP | All | Allow Ping from Home |
+| 3 | `168.253.204.10/32` | ICMP | All | Allow Ping from Work |
+| 4 | `45.220.11.50/32` | TCP | 22 | Allow SSH From Home |
+| 5 | `168.253.204.10/32` | TCP | 22 | Allow SSH From Work |
+| 6 | `0.0.0.0/0` | TCP | 80 | Web Traffic |
+| 7 | `0.0.0.0/0` | TCP | 443 | Web Traffic |
+| 8 | `10.0.0.0/16` | ICMP | All | intra-VCN |
+| 9 | `10.0.0.0/16` | TCP | 22 | intra-VCN |
+| 10 | `34.35.177.209/32` | All protocols | All | the **source/production host** |
+
+**Conformance against U2's expected policy:**
+
+| U2 requirement | Rule(s) | Verdict |
+|---|---|---|
+| FE public TCP 80/443 | 6, 7 (`0.0.0.0/0`) | **Conforms.** Applied at the VCN/subnet level, so both VMs also accept 80/443 — acceptable, since BE publishes no 80/443 listener and its host firewall does not open them |
+| SSH from a trusted admin range **only** | 4, 5 (`45.220.11.50/32`, `168.253.204.10/32`) | **Conforms at the cloud layer** — but rule 1 (`10.0.0.0/16`, all protocols) and rule 9 (`10.0.0.0/16` port 22) mean SSH is reachable from anywhere in the VCN, and the **guest firewall currently accepts 22 from any source** |
+| BE TCP 8000 from FE `10.0.0.26` **only** | rule 1 (`10.0.0.0/16` all protocols) | **Does NOT conform.** There is no `10.0.0.26/32` rule; the entire VCN may reach 8000. Not publicly exposed (verified, §3.5) because `10.0.0.0/16` is private address space, so this is a lateral-movement exposure, not an internet exposure |
+| 5432 / 6379 not publicly accessible | none | **Conforms.** No rule mentions 5432/6379 outside the intra-VCN rule; verified behaviourally in §3.5 |
+| Do not broaden rules | — | Nothing was broadened. **Recommendation:** tighten at least the guest firewall for 22 (done in this phase) and, if the owner chooses, add a `10.0.0.26/32` rule for 8000 and remove/scope the intra-VCN all-protocols rule |
+
+Rule 10 (`34.35.177.209/32`, all protocols) gives the **production source host** unrestricted access to
+these VMs. That is a deliberate migration affordance (it is what allows the transfer/validation work) and
+should be reviewed for removal once the source host is decommissioned.
+
+**Discrepancy report (as requested by U2):** the only material discrepancy is that "BE 8000 from
+`10.0.0.26` only" is **not** enforced at the cloud layer — it is enforced by the container bind address
+plus the host firewall designed in §3.3. No rule needs broadening; two rules are candidates for
+*tightening* (noted above, owner's call).
 
 ---
 
@@ -83,6 +122,17 @@ COMMIT
 chain is reloaded out of order. The IPv6 file (`rules.v6`) gets the equivalent treatment or an explicit
 documented decision to leave IPv6 unconfigured (OCI VCN has no IPv6 in use today **[A]**).
 
+**`ADMIN_CIDR` — as delivered:** the owner range **`45.220.11.50/32`** (the observed admin source during
+this work; `SSH_CLIENT` = `45.220.11.50`). This *narrows* the stock OCI image rule, which accepts port 22
+from **any** source (`-A INPUT -p tcp --state NEW --dport 22 -j ACCEPT` with no `-s`). Narrowing is
+explicitly permitted by U2 ("do not broaden"); it is not a broadening change. If the operator range is
+dynamic, this is a lockout risk and the value must be revisited before the hosts are relied upon — see
+the open item in `execution-log.md`.
+
+**Unverifiable from inside the guest (U2):** the OCI security list and any NSG applied to these VNICs
+cannot be read without console/API access. What the guests *can* prove is the resulting behaviour, which
+was measured; see §3.5.
+
 ### 3.3 Backend VM — `/etc/iptables/rules.v4` intent
 
 Same preamble, plus:
@@ -104,10 +154,35 @@ API to the internet; a bind mistake alone cannot either.
 |---|---|
 | `sudo iptables -S` after `netfilter-persistent restart` | intended rules present, Docker chains present only after Docker start |
 | Reboot test (Phase 3, on the destination, before data exists) | rules survive; `sshd` reachable; unpublished ports rejected |
-| From BE: `nc -z -w3 10.0.0.26 443` / from FE: `nc -z -w3 10.0.0.33 8000` | succeed |
+| From BE: `nc -z -w3 10.0.0.26 443` / from FE: `nc -z -w3 10.0.0.33 8000` | succeed once the services exist |
 | From an **external** vantage: FE `80/443` open, `3000/8000/5432/6379` closed | as designed |
 | `ip_forward` | `1` after Docker starts, documented |
 | `ss -lntp` | no `:111`; no `0.0.0.0:8000` on BE |
+
+### 3.5 Measured cloud-side behaviour (U2 evidence, 2026-10-20)
+
+Measured from the FE VM against the BE VM's **public** IP (a genuine inter-subnet public path):
+
+| Probe (from FE to BE public IP) | Result |
+|---|---|
+| `84.12.82.239:22` | no connection |
+| `84.12.82.239:8000` | no connection |
+| `84.12.82.239:5432` | no connection |
+| `84.12.77.251:443` (FE's own public IP, hairpin) | **`No route to host`** — the OCI VCN does not hairpin public IPs from inside the VCN; this is normal and expected, not a fault |
+
+Interpretation: no path was observed that exposes BE's `8000`/`5432` publicly. This is consistent with
+the required policy, but it is **behavioural** evidence only. The authoritative statement — which
+security list rule and which NSG allow 80/443 and restrict 22 — remains console-side and is recorded as
+an open item.
+
+Two host-side findings from the same run:
+
+1. **The stock OCI firewalls on both VMs accept port 22 from any source** (`-A INPUT -p tcp --state NEW
+   --dport 22 -j ACCEPT`, no `-s`). Only the cloud layer restricts SSH today. This Phase narrows it to
+   the admin `/32`.
+2. The FE→BE private path delivers **all** ports (22/80/443/3000/5432/6379/8000 all connect when a
+   listener exists) — so `10.0.0.0/24` has no port-level isolation. Correctness depends on container bind
+   addresses plus the host firewall, exactly as designed in §3.3.
 
 ---
 
@@ -172,32 +247,66 @@ Dockhand's own database has **0 users, 0 sessions, authentication disabled**, 0 
 repos; nginx logs show 326 `/dockhand` requests, of which 282 are not from our audit `curl` — i.e. real
 browser traffic exists (at least one owner visit on 14 Oct that produced 404s on the API sub-path).
 
-**Proposed change (exact):**
+**Proposed change (exact):** replace the three dockhand routing blocks with a single explicit **deny**
+that covers both the UI and its API, and closes the redirect:
 
 ```diff
 --- a/nginx/default.conf
 +++ b/nginx/default.conf
 @@
+-    # Dockhand - Docker Management UI (path-based routing)
 -    location /dockhand/ {
 -        proxy_pass http://dockhand:3000/;
--        ...
+-        proxy_http_version 1.1;
+-        proxy_set_header Host $host;
+-        proxy_set_header X-Real-IP $remote_addr;
+-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+-        proxy_set_header X-Forwarded-Proto $scheme;
+-        proxy_set_header Upgrade $http_upgrade;
+-        proxy_set_header Connection "upgrade";
+-        proxy_buffering off;
+-        proxy_read_timeout 3600s;
+-        proxy_connect_timeout 60s;
+-        # Inject <base> tag for SPA sub-path navigation
+-        sub_filter '<head>' '<head><base href="/dockhand/">';
+-        # Rewrite asset paths for SPA under sub-path
+-        sub_filter 'href="/' 'href="/dockhand/';
+-        sub_filter 'src="/' 'src="/dockhand/';
+-        sub_filter_once off;
+-        sub_filter_types text/html text/css application/javascript;
 -    }
+-
 -    location = /dockhand {
 -        return 301 /dockhand/;
 -    }
++    # Dockhand retired from public routing (2026-10-20).
++    # Regex location matches /dockhand, /dockhand/ and /dockhand/<anything>
++    # (including /dockhand/api/containers). The container, its database and its
++    # volumes are untouched and remain reachable only on the Docker network.
++    location ~ ^/dockhand(/|$) {
++        return 404;
++    }
 ```
 
-i.e. delete the `/dockhand/` location, the `sub_filter` directives that only serve it, and the
-`/dockhand` redirect. Leave the `dockhand` **container and volume** running and untouched.
+Rationale for the regex location rather than deleting the block:
+
+| Aspect | Why |
+|---|---|
+| Coverage | `location ~ ^/dockhand(/|$)` matches the exact path, the trailing-slash path **and** every sub-path, so the API surface cannot be reached by omitting or adding a slash |
+| Not a broad change | Nothing else in the config matches `^/dockhand`; `/api/`, `/` and `/health` are untouched |
+| Response | `404` (not `403`) avoids confirming that an administrative interface exists at that path |
+| Reversibility | The whole change is three deletions plus one four-line block; the previous file is preserved by hash and in git |
+| Scope discipline | The `dockhand` service, `dockhand_data` volume and its SQLite state are **not** stopped, removed or modified |
 
 | Aspect | Detail |
 |---|---|
 | Reason | unauthenticated administrative UI with root-equivalent Docker access on a public host |
-| Impact | `/dockhand/` returns 404; no other route changes; the container keeps running (reachable only from inside the Docker network) |
-| Validation | `docker exec missioncontrol-nginx-1 nginx -t`; reload; `curl -o /dev/null -w '%{http_code}' https://…/dockhand/` → 404; `/`, `/api/v1/health/live` still 200; websocket still works |
-| Rollback | restore the previous `nginx/default.conf` (sha256 `734f40e4…`), `nginx -t`, reload — < 1 minute |
+| Impact | `/dockhand`, `/dockhand/`, `/dockhand/api/*` return **404**; the container keeps running (reachable only from inside the Docker network); no other route changes |
+| Validation | `docker exec missioncontrol-nginx-1 nginx -t` **before** reload; then `curl` probes for `/dockhand`, `/dockhand/`, `/dockhand/api/containers` → 404 and `/`, `/api/v1/health/live`, `/api/v1/health/ready`, `/api/v1/version`, `/api/docs`, websocket → unchanged |
+| Rollback | restore the previous `nginx/default.conf` (sha256 `734f40e4…`, content preserved in commit `75a8280`), `nginx -t`, reload — < 1 minute |
 | Downtime | none (reload, not restart) |
-| Approval | **explicit owner approval required before touching production** |
+| Approval | **APPROVED 2026-10-20** (owner decision D-F). Executed as a separate operation from the migration; evidence recorded in `execution-log.md` |
+| Execution prerequisite | the small `@net` rate limit means rapid repeated probes from one IP can themselves return 429 — probes must be spaced and the result interpreted accordingly |
 
 Alternative if a Docker UI must remain: run it on the BE VM bound to `127.0.0.1`, reachable only through
 an SSH tunnel, with authentication enabled. **[R]** Do not proxy it publicly again.
