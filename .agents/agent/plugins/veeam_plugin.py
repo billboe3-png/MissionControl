@@ -153,7 +153,7 @@ class VeeamPlugin(AgentPlugin):
                 continue
             if (
                 target.get("hostname") == hostname
-                and (target.get("protocol") or "").lower() == "ssh"
+                and (target.get("protocol") or "").lower() in ("ssh", "winrm")
             ):
                 return target
         return None
@@ -224,7 +224,13 @@ class VeeamPlugin(AgentPlugin):
                 username = target.get("username") or ""
                 password = target.get("password") or ""
                 ssh_key = target.get("ssh_key") or ""
-                self._api_base = f"https://{hostname}:{port}"
+                protocol = (target.get("protocol") or "ssh").lower()
+                # ``port`` is the *transport* port (5985 for winrm targets).
+                # The REST API base must always point at Veeam's REST port
+                # (9419) or https requests hit the WinRM HTTP listener and
+                # fail with SSL WRONG_VERSION_NUMBER.
+                rest_port = 9419 if protocol in ("ssh", "winrm") else port
+                self._api_base = f"https://{hostname}:{rest_port}"
                 self._username = username or self._username
                 self._password = password or self._password
                 self._ssh_target = {
@@ -233,7 +239,7 @@ class VeeamPlugin(AgentPlugin):
                     "username": username or self._username,
                     "password": password or self._password,
                     "ssh_key": ssh_key or None,
-                    "protocol": target.get("protocol") or "ssh",
+                    "protocol": protocol,
                 }
                 logger.info(
                     "Veeam plugin configured from remote target %s", hostname
@@ -248,7 +254,8 @@ class VeeamPlugin(AgentPlugin):
                     self._ssh_target = self._find_remote_target_for_api_base()
                 if (
                     self._ssh_target
-                    and (self._ssh_target.get("protocol") or "").lower() == "ssh"
+                    and (self._ssh_target.get("protocol") or "").lower()
+                    in ("ssh", "winrm")
                 ):
                     self._use_relay = True
                     self._use_rest = False
@@ -782,13 +789,16 @@ class VeeamPlugin(AgentPlugin):
         )
         license = await self._run_collector_via_relay("license")
         logger.info("Veeam relay license collected=%s", bool(license))
+        lic = license
+        if isinstance(license, list) and license and isinstance(license[0], dict):
+            lic = license[0]
         return {
             "jobs": jobs or [],
             "sessions": sessions or [],
             "repositories": repos or [],
             "managed_servers": managed_servers or [],
             "restore_points": restore_points or [],
-            "license": license or {},
+            "license": lic or {},
         }
 
     async def _execute_relay(
@@ -808,13 +818,25 @@ class VeeamPlugin(AgentPlugin):
             collector = collector_ops[command]
             db_type = args.get("db_type") or None
             items = await self._run_collector_via_relay(collector, target_id=target_id)
-            if collector in ("jobs", "sessions", "repositories") and items is None:
+            # PS collectors can "succeed" with zero items when the Veeam
+            # PowerShell module cannot load (e.g. Veeam 13 requires PS 7 and
+            # the host only has 5.1). Treat empty the same as failed so the
+            # DB bridge picks the data up instead of reporting 0.
+            if collector in ("jobs", "sessions", "repositories") and not items:
+                items = await self._db_collect(collector, target_id, db_type=db_type)
+            if collector == "restore_points" and not items:
                 items = await self._db_collect(collector, target_id, db_type=db_type)
             if collector == "license":
+                # The collector script emits a single JSON object, but
+                # _parse_json_array wraps it in a list; the backend expects a
+                # dict, so unwrap it here.
+                lic = items
+                if isinstance(items, list) and items and isinstance(items[0], dict):
+                    lic = items[0]
                 return {
-                    "success": bool(items),
-                    "license": items or {},
-                    "error": None if items else "Veeam relay license unavailable",
+                    "success": bool(lic),
+                    "license": lic or {},
+                    "error": None if lic else "Veeam relay license unavailable",
                 }
             key = payload_key.get(collector, collector)
             return {
@@ -1419,6 +1441,23 @@ AND js.job_name NOT LIKE '%Security & Compliance Analyzer%'"""
                 "WHERE 1=1 " + _WHERE_FILTER_SQL + " "
                 "ORDER BY js.creation_time DESC LIMIT 200"
             )
+        if collector == "restore_points":
+            if db_type == "mssql":
+                return (
+                    "SELECT TOP 200 p.id, b.job_id, b.job_name, "
+                    "p.creation_time, p.type "
+                    "FROM [Backup.Model.Points] p "
+                    "JOIN [Backup.Model.Backups] b ON b.id = p.backup_id "
+                    "ORDER BY p.creation_time DESC"
+                )
+            return (
+                "SELECT p.id, b.job_id, b.job_name, "
+                "p.creation_time, p.type "
+                'FROM "backup.model.points" p '
+                'JOIN "backup.model.backups" b ON b.id = p.backup_id '
+                "ORDER BY p.creation_time DESC "
+                "LIMIT 200"
+            )
         if collector == "repositories":
             if db_type == "mssql":
                 return (
@@ -1675,6 +1714,29 @@ AND js.job_name NOT LIKE '%Security & Compliance Analyzer%'"""
                     "progressPercent": self._to_int(r[7], 0),
                 })
             return sessions
+        if collector == "restore_points":
+            sql = self._db_collect_sql("restore_points", db_type)
+            raw = await self._run_db_query_via_relay(
+                sql, target_id=target_id, db_type=db_type
+            )
+            if raw is None:
+                return None
+            rows = self._parse_psql_rows(raw)
+            points = []
+            for r in rows:
+                if len(r) < 4:
+                    continue
+                created = r[3] if r[3] and str(r[3]).strip().lower() != "null" else None
+                points.append({
+                    "id": r[0],
+                    "jobId": r[1],
+                    "name": r[2],
+                    "vmName": r[2],
+                    "type": r[4] if len(r) > 4 else None,
+                    "creationTime": created,
+                    "createdTime": created,
+                })
+            return points
         if collector == "repositories":
             sql = self._db_collect_sql("repositories", db_type)
             raw = await self._run_db_query_via_relay(
@@ -1786,18 +1848,33 @@ AND js.job_name NOT LIKE '%Security & Compliance Analyzer%'"""
                 "} | ConvertTo-Json -Compress }"
             ),
             "restore_points": (
-                "Import-Module Veeam.Backup.PowerShell -ErrorAction SilentlyContinue; "
-                "Get-VBRRestorePoint -Result Success -MaxCount 200 | ForEach-Object { @{"
-                "id=$_.Id.ToString(); jobId=$_.JobId.ToString(); creationTime=$_.CreationTime.ToString('o'); size=$_.Size "
-                "} | ConvertTo-Json -Compress }"
+                "Import-Module Veeam.Backup.PowerShell -WarningAction SilentlyContinue -ErrorAction SilentlyContinue; "
+                "$rp = Get-VBRRestorePoint -ErrorAction SilentlyContinue | Select-Object -First 200; "
+                "$out = @(); foreach ($r in $rp) { "
+                "  $jobId = $null; try { $jobId = $r.JobId.ToString() } catch {}; "
+                "  $size = 0; try { $size = $r.Size } catch {}; "
+                "  $ct = $null; try { $ct = $r.CreationTime.ToString('o') } catch { $ct = (Get-Date).ToString('o') }; "
+                "  $id = $null; try { $id = $r.Id.ToString() } catch { $id = [guid]::NewGuid().ToString() }; "
+                "  $out += [pscustomobject]@{id=$id; jobId=$jobId; creationTime=$ct; size=$size} "
+                "}; Write-Output ($out | ConvertTo-Json -Compress)"
             ),
             "license": (
                 "Import-Module Veeam.Backup.PowerShell -ErrorAction SilentlyContinue; "
-                "$ver=(Get-Module Veeam.Backup.PowerShell).Version; $lic=Get-VBRLicense; @{"
-                "type=$lic.Edition.ToString(); status=$lic.Status.ToString(); supportId=$lic.SupportId; "
-                "expirationDate=$lic.ExpirationDate.ToString('o'); edition=$lic.Edition.ToString(); "
-                "moduleVersion=if ($ver) {$ver.ToString()} else {$null} "
-                "} | ConvertTo-Json -Compress"
+                "$ver=(Get-Module Veeam.Backup.PowerShell).Version; "
+                "$lic=Get-VBRInstalledLicense -ErrorAction SilentlyContinue; if (-not $lic) { $lic=Get-VBRLicense -ErrorAction SilentlyContinue }; "
+                "$edition=$null; try { $edition=$lic.Edition.ToString() } catch {}; "
+                "$status=$null; try { $status=$lic.Status.ToString() } catch {}; "
+                "$suppId=$null; try { $suppId=$lic.SupportId } catch {}; "
+                "$exp=$null; try { if ($lic.ExpirationDate) { $exp=$lic.ExpirationDate.ToString('o') } } catch {}; "
+                "if (-not $lic) { "
+                # Veeam 13's PowerShell module requires PS 7; when it cannot
+                # load, parse the license file directly (plain XML, no module).
+                "$lf = Get-ChildItem 'C:\\ProgramData\\Veeam\\Backup' -Filter 'License*.lic' -ErrorAction SilentlyContinue | Sort-Object LastWriteTime -Descending | Select-Object -First 1; "
+                "if ($lf) { try { $x=[xml](Get-Content $lf.FullName -Raw); $r=$x.License; if (-not $r) { $r=$x.DocumentElement }; "
+                "$edition=$r.ProductEdition; $status=$r.Status; $suppId=$r.SupportId; if ($r.ExpirationDate) { $exp=$r.ExpirationDate } } catch {} } }; "
+                "[pscustomobject]@{edition=$edition; status=$status; supportId=$suppId; expirationDate=$exp; "
+                "moduleVersion=if ($ver) {$ver.ToString()} else {$null}; available=([bool]$lic -or [bool]$edition)} "
+                "| ConvertTo-Json -Compress"
             ),
         }
         script = script_map.get(collector)
@@ -1944,13 +2021,13 @@ AND js.job_name NOT LIKE '%Security & Compliance Analyzer%'"""
         for tid, target in (remote_manager.targets or {}).items():
             if (
                 target.get("hostname") == hostname
-                and (target.get("protocol") or "").lower() == "ssh"
+                and (target.get("protocol") or "").lower() in ("ssh", "winrm")
             ):
                 target_id = tid
                 break
         if target_id is None:
             logger.warning(
-                "Veeam jobs relay skipped: no SSH target for host %s", hostname
+                "Veeam jobs relay skipped: no relay target for host %s", hostname
             )
             return []
 
@@ -2214,16 +2291,18 @@ AND js.job_name NOT LIKE '%Security & Compliance Analyzer%'"""
             return self._parse_json_array(result["stdout"])
 
         if collector == "restore_points":
+            # Veeam 12.3 dropped -Result/-MaxCount; serialize nulls safely
+            # (JobId/Size may be null and ToString() would throw).
             script = (
                 prefix
-                + "Get-VBRRestorePoint -Result Success -MaxCount 200 | ForEach-Object { "
-                "  @{"
-                "    id=$_.Id.ToString(); "
-                "    jobId=$_.JobId.ToString(); "
-                "    creationTime=$_.CreationTime.ToString('o'); "
-                "    size=$_.Size "
-                "  } | ConvertTo-Json -Compress "
-                "}"
+                + "$rp = Get-VBRRestorePoint -ErrorAction SilentlyContinue | Select-Object -First 200; "
+                "$out = @(); foreach ($r in $rp) { "
+                "  $jobId = $null; try { $jobId = $r.JobId.ToString() } catch {}; "
+                "  $size = 0; try { $size = $r.Size } catch {}; "
+                "  $ct = $null; try { $ct = $r.CreationTime.ToString('o') } catch { $ct = (Get-Date).ToString('o') }; "
+                "  $id = $null; try { $id = $r.Id.ToString() } catch { $id = [guid]::NewGuid().ToString() }; "
+                "  $out += [pscustomobject]@{id=$id; jobId=$jobId; creationTime=$ct; size=$size} "
+                "}; Write-Output ($out | ConvertTo-Json -Compress)"
             )
             result = await self._run_script(script, timeout=120)
             if not result["success"]:
