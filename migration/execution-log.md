@@ -396,6 +396,115 @@ and on the BE VM immediately after use. Non-secret fingerprint recorded in the m
 
 Backup creation, off-host transfer, integrity verification and a full scratch restore test (including real
 credential decryption) are **complete and verified [V]**. The U6 gate — *"no data migration or cutover
-without an approved, verified recovery strategy"* — is now **satisfied on the evidence**. The next phase
-(transfer images/`.env`/TLS to the destinations, deploy the BE and FE stacks, validate) remains **unauthorised
-until the owner approves ** and is executed per `migration/cutover-runbook.md`.
+without an approved, verified recovery strategy"* — is **satisfied on the evidence**. The next phase
+(transfer images/`.env`/TLS to the destinations, deploy the BE and FE stacks, validate) proceeds under the
+owner's Phase 5 authorisation.
+
+---
+
+## Phase 4b — second copy of the verified backup (owner-directed, complete)
+
+**Owner decision (2026-10-20):** "Make a second copy of the backup before proceeding to Phase 5." The copy
+must be on a separate physical drive or second machine; contain **only encrypted artefacts and manifests**;
+be verified against the authoritative `SHA256SUMS`; leave the passphrase and Fernet-key custody unchanged;
+and must not modify or delete the original.
+
+**Location constraint discovered [V]:** the local workstation has **one physical disk** (`C:`, 476 GB NVMe;
+20.9 GB free) and **no removable/USB device attached**. The mapped network drive `Q:` →
+`\\Corhqfileserver\corhqfilevolume` (a separate machine, the CORHQ file server) was **unreachable** (name
+does not resolve; share not writable). The owner therefore selected the **production source host under
+`/opt`** as the second-copy location.
+
+| Timestamp (UTC) | Host | Action | Verification / result |
+|---|---|---|---|
+| 2026-10-20 18:05 | local | Confirmed the original was unmodified **before** copying | `certutil` SHA-256 of the local set → **5/5 OK** |
+| 2026-10-20 18:06 | prod | Created `/opt/mc-backup-offsite/20261020T173709Z` (root:root, mode 700) and copied the **8** encrypted/manifest files only | `sudo cp -p` of the four `.enc` + `MANIFEST.txt`, `SHA256SUMS`, `RESTORE-KEY-CHECK.enc/.txt` |
+| 2026-10-20 18:06 | prod | Confirmed no passphrase and no plaintext travelled | `grep` for the passphrase string → **absent**; no `/tmp/.pp.*` on the host; file count = 8 |
+| 2026-10-20 18:06 | prod | **Verified the second copy** against the authoritative `SHA256SUMS` (as root) | `sha256sum -c SHA256SUMS` → **RESTORE-KEY-CHECK.enc OK, db-full.dump.enc OK, globals.sql.enc OK, letsencrypt.tar.enc OK, missioncontrol.env.enc OK** (exit 0) |
+| 2026-10-20 18:06 | prod | Byte-for-byte comparison against the source stage | All four artefacts **MATCH** the authoritative digests |
+| 2026-10-20 18:06 | prod | Recorded a non-secret `SECOND-COPY.txt` note in the source stage | Location, mode, contents, verification result, custody note |
+| 2026-10-20 18:06 | local | Original **left untouched** | No write, move or delete performed on `C:\Backup\MissionControl\20261020T173709Z\` |
+
+### Second copy — verified state
+
+| Item | Value |
+|---|---|
+| Second-copy location | `/opt/mc-backup-offsite/20261020T173709Z/` on prod `34.35.177.209` (root:root, mode 700) |
+| Contents | 8 files: 4 encrypted artefacts + `MANIFEST.txt` + `SHA256SUMS` + `RESTORE-KEY-CHECK.enc/.txt` |
+| Passphrase present? | **No** — verified absent by string search; never on this host |
+| Verification | `sha256sum -c SHA256SUMS` → all OK; digests identical to the authoritative file |
+| Original | Unchanged; still verified 5/5 OK at `C:\Backup\MissionControl\20261020T173709Z\` |
+| Copies now in existence | **2** (local Windows machine + production source `/opt`) |
+
+### Recovery and custody arrangements (unchanged, confirmed)
+
+- **Passphrase:** owner's password manager + a sealed off-line copy. **Not present** on the local machine, the
+  source host, the `/opt` second copy, the destination VMs, or Git. Fingerprint (SHA-256) `2132b351…`
+  recorded in the manifest only.
+- **Fernet key:** value only inside `missioncontrol.env.enc` (both copies). Hash `e9e0d695…` in the manifest.
+  Needed for application use after a restore, **not** for decrypting the backup.
+- **Recovery requires BOTH:** the passphrase (owner custody) *and* the Fernet key (inside the encrypted
+  `.env`). Neither is recorded in Git or in any log.
+- **Residual risk (reduced, not eliminated):** both copies are encrypted and independently verified, but
+  neither is on removable media; the local copy shares the workstation's single disk and the second copy
+  shares the production host. **Recommendation remains:** place a third copy on removable media when one is
+  available. Recorded, not silently substituted.
+
+---
+
+## Phase 5 — destination deployment (owner-authorised 2026-10-20)
+
+**Authorisation:** deploy the backend on `10.0.0.33` first and validate before deploying the frontend on
+`10.0.0.26`; use the verified backup and approved artefacts; confirm the destination database is safe to
+initialise/restore before writing to it; record all changes and evidence; **stop and report on any critical
+failure**. **Not** authorised: DNS change, public-traffic switch, stopping production services, or cutover —
+production remains operational and authoritative throughout.
+
+### Phase 5 pre-flight (read-only) — 2026-10-20 18:06 UTC
+
+| Check | Host | Result |
+|---|---|---|
+| OS / resources | BE | Ubuntu 22.04.5, kernel 6.8.0-1062-oracle; **956 MB RAM**, 2 GB swap, **34 GB free** |
+| Existing Mission Control containers | BE | **none** |
+| Existing Mission Control images | BE | **none** (`postgres:16`, `python:3.12-slim` only, from the Phase 4 restore test) |
+| Existing Mission Control volumes | BE | **none** named `mc-*`; six anonymous volumes from the removed scratch containers |
+| `/opt/missioncontrol` | BE | **exists but empty** — created 17:13 during Phase 3; **no data** |
+| Postgres data directories anywhere | BE | **none** — clean slate |
+| Listeners | BE | only `0.0.0.0:22` (sshd) — nothing else |
+| fail2ban | BE | `active`, jail `sshd` (Phase 3b) |
+| TLS material | BE | none (expected — TLS is FE-only) |
+| Listeners | FE | nothing on 80/443 (expected pre-deploy) |
+| `/var/www/letsencrypt` | FE | **present** (Phase 3) |
+| `/etc/letsencrypt/live` | FE | **absent** — not yet copied (a later Phase 5 step) |
+| FE containers/volumes | FE | **none** |
+
+**Destination database safety:** confirmed **safe to initialise/restore** — there is no existing database,
+no data volume, no container and no data directory on BE. Nothing can be overwritten by a restore.
+
+### Phase 5 critical check FAILED — intra-VCN TCP is blocked (STOPPED)
+
+Before writing anything to the destination, the mandatory connectivity precondition was tested:
+
+| Probe | Result |
+|---|---|
+| ICMP FE→BE | **works** (2/2) |
+| **FE→BE TCP 8000** (required: the edge proxies `/api/` here) | **`No route to host`** |
+| FE↔BE TCP 22 / 80 / 443 / 5432 / 6379 | **`No route to host`** (both directions) |
+| ARP to peer | REACHABLE both sides (L2 fine) |
+| Guest INPUT REJECT counters after all probes | FE 10 pkts, BE 13 pkts — **too low to be the drop** |
+| `sshd` listening `0.0.0.0:22` both hosts | **yes** |
+| Internet egress / OCI metadata | 200 / open |
+
+**Conclusion:** the SYNs never reached the guests; the block is at the **OCI security-list / NSG layer**,
+not the guest firewall. This contradicts the Phase 1 claim that the private path "delivers every port"
+(now corrected in `network-security-plan.md` §1 and §3.6). The supplied intra-VCN rules (rule 1 all-protocols
+`10.0.0.0/16`, rule 9 TCP 22 `10.0.0.0/16`) *should* permit this traffic but are demonstrably not in force
+as supplied — **[?]** either a different list/NSG is applied, or the rules are attached elsewhere.
+
+**Action taken: Phase 5 STOPPED before any deployment**, per the owner's instruction ("if a critical check
+fails, stop and report the issue rather than proceeding to the next stage") and per U2 ("do not broaden
+ingress rules"). Nothing was deployed, transferred, written or restored on either destination. Production
+remains untouched. Full requirement and remediation options in `network-security-plan.md` §3.6.
+
+**Owner action required:** permit `10.0.0.26/32 → 10.0.0.33 TCP 8000` (required) and intra-VCN TCP 22
+(validation), keeping all sources private — never `0.0.0.0/0`.

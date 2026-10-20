@@ -11,7 +11,7 @@
 |---|---|
 | FE public `84.12.77.251`, private `10.0.0.26`; BE public `84.12.82.239`, private `10.0.0.33` | Phase 1 audit; OCI metadata |
 | Both VMs are in the same `10.0.0.0/24` VCN subnet | audit |
-| The **private path delivers every port** — `5432`, `6379`, `8000`, `3000` reachable `10.0.0.26 ↔ 10.0.0.33` | active probes in Phase 1 |
+| The **private path delivers every port** — `5432`, `6379`, `8000`, `3000` reachable `10.0.0.26 ↔ 10.0.0.33` | **SUPERSEDED 2026-10-20 (Phase 5): CONTRADICTED.** Active probes show **all TCP between the VMs is blocked** (`No route to host`) in both directions; only ICMP passes. See §3.6. The Phase 1 claim was not reproducible and is withdrawn |
 | Cloud ingress for **80/443 already reaches both VMs** (connection accepted, then host-level reject) | Phase 1 probes |
 | Public `22` is reachable but source-scoped at the cloud layer (only the admin range) | Phase 1 |
 | Public `8000`, `5432`, `6379`, `3000` are **not** reachable from the internet | Phase 1 probes from an external vantage |
@@ -180,9 +180,59 @@ Two host-side findings from the same run:
 1. **The stock OCI firewalls on both VMs accept port 22 from any source** (`-A INPUT -p tcp --state NEW
    --dport 22 -j ACCEPT`, no `-s`). Only the cloud layer restricts SSH today. This Phase narrows it to
    the admin `/32`.
-2. The FE→BE private path delivers **all** ports (22/80/443/3000/5432/6379/8000 all connect when a
-   listener exists) — so `10.0.0.0/24` has no port-level isolation. Correctness depends on container bind
-   addresses plus the host firewall, exactly as designed in §3.3.
+2. The FE→BE private path was reported in Phase 1 as delivering **all** ports. **This was NOT
+   reproducible in Phase 5** — see §3.6. Treat the design in §3.3 as requiring FE→BE TCP 8000 to be
+   permitted, which is currently **not** the case.
+
+---
+
+### 3.6 CRITICAL FINDING (Phase 5, 2026-10-20): intra-VCN TCP is blocked by the cloud layer
+
+**Observed (active probes, both directions, both VMs):**
+
+| Probe | Result |
+|---|---|
+| ICMP FE→BE | **works** (2/2, 0.27 ms avg) |
+| FE→BE TCP 22 / 80 / 443 / 5432 / 6379 / 8000 | **`No route to host`** (every port) |
+| BE→FE TCP 22 / 80 / 443 / 5432 / 6379 / 8000 | **`No route to host`** (every port) |
+| ARP/neighbour to the peer | **REACHABLE** on both sides (L2 works) |
+| Guest INPUT `REJECT` counter after all probes | FE **10 pkts**, BE **13 pkts** — far too low to account for the probes |
+| `sshd` listening on `0.0.0.0:22` on both VMs | **yes** |
+| Egress to the internet (`https://example.com`) | **200** |
+| OCI metadata `169.254.169.254:80` | **open** |
+
+**Diagnosis:** the TCP SYNs never reached either guest (the guest REJECT counters did not increment), while
+L2 ARP is fine and ICMP passes. Therefore the drop happens at the **OCI security-list / NSG layer**, not in
+the guest firewalls. `No route to host` on a *same-subnet* peer is the signature of a stateful cloud
+firewall silently dropping the flow.
+
+**Why this is critical for Phase 5:** the frontend edge proxies `/api/` to
+`http://10.0.0.33:8000` (§2, and `deploy/migration-2vm/nginx/default.conf`). That requires **FE→BE TCP 8000**.
+With intra-VCN TCP blocked, the deployed frontend **cannot reach the backend API**, so the two-VM
+architecture cannot function until this is fixed.
+
+**Relationship to the supplied rules (§1.1):** rule 1 (`10.0.0.0/16`, all protocols, all) and rule 9
+(`10.0.0.0/16`, TCP 22) *should* permit exactly this traffic. They are not being enforced as supplied.
+Two explanations remain, both console-side:
+
+- **[?]** the security list in force is not the one supplied, or an **NSG** on the VNIC overrides it; or
+- **[?]** the rules were attached to a different subnet/compartment than these two VMs.
+
+**This is not fixable from inside a guest and must not be worked around by broadening rules** (U2). It
+requires the owner to correct the cloud firewall so that **`10.0.0.26 → 10.0.0.33 TCP 8000` (and, for
+management/validation, intra-VCN TCP 22)** is permitted. **Phase 5 stopped at this check** (see
+`execution-log.md` → Phase 5).
+
+**[R] Owner action required (OCI console/API):** ensure the security list (and any NSG) applied to both
+VNICs allows at minimum:
+
+| Source | Protocol | Port | Purpose |
+|---|---|---|---|
+| `10.0.0.26/32` | TCP | 8000 | frontend edge → backend API (required) |
+| `10.0.0.0/24` (or the two `/32`s) | TCP | 22 | intra-VCN administration/validation |
+| `10.0.0.0/16` | ICMP | all | already effectively working |
+
+Do **not** add `0.0.0.0/0` to any of these; keep the sources private.
 
 ---
 
