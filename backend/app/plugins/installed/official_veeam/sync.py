@@ -178,7 +178,12 @@ class RestorePointSync:
         self, session: Session, client: Any, server_id: int, limit: int = 500,
     ) -> dict[str, int]:
         result = client.get_restore_points_sync()
-        items = _extract_items(result.get("restorePoints", []))
+        # The relay path returns the items under "restore_points" while the
+        # REST path historically used "restorePoints"; accept both so restore
+        # points ingested via the agent relay are not silently dropped.
+        items = _extract_items(
+            result.get("restore_points") or result.get("restorePoints") or []
+        )
         synced = 0
 
         for rp in items[:limit]:
@@ -233,7 +238,26 @@ class LicenseSync:
 
     def sync(self, session: Session, client: Any, server_id: int) -> dict[str, int]:
         result = client.get_license_sync()
+        if not isinstance(result, dict) or not result.get("success", True):
+            # The collector failed (e.g. PS module unavailable on the target).
+            # Do NOT write a placeholder row with empty edition/expiration —
+            # keep whatever was synced before instead of clobbering it.
+            logger.warning(
+                "License sync skipped for server %s: %s",
+                server_id, (result or {}).get("error", "no result"),
+            )
+            return {"synced": 0}
         lic = result.get("license", result)
+        if not isinstance(lic, dict) or not (
+            lic.get("edition")
+            or lic.get("licenseEdition")
+            or lic.get("expirationDate")
+            or lic.get("expiration")
+        ):
+            logger.warning(
+                "License sync skipped for server %s: no license data", server_id
+            )
+            return {"synced": 0}
 
         stmt = select(VeeamLicense).where(VeeamLicense.server_id == server_id)
         existing = session.execute(stmt).scalar_one_or_none()
