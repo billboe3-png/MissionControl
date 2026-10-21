@@ -686,3 +686,136 @@ Backend deployed on `10.0.0.33`, running healthy on an empty database, reachable
 VM, with **no side effects on live infrastructure** and **no impact on production**. All validation
 performed with recorded evidence. Remaining before cutover: frontend deployment (not yet authorised),
 production data restore, and the two inherited plugin defects above.
+
+---
+
+## Phase 6 — focused MikroTik schema-drift fix (pre-frontend)
+
+Owner instruction: fix the inherited MikroTik defect **before** frontend deployment.
+Guardrails: production remains authoritative and untouched; no data restore, DNS, cutover or
+decommission; no secrets or generated production data committed.
+
+### Root cause (established before any code change)
+
+| Timestamp | Host | Action and reason | Verification and result |
+|---|---|---|---|
+| 2026-10-21 08:10 | local | Read the model and the reader. | `MikroTikServer` declared `allow_insecure_ssl` (`models.py:32`); the only consumer is `proxy.py:84` via `getattr(server, "allow_insecure_ssl", False)` — already defensive |
+| 2026-10-21 08:15 | local | Read both MikroTik migrations. | `m1kr0t1k0001` creates `mikrotik_servers` from an **explicit column list that omits** the field; `m2kr0t1k0002` adds only `relay_agent_id` / `remote_target_id`. The migration never adds it |
+| 2026-10-21 08:20 | local | Searched the whole repository (Python **and** TypeScript). | The field appears in exactly two places: the model declaration and the defensive read. **No** Pydantic schema, **no** API route, **no** frontend component, **no** migration |
+| 2026-10-21 08:25 | local | Traced the origin via git. | Introduced in `61e3f93` ("mikrotik connector rewrite", a WIP sweep) together with its migration — authored inconsistently. Its predecessor on the same code path, `webfig_port`, was likewise never migrated |
+| 2026-10-21 08:30 | local | Established why CI never caught it. | `tests/conftest.py:102` builds the schema with `Base.metadata.create_all()`, which derives tables **from the model**, so the column always existed in tests. Production and the destination use **Alembic** |
+| 2026-10-21 08:35 | BE `10.0.0.33` | Measured the drift on the live schema. | Model has 24 columns, migrated DB has 23; the only difference is `['allow_insecure_ssl']`. The other Phase 1 drift items (`plugin_configs`, `agents.last_seen`, `remote_hosts.host_url`) are separate and untouched by this fix |
+
+**Conclusion:** the model was wrong, not the schema. The field is user-inaccessible, unsettable, and read
+only through a default-safe accessor. The correct minimal fix is to **align the model to the migration**.
+**No database migration is required.** Owner approved this direction.
+
+### RED → GREEN (test-driven)
+
+New regression class `TestMikroTikSchemaDrift` in `backend/tests/test_official_mikrotik_plugin.py`
+compares `MikroTikServer`'s columns against the **migration-authored** column set and asserts the
+sync-loop `SELECT` never references an unmigrated column.
+
+| Step | Command | Result |
+|---|---|---|
+| RED | `pytest tests/test_official_mikrotik_plugin.py::TestMikroTikSchemaDrift` | **2 failed** — `AssertionError: ... ['allow_insecure_ssl']` (failed for the right reason) |
+| Fix | removed one line from `models.py` | diff is exactly `1 deletion` |
+| GREEN | same command | **2 passed** |
+| Regression | `pytest tests/test_official_mikrotik_plugin.py tests/test_mikrotik_connectors.py` | **71 passed** |
+
+### The decisive proof (real Alembic schema, both directions)
+
+Run against a **disposable** scratch database built by `alembic upgrade head` (never production, never
+the destination), then dropped:
+
+| Model | Columns missing from migrated DB | Sync-loop `SELECT` |
+|---|---|---|
+| Original | `['allow_insecure_ssl']` | **FAILED → ProgrammingError** (bug reproduced) |
+| Fixed | `NONE` (alembic `h7h8h9i1j2k3`) | **SUCCESS, rows = 0** |
+
+### Full backend suite
+
+`1806 passed, 1 skipped`. Six failures exist but are **all pre-existing untracked Veeam WIP** and were
+proven independent by re-running them with the fix reverted (identical failures):
+
+- `test_veeam_column_case.py` — collection error, imports a symbol that does not exist (`??` untracked).
+- `test_agent_token_service.py` — 5 failures, naive/aware datetime `TypeError` in `agent_token_service.py:74` (`??` untracked).
+
+Separately encountered and repaired: the documented test services `mc-test-postgres` / `mc-test-redis`
+were stopped, which produced 53 spurious failures until started.
+
+### Deployment to the destination
+
+The destination compose bind-mounts `./backend:/app`, so `/opt/missioncontrol/backend/` **is** the live
+code. Applying the fix there means **no new image was required**; the existing image remains the
+unchanged, known-good rollback point.
+
+| Item | Value |
+|---|---|
+| Backend image (unchanged) | `missioncontrol-backend:601a878-20261020` `sha256:81f8448974fcc5030310e527d67f791369ce52bbd5d8a7218a864227990d147d` |
+| Rollback point | `/tmp/models.py.pre-mikrotik-fix`, sha256 `ef2e30968c8fb738369a703cf50252ef4c9b298cb6b67dfb93a5af95739c63e9`; also git `16a3c53` |
+| Applied change | one line removed; verified by `diff` = `32d31` only; file intact at 137 lines |
+
+### Steady-state verification on `10.0.0.33`
+
+The sync interval is **300 s**. Observed over 2.5 full cycles:
+
+| Metric | Before fix | After fix |
+|---|---|---|
+| `MikroTik sync cycle failed` since boot | 21 | **0** |
+| `allow_insecure_ssl` mentions | present | **0** |
+| `UndefinedColumn` | present | **0** |
+| Sync cycles actually executed | — | **3** (`sync cycle complete: 0 server(s), 0 online`) — proof the zero is meaningful |
+
+### Re-run acceptance checks (post-fix)
+
+| Check | Result |
+|---|---|
+| `/api/v1/health/live`, `/api/v1/health/ready` | **200**; ready reports postgres `ok`, redis `ok` |
+| Startup checks | **23/23 passed, 0 critical** |
+| Effective port exposure | binds `10.0.0.33:8000` only; postgres/redis publish nothing |
+| Public reachability of `:8000` | blocked (`000`) |
+| Alembic / schema | `h7h8h9i1j2k3`; 77 tables; `mikrotik_servers` 23 columns; `allow_insecure_ssl` **absent** |
+| Credential decryption | real `CredentialCipher` round-trip **True** |
+| Redis through the app accessor | `ping: True`, `get: ok` |
+| Restart persistence | Postgres + Redis sentinels both survived a full stack restart; backend healthy in ~40 s |
+| Side effects | all 15 integration/target tables **0 rows**; 0 outbound connections to production |
+| Restart policy / log rotation | `unless-stopped`; `json-file max-size:10m max-file:3` |
+| Resources | backend 157 MiB, postgres 24 MiB, redis 3 MiB of 956 MiB |
+
+Note: an initial check reported `/live` and `/ready` as 404. That was a **check-script error** — the real
+paths are `/api/v1/health/live` and `/api/v1/health/ready`, both 200. No application defect.
+
+### Production: untouched, but a repository side-effect to disclose
+
+The fix commit `391a464` was made in the **production host's** repository (`/opt/MissionControl`), because
+that repo is the migration's source of truth and the only place the test suite runs. Consequences:
+
+- **The running production container was NOT affected.** It started `2026-10-20T15:39:06Z`, **before** the
+  commit (`2026-10-21T09:06:50+02:00`), so it still holds the original module in memory. Production
+  continues to log the MikroTik error once per cycle (most recent `2026-10-21T07:24:20Z`) — unchanged,
+  exactly as before this work.
+- **No production service was restarted, reconfigured, or redeployed.** Backend health `healthy`;
+  1,059 requests served in the last 5 minutes with **0** HTTP 5xx.
+- **Production data intact**: `agents` 15, `agent_commands` 100,421, `integration_profiles` 6,
+  `veeam_backup_servers` 15, `sites` 2, `projects` 3, `tasks` 6.
+- **However**, the production working tree now carries commit `391a464` and the modified model file. It is
+  **not pushed** to `origin` and not on any remote branch. This means production's on-disk code no longer
+  matches its running process. The next production restart would activate the fix — which is desirable and
+  intended, but it is a change to production's code that the owner has **not** explicitly approved, so it
+  is recorded here for decision rather than left silent.
+- Trade-off of the alternative (fixing only `/opt/missioncontrol`): the regression test could never run
+  against the production repo, and the fix would not exist in the canonical repository. The owner should
+  choose whether to keep `391a464` on production, revert it, or cherry-pick it deliberately at cutover.
+
+### Residual risk
+
+1. **`391a464` sits on the production repo but is not pushed.** Owner decision required (keep/revert/cherry-pick).
+2. The MikroTik fix is **not** in the destination's git history — it was applied at file level to the
+   bind mount. The destination has no `.git`, so this is consistent, but the fix reaches production's
+   schema-drift only if `391a464` is retained and production restarts.
+3. Pre-existing untracked Veeam WIP remains broken in-tree (`test_veeam_column_case.py`,
+   `test_agent_token_service.py`). Out of scope; not touched.
+4. The Veeam shutdown exception is unchanged and still present by design.
+5. Eleven other plugin sync loops still start on every boot; the destination's empty database is still
+   the only thing preventing side effects.
