@@ -571,3 +571,118 @@ Every previously blocked port now reaches the peer; **only SSH is listening** �
   private subnet, rather than assuming the cloud ACL is the only gate.
 
 **Phase 5 is unblocked. The required FE→BE TCP 8000 path is open. Deployment may resume.**
+
+### Phase 5 backend deployment and validation — 2026-10-21 05:19–06:0x UTC
+
+**Scope:** backend stack on `10.0.0.33` only. **Path 1** (empty database, no production restore) per owner
+decision, so no plugin or agent has any target to contact. Frontend **not** deployed; no DNS change; no
+cutover; production untouched throughout.
+
+#### Authorised inputs
+
+| Item | Value |
+|---|---|
+| Code source | clean `git archive` of `5834374` (excludes uncommitted Veeam WIP and `.env.production*`) |
+| Archive | `/tmp/mc-deploy-5834374-clean.tar.gz`, sha256 `93008451bb14153d9b3fab205b20cdf149a3277f59327eca7c3f10ba06b41353`, 8.1 MB, 1425 entries |
+| Backend image | `missioncontrol-backend:601a878-20261020`, digest `sha256:81f8448974fcc5030310e527d67f791369ce52bbd5d8a7218a864227990d147d` (verified **after load**, matches the build ledger) |
+| Base images | `postgres:16-alpine`, `redis:7.2-alpine` pulled on the destination |
+| Secrets | production `MISSIONCONTROL_SECRET_KEY` (44 chars, sha256 `e9e0d695…`) and `POSTGRES_PASSWORD` (48 chars, sha256 `fa94728f…`) copied per owner decision |
+
+#### Placement and integrity
+
+| Check | Result |
+|---|---|
+| Archive sha256 on destination | `93008451…` — **MATCH** |
+| Image tar sha256 (workstation → destination) | `09d6801a…` — **MATCH** |
+| Image digest after `docker load` | `sha256:81f8448974fc…` — **MATCH** ledger |
+| `/opt/missioncontrol/.env` | mode **600**, owner `ubuntu`, 608 bytes |
+| `MISSIONCONTROL_SECRET_KEY` fingerprint on destination | sha256 `e9e0d6951aa4bb7e` — **identical to production** |
+| Secret values in transit | base64 through the SSH channel; never on the workstation disk, never in argv; staging files shredded |
+| Files placed | 510 backend, 45 deploy, compose + template |
+
+#### Deployment
+
+| Check | Result |
+|---|---|
+| Compose parse | OK |
+| Backend binding | **`10.0.0.33:8000`** only — never `0.0.0.0` |
+| Postgres / Redis publish | **none** (container network only) |
+| Containers | `mc-backend`, `mc-postgres`, `mc-redis` — all **healthy**, restart policy `unless-stopped` |
+| Alembic | `h7h8h9i1j2k3 (head)` — **identical to the Phase 4 backup state** |
+| Tables | 77 public |
+
+**Fault found and fixed during deployment (bind-mount runtime dirs).** First boot failed one critical
+startup check: `Required Directories: logs (/app/app/logs), data (/app/app/data) — Permission denied`.
+Cause: `git archive` exports only tracked files and `.gitignore:14` ignores `logs/`; the two runtime
+directories were therefore absent and the container user (uid 100) could not create them under the
+bind-mount. Fix: created both directories owned `100:101`, mode 775 — matching the container user and
+production's ownership for `data/`. After the fix the stack reached **23/23 startup checks, 0 critical**.
+
+*Incidental observation:* production's own `backend/app/logs` is **also not writable** by its container
+(uid 1001 vs 1002) — a pre-existing condition, now noting that Path 1 avoided inheriting it.
+
+#### Validation evidence
+
+| Area | Result |
+|---|---|
+| `/api/v1/health/live`, `/api/v1/health/ready` | **200 / 200** (in-container, and FE→BE over the private network) |
+| Response body via private path | `{"status":"ok"}` |
+| **FE `10.0.0.26` → BE `10.0.0.33`:8000** (the required edge→API path) | **200** — works |
+| FE→BE port sweep | 22 OPEN, 8000 OPEN, 80/443/5432/6379 refused (no listener) |
+| **Postgres 5432 from FE** | **not reachable** |
+| **Redis 6379 from FE** | **not reachable** |
+| **8000 from the public internet** | **closed/filtered** — API is private-only |
+| Postgres/Redis from the host | not reachable |
+| Startup checks | **23/23 pass**, 0 critical, 0 warning |
+| Fernet key | length 44, sha256 `e9e0d695…` matches production; via the app's real `CredentialCipher` (`get_credential_cipher()`) encrypt→decrypt round-trips; **wrong-key correctly raises InvalidToken**; 18 call sites |
+| Redis | ping True, v7.2.16; app accessor `app.db.redis.get_redis()` ping **True**; AOF `aof_enabled:1`, `aof_last_write_status:ok`; RDB `rdb_last_bgsave_status:ok` |
+| Persistence — Postgres | sentinel row survived a full stack restart (`1 → 1`) |
+| Persistence — Redis | key survived the restart |
+| Persistence — schema | 77 → 77 tables, alembic unchanged across restart |
+| Restart behaviour | all 3 containers healthy ~40 s after restart; health 200 |
+| Resource envelope | backend 138.8 MiB, postgres 30.7 MiB, redis 6.6 MiB; host 390 MiB used of 956 MiB, swap 84 MiB of 2047 MiB |
+| Log rotation | all three `json-file` with `max-size:10m`, `max-file:3` |
+| Boot persistence | `unless-stopped` + `docker` service `enabled` |
+
+#### Side-effect clearance (the U-critical check)
+
+| Check | Result |
+|---|---|
+| All integration/target tables | `agents`, `agent_commands`, `agent_remote_targets`, `agent_registration_tokens`, `credential_profiles`, `dlink_remote_targets`, `docker_hosts`, `hyperv_hosts`, `integration_profiles`, `mikrotik_servers`, `remote_hosts`, `unifi_controllers`, `veeam_backup_servers`, `zabbix_hosts`, `zabbix_servers` — **all 0 rows** |
+| Plugin setup log | 9 plugins loaded, **every one reports 0 configured** |
+| Established TCP from the backend netns | only the container network (`172.18.0.4 → 172.18.0.3:5432`, Postgres) |
+| **External established connections** | **none** |
+| Production identifiers in destination logs | `34.35.177.209` **0**, `CORHQ*`/`optichosting` **0** |
+| Seed content only | sites 1, projects 4, tasks 8, playbooks 54, playbook_steps 91 — no agents or integrations |
+
+#### Production remained authoritative and untouched
+
+| Check | Result |
+|---|---|
+| Production containers | nginx, frontend, backend, postgres, redis, dockhand — all up (19 h / 14 h) |
+| Requests from either destination VM in production logs | **0** (`84.12.82.239`, `84.12.77.251`, `10.0.0.33`, `10.0.0.26` — all zero) |
+| Production data | agents 15, agent_commands 100,211, integration_profiles 6, veeam_backup_servers 15, sites 2, projects 3, tasks 6 — intact |
+
+#### Inherited findings (NOT caused by this deployment)
+
+1. **MikroTik schema drift** — the plugin model selects `mikrotik_servers.allow_insecure_ssl`, which does
+   **not exist** in the schema, so the background sync logs one exception per cycle. Reproduced on
+   **production** (1,936 occurrences) with an identical missing column. Already recorded as Phase 1
+   outstanding issue 5 ("pre-existing schema drift … migrates with the database unless fixed"). Harmless
+   here (0 servers configured; the query returns nothing before failing); **should be fixed before cutover**
+   or it becomes a permanent log-noise generator.
+2. **Veeam plugin shutdown exception** — `Plugin stop failed: official_veeam` on every shutdown. Occurs
+   only during the stop path (3×, one per restart), never steady-state. Shutdown still completes and the
+   container exits cleanly. Pre-existing plugin lifecycle issue.
+3. **MikroTik/MikroTik-service naming** — `MikroTikService` (capital T) is the real class name; the
+   `logger.exception` at `official_mikrotik/__init__.py:73` catches the schema error above.
+
+**Both errors are one-shot per boot / per shutdown — verified 0 occurrences across three consecutive
+20-second windows in steady state.**
+
+#### Phase 5 backend outcome: PASS
+
+Backend deployed on `10.0.0.33`, running healthy on an empty database, reachable only from the frontend
+VM, with **no side effects on live infrastructure** and **no impact on production**. All validation
+performed with recorded evidence. Remaining before cutover: frontend deployment (not yet authorised),
+production data restore, and the two inherited plugin defects above.
