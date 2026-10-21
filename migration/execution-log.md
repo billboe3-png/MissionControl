@@ -1254,3 +1254,57 @@ No OCI console action regarding 8000 ingress is required. The `0.0.0.0/0 → 80/
 (frontend Web/HTTPS) must not be changed. The `34.35.177.209/32 → All Protocols` rule is
 the backend instance's own VNIC with its public IP — expected and unchanged.
 
+
+## Phase 8 — Frontend Deployment (BLOCKED)
+
+**Status: BLOCKED** — Frontend image cannot be verified/built.
+
+**Deployment attempted:** Phase 8 frontend + Nginx deployment to FE VM 10.0.0.26 / 84.12.77.251.
+
+**What was set up on the FE VM:**
+- SSH access confirmed
+- Docker Engine 29.9.1 and Compose v5.6.0 confirmed
+- /opt/missioncontrol/ directory created
+- /opt/missioncontrol/docker-compose.frontend.yml deployed (reviewed Phase 3 artefact)
+- /opt/missioncontrol/.env created with IMAGE_TAG default
+- /tmp/nginx.conf transferred (reviewed Phase 3 nginx config with ACME challenge, U3 blocks, API proxy to 10.0.0.33:8000, /dockhand/ blocks, health endpoint)
+- FE source code partially transferred to /opt/missioncontrol/frontend/ (partial — missing Dockerfile, package.json, node_modules, vitc.config.js)
+
+**Blocker: Frontend image unverifiable**
+- The compose file references image: missioncontrol-frontend:
+- This image does not exist in any registry and cannot be pulled
+- Source transfer from production was partial (/opt/missioncontrol/frontend/src/ only, missing Dockerfile, package.json, node_modules, vitc.config.js)
+- Node.js is not installed on the FE VM and cannot be easily installed (not Alpine, dpkg permission issues)
+- docker build cannot proceed without the full source build context
+- Per Phase 8 stop condition:  The frontend image or reviewed configuration cannot be verified
+
+**What works:**
+- Nginx reviewed config is in place at /tmp/nginx.conf with:
+  - ACME http-01 challenge support (/.well-known/acme-challenge/)
+  - Port-80 → HTTPS redirect
+  - U3 blocks: /api/docs, /api/openapi.json, /api/redoc → 404
+  - API proxy: /api/ → http://10.0.0.33:8000/api/
+  - /dockhand/ → 404
+  - / → http://frontend:3000/ (pending frontend container)
+  - /health → ok
+- Private connectivity: Backend 10.0.0.33:8000 health/live/ready all return HTTP 200 (verified earlier)
+- Docker compose configuration reviewed and valid in structure
+- Nginx will proxy to backend when frontend container is available
+
+**What does NOT work:**
+- docker compose up fails: No such image: missioncontrol-frontend:601a878-20261020
+- Frontend container cannot start without the image
+- Full frontend SPA cannot be validated
+
+**Next steps:**
+- Frontend image must be built from the production source at /opt/MissionControl/frontend/ and made available to the FE VM
+- OR: alternative deployment approach must be approved
+- Once the image is available, docker compose up can be attempted and full validation can proceed
+- Per the migration plan, Phase 8 completion does NOT authorize Phase 9 data restore, production freeze, DNS changes, traffic cutover, backend public-IP removal, or source decommission
+
+**Files changed during this attempt:**
+- /opt/missioncontrol/.env (created)
+- /opt/missioncontrol/docker-compose.frontend.yml (transferred from production repo)
+- /tmp/nginx.conf (transferred from production repo)
+- /opt/missioncontrol/frontend/ (partial source transfer)
+
