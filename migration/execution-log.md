@@ -939,3 +939,229 @@ vantage point was invalid.
 
 **Actions taken this phase:** none outside read-only inspection; production untouched; frontend not
 deployed; no ingress rule broadened; nothing pushed.
+
+## Phase 7 remediation — backend API `:8000` public exposure (host control APPLIED; OCI PENDING)
+
+**Owner scope decision (2026-10-21):** keep BOTH controls now (guest `DOCKER-USER` rule +
+persistence unit), report the exact OCI console action, and rely on **removing the backend public IP
+at go-live** as the definitive cloud-side closure. No OCI change was made (no authorised OCI
+access). Frontend deployment remains HELD.
+
+### Root cause (proven, not inferred)
+
+Docker's published-port DNAT bypasses the `INPUT` chain:
+
+```
+nat/PREROUTING -> DOCKER : DNAT  tcp  !br-999dacc36125  *  0.0.0.0/0  10.0.0.33  dpt:8000  to:172.18.0.4:8000
+filter/DOCKER            : ACCEPT tcp !br-999dacc36125 br-999dacc36125 0.0.0.0/0 172.18.0.4 dpt:8000
+```
+
+Inbound `:8000` is DNATted in `PREROUTING` **before** filtering, then follows
+`FORWARD → DOCKER-USER (was empty) → DOCKER-FORWARD → DOCKER ACCEPT`. The `INPUT`-chain `REJECT` is
+**never consulted**. The compose binding `10.0.0.33:8000:8000` restricts which local address listens,
+not the packet source.
+
+**Layer attribution proven by instrumentation:** a temporary kernel LOG rule recorded real external
+packets hitting `DOCKER-USER dport 8000` — `SRC=34.35.177.209`, `IN=ens3`, `DST=172.18.0.4`,
+`TTL=59`, alongside a matching `ens3` rx counter delta. Therefore **OCI was NOT blocking 8000**; a
+public-source permit exists at the OCI layer, and the guest firewall was the only failing layer. The
+Phase 5 note that blamed OCI for the VM-to-VM TCP block is corrected by this evidence.
+
+### Host-side control applied (BE VM `10.0.0.33`)
+
+Two `DOCKER-USER` rules, comment tag `mc-8000-restrict`, order-critical:
+
+```
+-A DOCKER-USER -s 10.0.0.26/32 -p tcp --dport 8000 -m comment --comment mc-8000-restrict -j RETURN
+-A DOCKER-USER -p tcp --dport 8000          -m comment --comment mc-8000-restrict -j DROP
+```
+
+Rule 1 permits the frontend VM; rule 2 drops every other source.
+
+**Persistence mechanism** (chosen because `netfilter-persistent` runs at `network-pre.target`,
+*before* dockerd creates `DOCKER-USER`, so it cannot restore this chain):
+
+- `/usr/local/sbin/mc-docker-user-firewall.sh` — mode `0750`, sha256
+  `b3e8271f83acc834c47df8a10028b4ffd735c6d02daa3d134e9cae305b04f319`. Idempotent: removes only its
+  own tagged rules, **never** flushes Docker-managed chains (`DOCKER`, `DOCKER-FORWARD`, `DOCKER-CT`,
+  `DOCKER-INTERNAL`, `DOCKER-BRIDGE`), verifies ordering and fails loudly (non-zero).
+- `/etc/systemd/system/mc-docker-user-firewall.service` — oneshot, `After=docker.service`,
+  `Requires=docker.service`, `PartOf=docker.service`, `RemainAfterExit=yes`, enabled + active.
+
+### Backups taken before change (BE VM)
+
+`/root/mc-firewall-backups/`: `rules.v4.bak.20261021T081410Z` (sha256 `e62cfd59…`),
+`iptables-live-filter.20261021T081410Z.txt` (sha256 `2d25ee78…`),
+`iptables-live-nat.20261021T081410Z.txt` (sha256 `7fa50b3c…`),
+`docker-user.20261021T081410Z.txt`, `LAST_STAMP`. Pre-change baseline also at
+`/tmp/p7r-baseline-be-20261021T080531Z/`.
+
+### Verification results
+
+| Test | Result |
+|---|---|
+| External `:8000` — health/live, health/ready, version, `/api/docs`, `/api/openapi.json`, `/api/redoc`, `/` | **all HTTP 000** (blocked) — U3 enforced |
+| External TCP `:8000` / `:5432` / `:6379` | all **blocked** |
+| FE `10.0.0.26` → `http://10.0.0.33:8000/api/v1/health/live` and `/ready` | **HTTP 200** (sanctioned path intact) |
+| FE → BE `:5432` / `:6379` | **blocked** |
+| FE traffic actually traverses `DOCKER-USER` | confirmed via temporary LOG (`P7R-FE-DU` count > 0) |
+| Survives `systemctl restart docker` | **yes** — unit re-applied via `PartOf`, rules present, containers healthy |
+| Survives full host reboot | **yes** — unit `active`+`enabled` at boot, rules present, `status=0/SUCCESS` |
+| Docker-managed chains intact | **yes** (DOCKER 4 / DOCKER-FORWARD 6 / DOCKER-CT 3 / DOCKER-INTERNAL 1 / DOCKER-BRIDGE 3 rules) |
+
+An earlier single external `200` observed while the DROP rule was live was a pre-existing conntrack
+entry, not a rule failure; with rules applied before traffic, 8/8 external attempts were blocked and
+4/4 FE attempts allowed. All temporary observation rules (LOG/RETURN/ACCEPT probes, scratch chains)
+were removed; `DOCKER-USER` now contains only the two tagged rules.
+
+### Remaining control required (cloud side) — OWNER ACTION
+
+The OCI layer still permits a public source to TCP 8000; the host rule compensates. In the OCI
+console (region `af-johannesburg-1`, root compartment, subnet `10.0.0.0/24`):
+
+1. Record every **security list** ingress rule on the subnet and every **NSG** attached to either
+   VNIC (`Compute → Instances → … → Attached VNICs → Network Security Groups`), plus the detached
+   `ig-quick-action-NSG` (detached ⇒ not evaluated).
+2. Find **every** rule permitting TCP 8000 (or all-ports) from any source broader than
+   `10.0.0.26/32` — security lists are OR-evaluated; one tight rule does not cancel a loose one.
+3. Narrow each to `10.0.0.26/32` (or delete) and ensure an explicit `10.0.0.26/32 → TCP 8000` exists.
+4. Leave SSH (`45.220.11.50/32`, `168.253.204.10/32`), 80/443 and unrelated rules untouched.
+
+**Definitive closure:** the backend's **public IP will be removed at go-live**, eliminating the
+internet path; the intra-VCN FE path is unaffected.
+
+### Rollback
+
+- Temporary: `iptables -D DOCKER-USER … --comment mc-8000-restrict …` (both lines), or
+  `systemctl restart docker` + re-run the script to restore the intended state.
+- Permanent: `systemctl disable --now mc-docker-user-firewall.service` and delete the two tagged
+  rules. Do **not** restore `rules.v4` wholesale — it does not contain `DOCKER-USER`.
+
+### Production untouched / denied actions not taken
+
+Production repo HEAD `f4c5a7f`; `391a464` retained (ancestor of HEAD); nothing staged; not pushed.
+No production restart/redeploy; no frontend deployment on `10.0.0.26` (nothing on 80/443, no nginx,
+no certs); no data restore; no DNS change; no traffic cutover. Production `:8000` blocked and `:443`
+open; production data intact (agents 15, agent_commands ~100.5k, integration_profiles 6).
+
+### Residual risk / open items
+
+- OCI ingress to 8000 remains permitted for a public source until the owner acts **or** the public IP
+  is removed at go-live. Host rule is the interim control.
+- `.env.production` is tracked in Git with a real-looking `POSTGRES_PASSWORD`; rotation likely
+  warranted. Production `.env` mode 664. `/dockhand/` 404 (separate item).
+- Frontend deployment, data restore, DNS/cutover, and source decommission remain **HELD** pending
+  owner review of this record.
+
+## Phase 7 remediation — backend API `:8000` public exposure (host control APPLIED; OCI PENDING)
+
+**Owner scope decision (2026-10-21):** keep BOTH controls now (guest `DOCKER-USER` rule +
+persistence unit), report the exact OCI console action, and rely on **removing the backend public IP
+at go-live** as the definitive cloud-side closure. No OCI change was made (no authorised OCI
+access). Frontend deployment remains HELD.
+
+### Root cause (proven, not inferred)
+
+Docker's published-port DNAT bypasses the `INPUT` chain:
+
+```
+nat/PREROUTING -> DOCKER : DNAT  tcp  !br-999dacc36125  *  0.0.0.0/0  10.0.0.33  dpt:8000  to:172.18.0.4:8000
+filter/DOCKER            : ACCEPT tcp !br-999dacc36125 br-999dacc36125 0.0.0.0/0 172.18.0.4 dpt:8000
+```
+
+Inbound `:8000` is DNATted in `PREROUTING` **before** filtering, then follows
+`FORWARD → DOCKER-USER (was empty) → DOCKER-FORWARD → DOCKER ACCEPT`. The `INPUT`-chain `REJECT` is
+**never consulted**. The compose binding `10.0.0.33:8000:8000` restricts which local address listens,
+not the packet source.
+
+**Layer attribution proven by instrumentation:** a temporary kernel LOG rule recorded real external
+packets hitting `DOCKER-USER dport 8000` — `SRC=34.35.177.209`, `IN=ens3`, `DST=172.18.0.4`,
+`TTL=59`, alongside a matching `ens3` rx counter delta. Therefore **OCI was NOT blocking 8000**; a
+public-source permit exists at the OCI layer, and the guest firewall was the only failing layer. The
+Phase 5 note that blamed OCI for the VM-to-VM TCP block is corrected by this evidence.
+
+### Host-side control applied (BE VM `10.0.0.33`)
+
+Two `DOCKER-USER` rules, comment tag `mc-8000-restrict`, order-critical:
+
+```
+-A DOCKER-USER -s 10.0.0.26/32 -p tcp --dport 8000 -m comment --comment mc-8000-restrict -j RETURN
+-A DOCKER-USER -p tcp --dport 8000          -m comment --comment mc-8000-restrict -j DROP
+```
+
+Rule 1 permits the frontend VM; rule 2 drops every other source.
+
+**Persistence mechanism** (chosen because `netfilter-persistent` runs at `network-pre.target`,
+*before* dockerd creates `DOCKER-USER`, so it cannot restore this chain):
+
+- `/usr/local/sbin/mc-docker-user-firewall.sh` — mode `0750`, sha256
+  `b3e8271f83acc834c47df8a10028b4ffd735c6d02daa3d134e9cae305b04f319`. Idempotent: removes only its
+  own tagged rules, **never** flushes Docker-managed chains (`DOCKER`, `DOCKER-FORWARD`, `DOCKER-CT`,
+  `DOCKER-INTERNAL`, `DOCKER-BRIDGE`), verifies ordering and fails loudly (non-zero).
+- `/etc/systemd/system/mc-docker-user-firewall.service` — oneshot, `After=docker.service`,
+  `Requires=docker.service`, `PartOf=docker.service`, `RemainAfterExit=yes`, enabled + active.
+
+### Backups taken before change (BE VM)
+
+`/root/mc-firewall-backups/`: `rules.v4.bak.20261021T081410Z` (sha256 `e62cfd59…`),
+`iptables-live-filter.20261021T081410Z.txt` (sha256 `2d25ee78…`),
+`iptables-live-nat.20261021T081410Z.txt` (sha256 `7fa50b3c…`),
+`docker-user.20261021T081410Z.txt`, `LAST_STAMP`. Pre-change baseline also at
+`/tmp/p7r-baseline-be-20261021T080531Z/`.
+
+### Verification results
+
+| Test | Result |
+|---|---|
+| External `:8000` — health/live, health/ready, version, `/api/docs`, `/api/openapi.json`, `/api/redoc`, `/` | **all HTTP 000** (blocked) — U3 enforced |
+| External TCP `:8000` / `:5432` / `:6379` | all **blocked** |
+| FE `10.0.0.26` → `http://10.0.0.33:8000/api/v1/health/live` and `/ready` | **HTTP 200** (sanctioned path intact) |
+| FE → BE `:5432` / `:6379` | **blocked** |
+| FE traffic actually traverses `DOCKER-USER` | confirmed via temporary LOG (`P7R-FE-DU` count > 0) |
+| Survives `systemctl restart docker` | **yes** — unit re-applied via `PartOf`, rules present, containers healthy |
+| Survives full host reboot | **yes** — unit `active`+`enabled` at boot, rules present, `status=0/SUCCESS` |
+| Docker-managed chains intact | **yes** (DOCKER 4 / DOCKER-FORWARD 6 / DOCKER-CT 3 / DOCKER-INTERNAL 1 / DOCKER-BRIDGE 3 rules) |
+
+An earlier single external `200` observed while the DROP rule was live was a pre-existing conntrack
+entry, not a rule failure; with rules applied before traffic, 8/8 external attempts were blocked and
+4/4 FE attempts allowed. All temporary observation rules (LOG/RETURN/ACCEPT probes, scratch chains)
+were removed; `DOCKER-USER` now contains only the two tagged rules.
+
+### Remaining control required (cloud side) — OWNER ACTION
+
+The OCI layer still permits a public source to TCP 8000; the host rule compensates. In the OCI
+console (region `af-johannesburg-1`, root compartment, subnet `10.0.0.0/24`):
+
+1. Record every **security list** ingress rule on the subnet and every **NSG** attached to either
+   VNIC (`Compute → Instances → … → Attached VNICs → Network Security Groups`), plus the detached
+   `ig-quick-action-NSG` (detached ⇒ not evaluated).
+2. Find **every** rule permitting TCP 8000 (or all-ports) from any source broader than
+   `10.0.0.26/32` — security lists are OR-evaluated; one tight rule does not cancel a loose one.
+3. Narrow each to `10.0.0.26/32` (or delete) and ensure an explicit `10.0.0.26/32 → TCP 8000` exists.
+4. Leave SSH (`45.220.11.50/32`, `168.253.204.10/32`), 80/443 and unrelated rules untouched.
+
+**Definitive closure:** the backend's **public IP will be removed at go-live**, eliminating the
+internet path; the intra-VCN FE path is unaffected.
+
+### Rollback
+
+- Temporary: `iptables -D DOCKER-USER … --comment mc-8000-restrict …` (both lines), or
+  `systemctl restart docker` + re-run the script to restore the intended state.
+- Permanent: `systemctl disable --now mc-docker-user-firewall.service` and delete the two tagged
+  rules. Do **not** restore `rules.v4` wholesale — it does not contain `DOCKER-USER`.
+
+### Production untouched / denied actions not taken
+
+Production repo HEAD `f4c5a7f`; `391a464` retained (ancestor of HEAD); nothing staged; not pushed.
+No production restart/redeploy; no frontend deployment on `10.0.0.26` (nothing on 80/443, no nginx,
+no certs); no data restore; no DNS change; no traffic cutover. Production `:8000` blocked and `:443`
+open; production data intact (agents 15, agent_commands ~100.5k, integration_profiles 6).
+
+### Residual risk / open items
+
+- OCI ingress to 8000 remains permitted for a public source until the owner acts **or** the public IP
+  is removed at go-live. Host rule is the interim control.
+- `.env.production` is tracked in Git with a real-looking `POSTGRES_PASSWORD`; rotation likely
+  warranted. Production `.env` mode 664. `/dockhand/` 404 (separate item).
+- Frontend deployment, data restore, DNS/cutover, and source decommission remain **HELD** pending
+  owner review of this record.
