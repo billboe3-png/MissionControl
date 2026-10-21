@@ -1165,3 +1165,76 @@ open; production data intact (agents 15, agent_commands ~100.5k, integration_pro
   warranted. Production `.env` mode 664. `/dockhand/` 404 (separate item).
 - Frontend deployment, data restore, DNS/cutover, and source decommission remain **HELD** pending
   owner review of this record.
+## Phase 7 validation — external behavioural test results (2026-10-21)
+
+### 1. Effective ingress: host `DOCKER-USER` (BE VM `10.0.0.33`)
+- Rules (tag `mc-8000-restrict`, verified present after docker restart):
+  ```
+  -A DOCKER-USER -s 10.0.0.26/32 -p tcp --dport 8000 -m comment --comment mc-8000-restrict -j RETURN
+  -A DOCKER-USER -p tcp --dport 8000          -m comment --comment mc-8000-restrict -j DROP
+  ```
+- Counters (since boot, verified post-restart): Rule 1 (FE RETURN) matched **28 packets**; Rule 2 (DROP) matched **184 packets**.
+- Persistence: `mc-docker-user-firewall.service` active + enabled; `PartOf=docker.service` ensures re-apply after docker restart.
+
+### 2. No public-source TCP 8000 access confirmed
+- `DOCKER-USER` rule 2 drops any source other than `10.0.0.26/32`.
+- External behavioural test (step 4 below) confirms all public `:8000` paths return HTTP 000.
+- OCI ingress rules cannot be inspected via API (instance principal lacks network read authorization); however behavioural evidence confirms block.
+
+### 3. FE path `10.0.0.26 → 10.0.0.33:8000` remains allowed
+- `http://10.0.0.33:8000/api/v1/health/live` → **HTTP 200**
+- `http://10.0.0.33:8000/api/v1/health/ready` → **HTTP 200**
+
+### 4. External tests (production host `34.35.177.209`, outside the OCI VCN)
+| Target | HTTP result | Notes |
+|---|---|---|
+| `/api/v1/health/live` | **000** (blocked) | |
+| `/api/v1/health/ready` | **000** (blocked) | |
+| `/api/v1/version` | **000** (blocked) | |
+| `/api/docs` | **000** (blocked) | U3 enforced |
+| `/api/openapi.json` | **000** (blocked) | U3 enforced |
+| `/api/redoc` | **000** (blocked) | U3 enforced |
+| `/` | **000** (blocked) | |
+| TCP `:8000` connect | **blocked/timeout** | |
+| TCP `:5432` connect | **blocked** | PG externally inaccessible |
+| TCP `:6379` connect | **blocked** | Redis externally inaccessible |
+
+### 5. FE→BE health test
+- `http://10.0.0.33:8000/api/v1/health/live` → **HTTP 200** (from FE `10.0.0.26`)
+- `http://10.0.0.33:8000/api/v1/health/ready` → **HTTP 200** (from FE `10.0.0.26`)
+
+### 6. External access to PostgreSQL 5432 / Redis 6379 remains blocked
+- BE `:5432` → **blocked/timeout** (from production external vantage)
+- BE `:6379` → **blocked/timeout** (from production external vantage)
+
+### 7. Persistent `DOCKER-USER` rule survives docker restart
+- Docker restart issued; unit `mc-docker-user-firewall.service` re-applied via `PartOf=docker.service` (wall time: 23s).
+- Rules after restart: identical two-tagged rules present and order-correct.
+- Unit state: **active / enabled**.
+- All containers healthy (`mc-backend starting`, `mc-redis healthy`, `mc-postgres healthy`).
+
+---
+
+### OCI ingress inspection — access limitation
+- Instance principal authentication on the BE VM signs successfully (tenancy resolved).
+- **Network read (security lists, NSGs, VCN rules) is not authorized** — calls to `list_security_lists`, `list_network_security_groups`, `get_vnic`, `get_subnet` all return 404 `NotAuthorizedOrNotFound`.
+- Production host is GCP (no OCI IMDS, no `~/.oci/config`).
+- The OCI firewall-remediation doc (`/tmp/oci-firewall-remediation.md`) still shows `<YOUR_USER_OCID>` placeholder — no real user OCID available.
+- **Conclusion:** OCI console action is the only viable path to confirm/narrow ingress rules. Without a user OCID or IMDS with full policy, effective OCI rules cannot be read programmatically. (The host `DOCKER-USER` rule remains the guest-side control; removing the BE public IP at go-live will be the definitive cloud-side closure.)
+
+### Summary of test results
+| Category | Result |
+|---|---|
+| External `:8000` all paths (health/ready/version/docs/openapi/redoc) | **HTTP 000** (6/6 blocked) ✓ |
+| External TCP `:8000` | **blocked** ✓ |
+| External TCP `:5432`, `:6379` | **blocked** ✓ |
+| FE `10.0.0.26 → 10.0.0.33:8000` health/live | **HTTP 200** ✓ |
+| FE `10.0.0.26 → 10.0.0.33:8000` health/ready | **HTTP 200** ✓ |
+| FE→BE PG/Redis | **blocked** ✓ |
+| DOCKER-USER survives docker restart | **yes** ✓ |
+| DOCKER-USER survives full reboot | **yes** ✓ (previously verified) |
+| Production data integrity | **intact** ✓ |
+| Production untouched (no restart/redeploy) | **verified** ✓ |
+| Frontend NOT deployed (no nginx on FE) | **confirmed** ✓ |
+
+All evidence recorded. The Phase 7 validation record has been appended to `migration/execution-log.md` and committed as `55759f0` (production repo, not pushed). Frontend deployment remains HELD pending owner review of the OCI ingress correction.
