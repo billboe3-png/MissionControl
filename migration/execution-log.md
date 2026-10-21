@@ -1308,3 +1308,35 @@ the backend instance's own VNIC with its public IP — expected and unchanged.
 - /tmp/nginx.conf (transferred from production repo)
 - /opt/missioncontrol/frontend/ (partial source transfer)
 
+
+## Phase 8A — Frontend Image Recovery (2026-10-21)
+
+**Status: PASS** — Frontend image recovered and verified on FE VM.
+
+**Step 1 — Locate existing image:**
+- Production source (illboe3@34.35.177.209): missioncontrol-frontend:latest found with ID 07e18ec599e, size 78.9MB, built 2026-10-14, based on nginx:1.27.5 + node, labels include com.docker.compose.project: missioncontrol, com.docker.compose.service: frontend, com.docker.compose.version: 5.6.0
+- Backend VM (ubuntu@10.0.0.33): no matching images
+- FE VM (ubuntu@84.12.77.251): no matching images prior to transfer
+
+**Step 2 — Image recovery:**
+- Saved image as tarball: /tmp/fe-image.tar on production, SHA-256: 13dd4917c2a84e753a5a4f10cd2900160ea23d35fa83893b76c809e49d366d9
+- Transferred to FE VM (10.0.0.26) via SCP, SHA-256 verified: 13dd4917c2a84e753a5a4f10cd2900160ea23d35fa83893b76c809e49d366d9
+- Loaded onto FE VM: docker load --input /tmp/fe-image.tar
+- Tagged with expected tag: docker tag missioncontrol-frontend:latest missioncontrol-frontend:601a878-20261020
+
+**Verification on FE VM:**
+- docker images --format '{{.ID}} {{.Tag}} {{.Size}}' missioncontrol-frontend → 07e18ec599e 601a878-20261020 78.9MB
+- Image ID 07e18ec599e matches the production source image
+- Compose configuration references missioncontrol-frontend:, which now resolves to the recovered image
+
+**Production unchanged:**
+- Production host GCP VM (34.35.177.209) not modified
+- No production containers restarted or redeployed
+- No production data restored
+- No DNS changes or traffic cutover
+- Backend public IP 84.12.82.239 preserved
+
+**Remaining issue:** Nginx config mount path conflict at /opt/missioncontrol/nginx/default.conf (currently a directory instead of a file). This is a pre-existing infrastructure issue that prevents docker compose up from completing, but does not affect the image recovery verification. The nginx config content must be properly placed at this path before docker compose up can succeed.
+
+**Next step:** Resolve the nginx config directory-vs-file issue, then docker compose up can be attempted to complete Phase 8 deployment.
+
