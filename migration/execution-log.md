@@ -819,3 +819,123 @@ that repo is the migration's source of truth and the only place the test suite r
 4. The Veeam shutdown exception is unchanged and still present by design.
 5. Eleven other plugin sync loops still start on every boot; the destination's empty database is still
    the only thing preventing side effects.
+
+---
+
+## Phase 7 — frontend preparation: findings and STOP
+
+Owner instruction: Phase 7 preparation + frontend deployment, with controls (preserve the Phase 6
+fix; review automatic plugin side effects; reconfirm network boundaries; deploy frontend only;
+validate and report).
+
+### Section 1 — Phase 6 fix preserved and verified (PASS)
+
+| Check | Result |
+|---|---|
+| `391a464` retained | **YES** — still an ancestor of HEAD (`3075ebb`); nothing reverted |
+| History pushed/rewritten | **NO** — 0 remote refs contain `391a464`; nothing staged; ahead of origin by 4 |
+| Production restarted/redeployed | **NO** |
+
+**Model file on the backend VM** — `/opt/missioncontrol/backend/app/plugins/installed/official_mikrotik/models.py`:
+size 6546, mode 664, owner `ubuntu:ubuntu`, mtime `2026-10-21T07:07:24Z`,
+**sha256 `d7d83076d5f26e47089ff47a4ae9f5a2777d036a2670e3dd5b6b214d805a24f3`**, 0 occurrences of
+`allow_insecure_ssl`. The container's view of `/app/…/models.py` has the **identical** hash, and the
+mount is `bind /opt/missioncontrol/backend -> /app` — so the running backend uses the fixed
+bind-mounted file. In-memory check: `allow_insecure_ssl in live mapped columns: False`, 23 columns.
+
+**Sync cycles occurred after the file became active:** file mtime `07:07:24` → cycles at `07:13:08`,
+`07:18:08`, `07:23:08`, `07:23:44`, `07:28:44`; **0 failures**. Confirmed.
+
+### The committed-on-disk vs running-in-container distinction (recorded as required)
+
+- **On disk** (production repo, HEAD `3075ebb`): hash `89787a23…`, 0 occurrences — the fix is present.
+- **Running production container**: started `2026-10-20T15:39:06Z`, **before** the `391a464` commit
+  (`2026-10-21T09:06+02:00`). The **long-running uvicorn process still executes the original module**,
+  proven by the uninterrupted 5-minute error cadence across the file swap (`07:04:20` → `07:39:20`).
+- **Harmless**: `mikrotik_servers` has 0 rows, so the failing query is an empty-table select — log
+  noise only. 0 HTTP 5xx; backend `healthy`; 405 requests/2 min; production data intact
+  (agents 15, agent_commands 100,480, integration_profiles 6, veeam_backup_servers 15, sites 2, projects 3).
+- Methodological note: `docker exec … python -c` spawns a new interpreter that imports the current
+  file, so it reports the fix as active and proves nothing about the long-running process.
+
+### Section 2 — automatic plugin side-effect review (COMPLETE)
+
+**Ten plugin loops + one app-level loop start automatically.** Classification:
+
+| # | Loop | Entry point | Interval | Class | Guard |
+|---|---|---|---|---|---|
+| 1 | git | `git/__init__.py:104` | 120 s | external (polls repos) | `auto_sync_enabled and self._clients` |
+| 2 | hyperv | `hyperv/__init__.py:126` | 120 s | external (agent/relay) | `auto_sync_enabled` |
+| 3 | official_docker | `official_docker/__init__.py:85` | 120 s | external (Docker API) | `auto_sync_enabled and self._clients` |
+| 4 | official_mikrotik | `official_mikrotik/__init__.py:45` | 300 s | external (device poll) | `not auto_sync_enabled → return` |
+| 5 | official_unifi | `official_unifi/__init__.py:100` | 300 s | external (controller API) | `auto_sync_enabled and self._clients` |
+| 6 | official_veeam | `official_veeam/__init__.py:92` | 300 s | external (SSH/MSSQL bridge) | `auto_sync_enabled and self._clients` |
+| 7 | official_dlink | `official_dlink/__init__.py:45` | 300 s | external (device poll) | `not auto_sync_enabled → return` |
+| 8 | zabbix | `zabbix/__init__.py:95` | 300 s | external (Zabbix API) | `auto_sync_enabled and self._clients` |
+| 9 | system_info | `system_info/__init__.py` | — | **no loop, no I/O** (widgets only) | n/a |
+| 10 | stale-agent sweeper | `app/main.py:413` | 60 s | **internal-state only** (marks stale agents offline) | none — always runs |
+| 11 | plugin startup itself | `app/main.py` plugin load | boot | registers routes/tables | none |
+
+- **Real, evidence-backed control:** `auto_sync_enabled` is genuinely honoured — it gates
+  `asyncio.create_task(...)` in every plugin's `start()`. Six plugins additionally require
+  `self._clients` to be non-empty (≥1 configured target). No flag was invented.
+- `system_info` performs no network I/O. The stale sweeper is DB-only (`mark_stale_agents_offline`).
+- **All loop bodies select only `enabled`/`online` rows**, so with an empty database every loop is inert.
+- **Live evidence:** only **3** loops actually started on the destination — `D-Link (300s)`,
+  `Hyper-V (120s)`, `MikroTik (300s)`. The rest never started (no clients).
+- **Destination remains unconfigured:** git 0, hyperv 0, docker 0, mikrotik 0, unifi 0, veeam 0,
+  dlink 0, zabbix 0. The backend's only established sockets are 3 to `172.18.0.3:5432` (its own
+  Postgres on the internal Docker network). No outbound attempts, no sweeper errors.
+
+### Section 3 — network boundaries: **CRITICAL FINDING — frontend deployment HELD**
+
+Guest and host layers are correct:
+- Both VMs: `netfilter-persistent` enabled+active, `10.0.0.0/24` ACCEPT first, default REJECT, backups
+  preserved (`rules.v4.bak.20261020T185922Z` FE, `…T185923Z` BE).
+- BE listens only on `10.0.0.33:8000`; Postgres and Redis publish **nothing**.
+- FE → BE `10.0.0.33:8000/api/v1/health/live` = **200** (sanctioned path works).
+- FE → BE `5432`/`6379` = **blocked**.
+
+**But the backend API is publicly reachable.** Tested from the **production host** (a genuine
+external vantage point, outside the OCI VCN):
+
+| Target | Result |
+|---|---|
+| `84.12.82.239:8000/api/v1/health/live` | **HTTP 200** `{"status":"ok"}` (3/3 repeats, TCP handshake confirmed) |
+| `84.12.82.239:8000/api/v1/version` | **HTTP 200** — real payload |
+| `84.12.82.239:8000/api/docs` | **HTTP 200** — **U3 violation** |
+| `84.12.82.239:8000/api/openapi.json` | **HTTP 200** — **U3 violation** |
+| `84.12.82.239:8000/api/redoc` | **HTTP 200** — **U3 violation** |
+| `84.12.82.239:5432` / `:6379` | blocked/filtered — correct |
+| `34.35.177.209:8000` (**production control**) | **blocked** — correct |
+| `34.35.177.209:443` (**production control**) | OPEN — correct |
+
+**Root cause — Docker's published-port DNAT bypasses the INPUT chain:**
+
+```
+nat/PREROUTING -> DOCKER:  DNAT tcp  !br-999dacc36125  *  0.0.0.0/0  10.0.0.33  dpt:8000  to:172.18.0.4:8000
+filter/DOCKER:             ACCEPT tcp !br-999dacc36125 br-999dacc36125  0.0.0.0/0  172.18.0.4  dpt:8000
+```
+
+An inbound packet to host `:8000` is DNATted in `PREROUTING` **before** filtering, then travels the
+**FORWARD** path (`FORWARD → DOCKER-USER (empty) → DOCKER-FORWARD → DOCKER ACCEPT`). The `INPUT`
+chain — which holds the `REJECT` — **is never consulted**. The compose binding
+`10.0.0.33:8000:8000` restricts which local address listens but not the packet source. The OCI layer
+is not blocking 8000 either (proven by the external 200).
+
+**Why earlier phases concluded "8000 closed publicly":** `execution-log.md:165` records the U2 probe
+as run **"from FE→BE public"** — from inside the VCN, which cannot hairpin public IPs onto itself —
+and `network-security-plan.md:55` asserts "Not publicly exposed (verified §3.5)" on that basis. The
+vantage point was invalid.
+
+**Remediation options (NOT applied — owner decision required):**
+1. **Guest-side, narrow:** `DOCKER-USER: -i ens3 -p tcp --dport 8000 ! -s 10.0.0.26/32 -j DROP`.
+   Keeps the FE path, blocks the internet. Caveat: `DOCKER-USER` is not restored by
+   `netfilter-persistent` as configured; needs a dockerd/systemd hook to survive restarts.
+2. **Cloud-side, durable (preferred):** no `0.0.0.0/0` rule for 8000; add explicit
+   `10.0.0.26/32 → TCP 8000`. Requires the OCI **user OCID**, which is **not present on any host**
+   (only a `<YOUR_USER_OCID>` placeholder in `/tmp/oci-firewall-remediation.md`) or console access.
+3. **Both**, as the original design intended.
+
+**Actions taken this phase:** none outside read-only inspection; production untouched; frontend not
+deployed; no ingress rule broadened; nothing pushed.
