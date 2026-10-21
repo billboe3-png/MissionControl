@@ -969,3 +969,79 @@ class TestRelayExecutor:
         raw = "version: 7.24 (stable)\nboard-name: hEX S\n"
         info = MikroTikService()._parse_resource_output(raw)
         assert info["memory_usage_pct"] is None
+
+
+# ---------------------------------------------------------------------- #
+# Schema-drift regression                                                #
+# ---------------------------------------------------------------------- #
+
+
+class TestMikroTikSchemaDrift:
+    """The ORM model must match the schema the Alembic migration creates.
+
+    Regression: `MikroTikServer` declared `allow_insecure_ssl`, but
+    `m1kr0t1k0001_add_mikrotik_plugin_tables` created `mikrotik_servers`
+    without it. Tests build tables via `Base.metadata.create_all()` (from the
+    model), so the drift was invisible here while every Alembic-managed
+    database raised `UndefinedColumn` on each plugin sync cycle.
+    """
+
+    def test_model_matches_mikrotik_migration_columns(self):
+        """Every model column must exist in the migration-created table."""
+        import sqlalchemy as sa
+
+        from app.plugins.installed.official_mikrotik.models import MikroTikServer
+
+        # Build the table using ONLY the migration's column definitions.
+        meta = sa.MetaData()
+        migrated = sa.Table(
+            "mikrotik_servers",
+            meta,
+            sa.Column("id", sa.Integer(), primary_key=True),
+            sa.Column("name", sa.String(200), nullable=False),
+            sa.Column("host", sa.String(500), nullable=False),
+            sa.Column("ssh_port", sa.Integer(), nullable=False),
+            sa.Column("telnet_enabled", sa.Boolean(), nullable=False),
+            sa.Column("telnet_port", sa.Integer(), nullable=True),
+            sa.Column("username", sa.String(200), nullable=False),
+            sa.Column("password_encrypted", sa.Text(), nullable=True),
+            sa.Column("api_enabled", sa.Boolean(), nullable=False),
+            sa.Column("api_port", sa.Integer(), nullable=True),
+            sa.Column("enabled", sa.Boolean(), nullable=False),
+            sa.Column("last_sync_at", sa.DateTime(), nullable=True),
+            sa.Column("status", sa.String(20), nullable=False),
+            sa.Column("last_error", sa.Text(), nullable=True),
+            sa.Column("version", sa.String(50), nullable=True),
+            sa.Column("board_name", sa.String(100), nullable=True),
+            sa.Column("cpu_load", sa.String(20), nullable=True),
+            sa.Column("memory_usage_pct", sa.Integer(), nullable=True),
+            sa.Column("uptime", sa.String(100), nullable=True),
+            sa.Column("created_at", sa.DateTime(), nullable=True),
+            sa.Column("updated_at", sa.DateTime(), nullable=True),
+            # m2kr0t1k0002 added these two
+            sa.Column("relay_agent_id", sa.Integer(), nullable=True),
+            sa.Column("remote_target_id", sa.Integer(), nullable=True),
+        )
+
+        migrated_cols = {c.name for c in migrated.columns}
+        model_cols = {c.name for c in MikroTikServer.__table__.columns}
+
+        missing_from_db = model_cols - migrated_cols
+        assert not missing_from_db, (
+            "MikroTikServer maps columns that no migration creates, so every "
+            "query on an Alembic-managed database fails with UndefinedColumn: "
+            f"{sorted(missing_from_db)}"
+        )
+
+    def test_server_select_does_not_reference_unmigrated_columns(self, db_session):
+        """A real SELECT of MikroTikServer must only touch migrated columns."""
+        import sqlalchemy as sa
+
+        from app.plugins.installed.official_mikrotik.models import MikroTikServer
+
+        # Filtering by `enabled` is what the sync loop does; if the mapped
+        # column set contains an unmigrated column this statement (or the
+        # generated SELECT list) is invalid against the real schema.
+        stmt = sa.select(MikroTikServer).where(MikroTikServer.enabled.is_(True))
+        compiled = str(stmt.compile(compile_kwargs={"literal_binds": True}))
+        assert "allow_insecure_ssl" not in compiled

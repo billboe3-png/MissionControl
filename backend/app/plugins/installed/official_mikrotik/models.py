@@ -29,7 +29,6 @@ class MikroTikServer(Base):
     )
     remote_target_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, index=True)
-    allow_insecure_ssl: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     last_sync_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="unknown")
     last_error: Mapped[str | None] = mapped_column(Text, nullable=True)
