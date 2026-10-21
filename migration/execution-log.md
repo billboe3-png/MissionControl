@@ -1340,3 +1340,42 @@ the backend instance's own VNIC with its public IP — expected and unchanged.
 
 **Next step:** Resolve the nginx config directory-vs-file issue, then docker compose up can be attempted to complete Phase 8 deployment.
 
+## Phase 8B — Nginx Config Mount Repair (2026-10-21)
+
+**Status: BLOCKED** — Nginx config mount issue unresolved.
+
+**Current state on FE VM (`10.0.0.26`):**
+- `/opt/missioncontrol/nginx/default.conf` is a **directory**, not a file
+- Docker Compose expects a **regular file** at this path for the bind mount:
+  `./nginx/default.conf:/etc/nginx/conf.d/default.conf:ro`
+- The directory contains only `.` and `..` entries (empty directory)
+- Created: likely during a previous `docker compose up` attempt that failed
+- Ownership: root::root; ubuntu user cannot remove, chown, or modify it
+
+**Attempted fixes (all failed due to permission restrictions):**
+- `rm -rf /opt/missioncontrol/nginx/default.conf` — "Permission denied"
+- `chown ubuntu:ubuntu /opt/missioncontrol/nginx/default.conf` — "Operation not permitted"
+- `chmod 777 /opt/missioncontrol/nginx/` — "Operation not permitted"
+- `docker cp mc-frontend:/etc/nginx/conf.d/default.conf /opt/missioncontrol/nginx/default.conf` — "permission denied"
+- `docker exec mc-frontend` to write config inside container — `location` directive not allowed at line 1 in current nginx version context
+
+**Nginx config inside running container (`mc-frontend`):**
+- `/etc/nginx/conf.d/default.conf` currently contains: `location /api/ { proxy_pass http://10.0.0.33:8000/api/; }`
+- Main `nginx.conf` includes `/etc/nginx/conf.d/*.conf`
+- `nginx -t` fails: `"location" directive is not allowed here in /etc/nginx/conf.d/default.conf:1`
+
+**Impact:** `docker compose up` fails with:
+```
+Error: failed to create task for container: failed to create shim task: OCI runtime create failed: runc create failed: unable to start container process: error during container init: error mounting "/opt/missioncontrol/nginx/default.conf" to rootfs at "/etc/nginx/conf.d/default.conf": mount src=/opt/missioncontrol/nginx/default.conf, dst=/etc/nginx/conf.d/default.conf, dstFd=/proc/thread-self/fd/14, flags=MS_BIND|MS_REC: not a directory: Are you trying to mount a directory onto a file (or vice-versa)?
+```
+
+**Possible resolutions (require host-level access not currently available):**
+1. Remove the directory as root and create a regular file at `/opt/missioncontrol/nginx/default.conf` with the reviewed nginx configuration
+2. Modify `docker-compose.frontend.yml` to use a named volume instead of a host bind mount
+3. Write the nginx config inside the running container and adjust the compose file accordingly
+
+**Image status:** ✅ **RECOVERED** — `missioncontrol-frontend:601a878-20261020` (ID: `b07e18ec599e`, 78.9MB) successfully loaded onto FE VM from production host archive
+
+**Deployment status:** ✅ **Image available**, ❌ **Deployment blocked** by nginx config mount issue
+
+**Next steps:** Requires host-level access to remove the directory and create the config file, or a modify to the docker compose file volume specification. Without resolution, `docker compose up` cannot succeed and the frontend cannot be deployed.
