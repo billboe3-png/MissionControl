@@ -1238,3 +1238,19 @@ open; production data intact (agents 15, agent_commands ~100.5k, integration_pro
 | Frontend NOT deployed (no nginx on FE) | **confirmed** ✓ |
 
 All evidence recorded. The Phase 7 validation record has been appended to `migration/execution-log.md` and committed as `55759f0` (production repo, not pushed). Frontend deployment remains HELD pending owner review of the OCI ingress correction.
+### OCI ingress rule discovery (2026-10-21)
+A review of the OCI console (region af-johannesburg-1, root compartment, subnet 10.0.0.0/24)
+revealed that the ingress rule `10.0.0.26/32 → TCP 8000` already exists as rule #10 with
+description MC-FE edge to MC-BE API. There is no `0.0.0.0/0 → TCP 8000` rule.
+
+This means the OCI layer already had the correct restrictive rule for TCP 8000 (permitting only
+the frontend VM source). The earlier public exposure of `84.12.82.239:8000` was proven by
+instrumentation to be due to Docker's published-port DNAT bypassing the guest `INPUT` chain
+(and empty `DOCKER-USER`), not through an OCI-wide 8000 permit. The host `DOCKER-USER` rule
+(tag `mc-8000-restrict`, two rules: FE RETURN + DROP) is the guest-side control that compensates
+for the Docker bypass. The OCI rule and the host rule are complementary; both are now in place.
+
+No OCI console action regarding 8000 ingress is required. The `0.0.0.0/0 → 80/443` rules
+(frontend Web/HTTPS) must not be changed. The `34.35.177.209/32 → All Protocols` rule is
+the backend instance's own VNIC with its public IP — expected and unchanged.
+
